@@ -1,2 +1,2 @@
 # tract-tracer
-Web-app to display a DWI-derived tractogram (.tck file) in such a way that it can be compared to injection/labelled sites from published tract-tracing studies.
+Web-app to display a DWI-derived tractogram (.tck file) in such a way that it can be compared to injection/labelled sites from published tract-tracing studies. The initial design features a three column layout, with SAG/COR/AXI sections in the left column to select an injection region-of-interest (ROI), a 3d panel to show streamlines passing through the ROI, and another set of SAG/COR/AXI sections in the right panel to show streamlines together with anatomical scan sections.
