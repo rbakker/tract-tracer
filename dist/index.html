@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tract Tracer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#080b0f;--panel:#0c1018;--border:#1a2030;
+  --accent:#4af;--accent2:#f84;--dim:#9ad;
+  --text:#8899aa;--bright:#ccdde8;
+  --sag:#3af8cc;--cor:#f8a03a;--axi:#a03af8;
+}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;
+  display:flex;height:100vh;overflow:hidden;font-size:11px;}
+
+/* ── PANELS ── */
+#left,#right{width:33.333%;display:flex;flex-direction:column;background:var(--panel);flex-shrink:0;}
+#left{border-right:1px solid var(--border);}
+#right{border-left:1px solid var(--border);}
+#left .slice-row,#right .slice-row{flex:1;min-height:0;}
+#middle{flex:1;position:relative;overflow:hidden;}
+#three-canvas{width:100%;height:100%;display:block;}
+
+/* ── SLICE ROWS ── */
+.slice-row{display:flex;flex-direction:column;position:relative;border-bottom:1px solid var(--border);}
+.slice-row:last-child{border-bottom:none;}
+.slice-label{position:absolute;top:6px;left:8px;z-index:2;letter-spacing:0.15em;
+  font-size:10px;font-weight:500;pointer-events:none;}
+.slice-label.sag{color:var(--sag);}
+.slice-label.cor{color:var(--cor);}
+.slice-label.axi{color:var(--axi);}
+.slice-coord{position:absolute;top:6px;right:8px;z-index:2;color:var(--dim);
+  font-size:10px;pointer-events:none;}
+.slice-canvas{width:100%;height:100%;display:block;cursor:crosshair;}
+
+/* ── SETTINGS BUTTON + LOAD BUTTON ── */
+#top-btns{position:absolute;top:10px;left:12px;z-index:10;
+  display:flex;gap:8px;pointer-events:all;}
+.top-btn{background:rgba(8,11,15,0.82);border:1px solid var(--border);
+  color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:11px;
+  letter-spacing:0.12em;padding:5px 14px;cursor:pointer;
+  transition:border-color 0.15s,color 0.15s;}
+.top-btn:hover{border-color:var(--accent);color:var(--accent);}
+.top-btn .icon{font-size:16px;letter-spacing:0;margin-right:4px;vertical-align:-1px;}
+
+/* ── SETTINGS OVERLAY ── */
+#settings-overlay{position:absolute;top:36px;left:12px;
+  z-index:20;width:310px;max-height:calc(100vh - 80px);overflow-y:auto;
+  background:rgba(8,11,15,0.93);border:1px solid var(--border);
+  backdrop-filter:blur(6px);padding:14px 16px;display:none;pointer-events:all;}
+#settings-overlay.open{display:block;}
+
+/* ── LOAD DROPDOWN + DROP ZONES ── */
+#load-dropdown{position:absolute;top:36px;left:12px;z-index:20;
+  background:rgba(8,11,15,0.93);border:1px solid var(--border);
+  backdrop-filter:blur(6px);padding:16px;display:none;pointer-events:all;gap:14px;}
+#load-dropdown.open{display:flex;}
+.drop-zone{border:1px solid var(--border);padding:1.2rem 1.5rem;text-align:center;
+  cursor:pointer;transition:border-color 0.2s;min-width:130px;}
+.drop-zone:hover,.drop-zone.over{border-color:var(--accent);}
+.drop-zone .tag{color:var(--accent);font-size:10px;margin-bottom:4px;}
+.drop-zone .name{color:var(--bright);margin:4px 0;font-size:10px;}
+.drop-zone p{color:var(--dim);font-size:10px;margin-top:4px;}
+input[type=file]{display:none;}
+
+/* ── WELCOME SCREEN ── */
+#welcome{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;pointer-events:none;
+  z-index:1;}
+#welcome h2{color:var(--bright);letter-spacing:0.3em;font-size:14px;font-weight:400;}
+#welcome p{color:var(--dim);font-size:10px;letter-spacing:0.15em;}
+
+/* ── FLOATING TOOLTIP ── */
+#tip{position:fixed;background:#ffd86e;color:#1a1200;font-family:'JetBrains Mono',monospace;
+  font-size:9px;line-height:1.6;letter-spacing:0.04em;padding:6px 9px;
+  border-radius:2px;box-shadow:0 2px 10px rgba(0,0,0,0.6);
+  pointer-events:none;z-index:9999;display:none;max-width:240px;white-space:pre-wrap;}
+
+/* section headings */
+.cfg-section{margin-top:12px;margin-bottom:6px;color:var(--accent);
+  font-size:9px;letter-spacing:0.2em;border-bottom:1px solid var(--border);padding-bottom:4px;}
+.cfg-section:first-child{margin-top:0;}
+
+/* rows */
+.ctl-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.ctl-row label{color:var(--dim);letter-spacing:0.08em;font-size:9px;
+  white-space:nowrap;min-width:56px;}
+.ctl-row input[type=range]{flex:1;accent-color:var(--accent2);min-width:0;}
+.ctl-val{color:var(--text);font-size:9px;min-width:42px;text-align:right;}
+/* reset button */
+.plane-toggles{display:flex;gap:10px;margin-bottom:4px;margin-left:62px;}
+.plane-toggle{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;}
+.plane-toggle input[type=checkbox]{display:none;}
+.plane-toggle .pill{width:26px;height:12px;border-radius:6px;border:1px solid;
+  position:relative;transition:background 0.15s;}
+.plane-toggle .pill::after{content:'';position:absolute;top:1px;left:1px;
+  width:8px;height:8px;border-radius:50%;background:#fff;transition:left 0.15s;}
+.plane-toggle input:checked + .pill::after{left:15px;}
+.plane-toggle input:checked + .pill{opacity:1;}
+.plane-toggle input:not(:checked) + .pill{background:transparent!important;opacity:0.4;}
+.plane-toggle span{font-size:9px;letter-spacing:0.1em;}
+.pt-sag .pill{border-color:var(--sag);background:var(--sag);}
+.pt-cor .pill{border-color:var(--cor);background:var(--cor);}
+.pt-axi .pill{border-color:var(--axi);background:var(--axi);}
+
+/* reset button */
+#rot-reset{background:none;border:1px solid var(--border);color:var(--dim);
+  font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 8px;
+  cursor:pointer;letter-spacing:0.1em;margin-left:62px;margin-top:4px;}
+#rot-reset:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── MIDDLE HUD ── */
+#middle-hud{position:absolute;inset:0;pointer-events:none;}
+#stats{position:absolute;top:16px;right:16px;text-align:right;line-height:2;color:var(--dim);}
+#coord-hud{position:absolute;bottom:10px;right:16px;text-align:right;line-height:1.8;color:var(--dim);}
+#coord-hud span{color:var(--text);}
+#middle-info{position:absolute;bottom:10px;left:16px;line-height:2;color:var(--dim);}
+#middle-info span{color:var(--text);}
+#mprogress{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  color:var(--dim);letter-spacing:0.2em;text-align:center;line-height:2;}
+
+</style>
+</head>
+<body>
+<div id="tip"></div>
+
+<!-- LEFT: slice viewers A -->
+<div id="left">
+  <div class="slice-row">
+    <div class="slice-label sag">SAG·probe</div>
+    <div class="slice-coord" id="coord-sag">—</div>
+    <canvas class="slice-canvas" id="cvs-sag"></canvas>
+  </div>
+  <div class="slice-row">
+    <div class="slice-label cor">COR·probe</div>
+    <div class="slice-coord" id="coord-cor">—</div>
+    <canvas class="slice-canvas" id="cvs-cor"></canvas>
+  </div>
+  <div class="slice-row">
+    <div class="slice-label axi">AXI·probe</div>
+    <div class="slice-coord" id="coord-axi">—</div>
+    <canvas class="slice-canvas" id="cvs-axi"></canvas>
+  </div>
+</div>
+
+<!-- MIDDLE: 3D view -->
+<div id="middle">
+  <canvas id="three-canvas"></canvas>
+
+  <!-- Top-left buttons -->
+  <div id="top-btns">
+    <button class="top-btn" id="load-btn"><span class="icon">⬆</span>LOAD…</button>
+    <button class="top-btn" id="settings-btn"><span class="icon">⚙</span>SETTINGS</button>
+  </div>
+
+  <!-- Load dropdown -->
+  <div id="load-dropdown">
+    <div class="drop-zone" id="dz-nii" onclick="document.getElementById('fi-nii').click()">
+      <div class="tag">ANATOMY</div>
+      <div class="name">.nii / .nii.gz</div>
+      <p>drop or click</p>
+      <input type="file" id="fi-nii" accept=".nii,.gz">
+    </div>
+    <div class="drop-zone" id="dz-tck" onclick="document.getElementById('fi-tck').click()">
+      <div class="tag">TRACTOGRAM</div>
+      <div class="name">.tck</div>
+      <p>drop or click</p>
+      <input type="file" id="fi-tck" accept=".tck">
+    </div>
+  </div>
+
+  <!-- Settings overlay -->
+  <div id="settings-overlay">
+
+    <div class="cfg-section" data-tip="Left-click or drag to move the probe.\nScroll to step through slices.\nCtrl+Scroll to zoom.\nRight-drag to pan.">STREAMLINE PROBE</div>
+    <div class="ctl-row" data-tip="Sphere radius in mm.\nStreamlines passing through this sphere are selected.">
+      <label>RADIUS</label>
+      <input type="range" id="radius-slider" min="0.25" max="10" value="5" step="0.25">
+      <span class="ctl-val" id="radius-val">5.0 mm</span>
+    </div>
+    <div class="ctl-row" data-tip="Only select streamlines whose start or end point\nis within this distance of the probe centre.\n0 = off (select all passing streamlines).">
+      <label>ENDS·PROBE</label>
+      <input type="range" id="probe-ends-slider" min="0" max="30" value="0" step="0.5">
+      <span class="ctl-val" id="probe-ends-val">off</span>
+    </div>
+
+    <div class="cfg-section" data-tip="Streamlines selected by the probe are shown\nin the right panels within a slab around each slice.\nAdjust thickness and end-filtering below.">STREAMLINE SLABS</div>
+    <div class="ctl-row" data-tip="Show streamline segments within a slab of this\nthickness (× voxel size) around each slice plane.">
+      <label>THICKNESS</label>
+      <input type="range" id="slab-slider" min="0.5" max="20" value="2" step="0.5">
+      <span class="ctl-val" id="slab-val">2.0×</span>
+    </div>
+    <div class="ctl-row" data-tip="Only show segments this far (mm) from a streamline\nstart or end point. 0 = show all segments.">
+      <label>ENDS·SLAB</label>
+      <input type="range" id="ends-slider" min="0" max="30" value="0" step="0.5">
+      <span class="ctl-val" id="ends-val">off</span>
+    </div>
+    <div class="ctl-row" data-tip="Colour used for streamline ends when ends-only is active.">
+      <label>ENDS·COL</label>
+      <input type="color" id="ends-color-picker" value="#ffffee" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding:0;">
+    </div>
+
+    <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.">VOLUME RENDERING</div>
+    <div class="ctl-row" data-tip="Opacity multiplier for the glass brain silhouette.\nNot a percentage — higher values accumulate more\nopacity along each ray. ~5 = subtle, ~15 = opaque.">
+      <label>OPACITY</label>
+      <input type="range" id="brain-alpha-slider" min="0" max="20" value="5" step="0.5">
+      <span class="ctl-val" id="brain-alpha-val">5.0</span>
+    </div>
+    <div class="ctl-row" data-tip="Minimum normalised intensity to contribute.\nRaise to suppress skull or CSF in full-head scans.">
+      <label>THRESHOLD</label>
+      <input type="range" id="brain-thresh-slider" min="0" max="0.8" value="0.15" step="0.01">
+      <span class="ctl-val" id="brain-thresh-val">0.15</span>
+    </div>
+    <div class="ctl-row" data-tip="Rim sharpness. Higher = thinner silhouette edges,\nlower = broader, more filled glass brain.">
+      <label>RIM</label>
+      <input type="range" id="brain-rim-slider" min="0.2" max="2" value="1" step="0.05">
+      <span class="ctl-val" id="brain-rim-val">1.0</span>
+    </div>
+    <div class="ctl-row" data-tip="Toggle section plane rectangles in the 3D view.">
+      <label>PLANES</label>
+      <div class="plane-toggles" style="margin:0;">
+        <label class="plane-toggle pt-sag">
+          <input type="checkbox" id="tog-sag" checked>
+          <div class="pill"></div>
+          <span style="color:var(--sag)">SAG</span>
+        </label>
+        <label class="plane-toggle pt-cor">
+          <input type="checkbox" id="tog-cor" checked>
+          <div class="pill"></div>
+          <span style="color:var(--cor)">COR</span>
+        </label>
+        <label class="plane-toggle pt-axi">
+          <input type="checkbox" id="tog-axi" checked>
+          <div class="pill"></div>
+          <span style="color:var(--axi)">AXI</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.\nPitch = left-right axis · Yaw = up-down · Roll = front-back.\nUse Reset Planes to return to standard orientation.">SECTION PLANES</div>
+    <div class="ctl-row" data-tip="Rotate all section planes around the left-right axis.">
+      <label>PITCH</label>
+      <input type="range" id="pitch-slider" min="-90" max="90" value="0" step="1">
+      <span class="ctl-val" id="pitch-val">0°</span>
+    </div>
+    <div class="ctl-row" data-tip="Rotate all section planes around the up-down axis.">
+      <label>YAW</label>
+      <input type="range" id="yaw-slider" min="-90" max="90" value="0" step="1">
+      <span class="ctl-val" id="yaw-val">0°</span>
+    </div>
+    <div class="ctl-row" data-tip="Rotate all section planes around the front-back axis.">
+      <label>ROLL</label>
+      <input type="range" id="roll-slider" min="-90" max="90" value="0" step="1">
+      <span class="ctl-val" id="roll-val">0°</span>
+    </div>
+    <button id="rot-reset">RESET PLANES</button>
+
+  </div><!-- /settings-overlay -->
+
+  <!-- Welcome screen (shown when no data loaded) -->
+  <div id="welcome">
+    <h2>TRACT TRACER</h2>
+    <p>Use the LOAD… menu to get started</p>
+    <div id="mprogress"></div>
+  </div>
+
+  <div id="middle-hud" style="display:none;">
+    <div id="stats">
+      <div id="stat-total"></div>
+      <div id="stat-sel"></div>
+    </div>
+    <div id="coord-hud">
+      X <span id="hud-x">—</span> &nbsp;
+      Y <span id="hud-y">—</span> &nbsp;
+      Z <span id="hud-z">—</span> mm
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT: slice viewers B -->
+<div id="right">
+  <div class="slice-row">
+    <div class="slice-label sag">SAG·result</div>
+    <div class="slice-coord" id="coord-sag-b">—</div>
+    <canvas class="slice-canvas" id="cvs-sag-b"></canvas>
+  </div>
+  <div class="slice-row">
+    <div class="slice-label cor">COR·result</div>
+    <div class="slice-coord" id="coord-cor-b">—</div>
+    <canvas class="slice-canvas" id="cvs-cor-b"></canvas>
+  </div>
+  <div class="slice-row">
+    <div class="slice-label axi">AXI·result</div>
+    <div class="slice-coord" id="coord-axi-b">—</div>
+    <canvas class="slice-canvas" id="cvs-axi-b"></canvas>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { parseNifti }   from './js/nifti.js';
+import { parseTck }     from './js/tck.js';
+import { GridIndex }    from './js/grid-index.js';
+import { VolRenderer }  from './js/vol-renderer.js';
+import { mat3mulVec, eulerToMat3 } from './js/affine.js';
+
+'use strict';
+// ═══════════════════════════════════════════════════════════
+// 0.  STATE
+// ═══════════════════════════════════════════════════════════
+const state = {
+  cursor:  [0,0,0],
+  cursorB: [0,0,0],
+  viewA: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
+  viewB: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
+  zoomA: 1.0,   // zoom for left panel set (all three planes share)
+  zoomB: 1.0,   // zoom for right panel set
+  nii: null,
+  niiLoaded: false,
+  tckLoaded: false,
+};
+// Out-of-plane axis index per plane
+const OOP = {sag:0, cor:1, axi:2};
+
+function syncViewOOP(views, cursor) {
+  // For each plane, update only the out-of-plane component of its viewCentre
+  // to match the cursor — in terms of the ROTATED plane normal, not fixed RAS axes.
+  //
+  // Decompose cursor into: viewCentre + normal_component * normal_dir
+  // Keep viewCentre's in-plane part fixed; replace its normal-axis projection
+  // so that the slice through viewCentre passes through cursor.
+  //
+  // normalAxis: 0=sag, 1=cor, 2=axi  →  _rot_dirs[normalAxis] is the plane normal.
+  for (const [key, normalAxis] of [['sag',0],['cor',1],['axi',2]]) {
+    const n = vr._rot_dirs[normalAxis];        // unit normal of this plane (rotated)
+    const vc = views[key];
+    // Signed distance from current viewCentre to cursor along normal
+    const d = (cursor[0]-vc[0])*n[0] + (cursor[1]-vc[1])*n[1] + (cursor[2]-vc[2])*n[2];
+    // Shift viewCentre along normal so it tracks cursor's out-of-plane position
+    views[key] = [vc[0]+d*n[0], vc[1]+d*n[1], vc[2]+d*n[2]];
+  }
+}
+let radius=2, probeEndsMm=0, slabMultiplier=2, endsMm=0;
+let endsColor = '#ffffee';
+let pitch=0, yaw=0, roll=0;
+const vr = new VolRenderer();
+window._vr = vr;  // debug access
+
+function setCursor(ras) {
+  state.cursor = ras;
+  syncViewOOP(state.viewA, ras);
+  updateSlices(); updateProbe(); updateCoordHud(); updatePlaneMeshes();
+}
+function setCursorB(ras) {
+  state.cursorB = ras;
+  syncViewOOP(state.viewB, ras);
+  updateSlicesB(); updatePlaneMeshes();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 1.  SLICE RENDERING  (delegates to VolRenderer)
+// ═══════════════════════════════════════════════════════════
+const PLANES = {
+  sag: { key:'sag', chColor:[0.23,0.97,0.8],  scrollAxis:0 },
+  cor: { key:'cor', chColor:[0.97,0.63,0.23],  scrollAxis:1 },
+  axi: { key:'axi', chColor:[0.63,0.23,0.97],  scrollAxis:2 },
+};
+const canvasA={}, canvasB={};
+
+function drawSlice(planeKey) {
+  const cvs = canvasA[planeKey];
+  if (!cvs||!state.nii) return;
+  vr.renderSlice(cvs, planeKey, state.viewA[planeKey], state.cursor, PLANES[planeKey].chColor, 'a', state.zoomA);
+  updateCoordLabel(planeKey, state.cursor);
+}
+
+function drawSliceB(planeKey) {
+  const cvs = canvasB[planeKey];
+  if (!cvs||!state.nii) return;
+  // Pass zoom=zoomB, probeRadius=0 (no circle on right panels)
+  vr.renderSlice(cvs, planeKey, state.viewB[planeKey], state.cursorB, PLANES[planeKey].chColor, 'b', state.zoomB, 0);
+  if (selTracts.length && slabRenderer) slabRenderer.render(cvs, planeKey, state.cursorB);
+  updateCoordLabelB(planeKey);
+}
+
+function updateSlices()  { for (const k of ['sag','cor','axi']) drawSlice(k); updateProbeGap(); }
+function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSliceB(k); }
+
+function updateCoordLabel(planeKey, cursor) {
+  if (!state.nii) return;
+  const vox = mat3mulVec(state.nii.invAb, cursor).map(Math.round);
+  const ids  = {sag:'coord-sag', cor:'coord-cor', axi:'coord-axi'};
+  const axes = {sag:'x', cor:'y', axi:'z'};
+  const idx  = {sag:0,   cor:1,   axi:2};
+  document.getElementById(ids[planeKey]).textContent = axes[planeKey]+'='+vox[idx[planeKey]];
+}
+
+function updateCoordLabelB(planeKey) {
+  if (!state.nii) return;
+  const vox = mat3mulVec(state.nii.invAb, state.cursorB).map(Math.round);
+  const ids  = {sag:'coord-sag-b', cor:'coord-cor-b', axi:'coord-axi-b'};
+  const axes = {sag:'x', cor:'y', axi:'z'};
+  const idx  = {sag:0,   cor:1,   axi:2};
+  document.getElementById(ids[planeKey]).textContent = axes[planeKey]+'='+vox[idx[planeKey]];
+}
+
+// ═══════════════════════════════════════════════════════════
+// 2.  GPU SLAB RENDERER
+// ═══════════════════════════════════════════════════════════
+let selTracts = [];
+
+const SLAB_VS = `
+varying vec3  vColor;
+varying float vSignedDist;  // signed mm from slice plane
+varying float vEndDist;     // mm from nearest tract endpoint
+attribute vec3  color;
+attribute float endDist;
+uniform vec3  u_sliceNormal;  // unit normal of slice plane (RAS mm)
+uniform vec3  u_slicePt;      // any point on slice plane (RAS mm)
+void main() {
+  vColor      = color;
+  vEndDist    = endDist;
+  vSignedDist = dot(position - u_slicePt, u_sliceNormal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const SLAB_FS = `
+precision highp float;
+varying vec3  vColor;
+varying float vSignedDist;
+varying float vEndDist;
+uniform float u_slabHalf;   // slab half-thickness in mm
+uniform float u_endsMm;     // 0 = off; >0 = only show within this mm of endpoints
+uniform vec3  u_endsColor;  // colour for ends segments when u_endsMm > 0
+void main() {
+  float absDist = abs(vSignedDist);
+  // Discard outside 4× slab (same fade range as old CPU code)
+  if (absDist > u_slabHalf * 4.0) discard;
+  // Ends filter
+  if (u_endsMm > 0.0 && vEndDist > u_endsMm) discard;
+  // Brightness: full inside slab, fading to 0.15 at 4× slab
+  float br = absDist <= u_slabHalf
+    ? 1.0
+    : max(0.15, 1.0 - (absDist - u_slabHalf) / (u_slabHalf * 3.0));
+  // Colour: ends colour when ends active, else direction colour
+  vec3 col = (u_endsMm > 0.0) ? u_endsColor : vColor;
+  gl_FragColor = vec4(col * br, 1.0);
+}`;
+
+class SlabRenderer {
+  constructor(threeRenderer) {
+    this._r   = threeRenderer;
+    this._rt  = null;    // WebGLRenderTarget, resized on demand
+    this._mat = null;    // ShaderMaterial for slab
+    this._rtW = 0;
+    this._rtH = 0;
+    this._pixels = null; // reused Uint8Array for readback
+  }
+
+  _ensureRT(W, H) {
+    if (this._rt && this._rtW === W && this._rtH === H) return;
+    if (this._rt) this._rt.dispose();
+    this._rt = new THREE.WebGLRenderTarget(W, H, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format:    THREE.RGBAFormat,
+      type:      THREE.UnsignedByteType,
+    });
+    this._rtW = W; this._rtH = H;
+    this._pixels = new Uint8Array(W * H * 4);
+  }
+
+  _ensureMat() {
+    if (this._mat) return;
+    this._mat = new THREE.ShaderMaterial({
+      vertexShader:   SLAB_VS,
+      fragmentShader: SLAB_FS,
+      uniforms: {
+        u_sliceNormal: { value: new THREE.Vector3() },
+        u_slicePt:     { value: new THREE.Vector3() },
+        u_slabHalf:    { value: 1.0 },
+        u_endsMm:      { value: 0.0 },
+        u_endsColor:   { value: new THREE.Vector3(1, 1, 0.93) },
+      },
+    });
+  }
+
+  // Render slab for one plane onto canvas2d.
+  // mesh: the selMesh LineSegments
+  // planeKey: 'sag'|'cor'|'axi'
+  // cursor: RAS mm point on the plane
+  render(canvas2d, planeKey, cursor) {
+    if (!selMesh) return;
+    const W = canvas2d.width, H = canvas2d.height;
+    if (W <= 0 || H <= 0) return;
+    this._ensureRT(W, H);
+    this._ensureMat();
+
+    const r = this._r;
+    const nii = state.nii;
+
+    // ── Plane normal and axes ──────────────────────────────
+    const normalAxis = vr._getNormalAxis(planeKey);
+    const [uAx, vAx] = vr._getPlaneAxes(planeKey);
+    const nDir = vr._rot_dirs[normalAxis];  // unit normal
+    const uDir = vr._rot_dirs[uAx];
+    const vDir = vr._rot_dirs[vAx];
+
+    // ── Slab half-thickness in mm ─────────────────────────
+    const oop = OOP[planeKey];
+    const halfThickMm = slabMultiplier * nii.pixdim[oop+1] / 2;
+
+    // ── Ortho camera — axes explicitly set from slice geometry ──
+    // Using lookAt risks axis flips depending on normal direction.
+    // Instead: directly build camera matrixWorld from uDir/vDir/nDir.
+    // Camera right = uDir, camera up = vDir, camera looks along -nDir
+    // (Three.js cameras look along -Z in their local space).
+    const camDist = halfThickMm * 4 + 1;
+    const vc = state.viewB[planeKey];
+    const pp = vr._planeParams[planeKey + 'b'];
+    if (!pp) return;
+    const mpp = pp.mm_per_px;
+    const halfU = mpp * W / 2;
+    const halfV = mpp * H / 2;
+
+    const cam = new THREE.OrthographicCamera(-halfU, halfU, halfV, -halfV,
+      0.01, camDist * 2 + 1);
+
+    // Camera position: viewCentre shifted along +nDir (camera looks along -Z = -nDir)
+    const cpx = vc[0] + nDir[0]*camDist;
+    const cpy = vc[1] + nDir[1]*camDist;
+    const cpz = vc[2] + nDir[2]*camDist;
+
+    // Build column-major matrixWorld:
+    // col0 = right  = uDir
+    // col1 = up     = vDir
+    // col2 = back   = +nDir  (camera -Z points toward -nDir = into scene)
+    // col3 = pos
+    cam.matrixAutoUpdate = false;
+    cam.matrixWorld.set(
+      uDir[0], vDir[0], nDir[0], cpx,
+      uDir[1], vDir[1], nDir[1], cpy,
+      uDir[2], vDir[2], nDir[2], cpz,
+            0,       0,       0,   1
+    );
+    cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+    cam.updateProjectionMatrix();
+
+    // ── Update slab material uniforms ─────────────────────
+    const u = this._mat.uniforms;
+    u.u_sliceNormal.value.set(nDir[0], nDir[1], nDir[2]);
+    u.u_slicePt.value.set(cursor[0], cursor[1], cursor[2]);
+    u.u_slabHalf.value = halfThickMm;
+    u.u_endsMm.value   = endsMm;
+    const ec = new THREE.Color(endsColor);
+    u.u_endsColor.value.set(ec.r, ec.g, ec.b);
+
+    // ask Claude if this cloning step is really necessary
+	const sliceMesh = selMesh.clone();
+	sliceMesh.geometry = selMesh.geometry; // share geometry
+    sliceMesh.material = this._mat;
+
+    // Swap material, render to RT in a minimal scene, swap back
+    const savedRT    = r.getRenderTarget();
+    const savedBg    = r.getClearColor(new THREE.Color());
+    const savedAlpha = r.getClearAlpha();
+
+    if (!this._scene) this._scene = new THREE.Scene();
+    this._scene.add(sliceMesh);
+    r.setRenderTarget(this._rt);
+    r.setClearColor(0x000000, 0);
+    r.clear();
+    r.render(this._scene, cam);
+    this._scene.remove(sliceMesh);
+    r.setRenderTarget(savedRT);
+    r.setClearColor(savedBg, savedAlpha);
+
+    // ── Composite onto slice canvas ───────────────────────
+    // putImageData ignores compositing, so we read pixels into an
+    // offscreen canvas and drawImage on top of the anatomy slice.
+    r.readRenderTargetPixels(this._rt, 0, 0, W, H, this._pixels);
+    // Flip Y: WebGL y=0 is bottom, canvas y=0 is top
+    if (!this._offCanvas || this._offCanvas.width!==W || this._offCanvas.height!==H) {
+      this._offCanvas = new OffscreenCanvas(W, H);
+    }
+    const offCtx = this._offCanvas.getContext('2d');
+    const imgData = offCtx.createImageData(W, H);
+    for (let y = 0; y < H; y++) {
+      const srcRow = (H - 1 - y) * W * 4;
+      imgData.data.set(this._pixels.subarray(srcRow, srcRow + W*4), y * W * 4);
+    }
+    offCtx.putImageData(imgData, 0, 0);
+    const ctx2d = canvas2d.getContext('2d');
+    ctx2d.drawImage(this._offCanvas, 0, 0);
+  }
+}
+
+let slabRenderer = null;  // initialised after renderer3 exists
+
+// ═══════════════════════════════════════════════════════════
+// 3.  SLICE INTERACTION
+// ═══════════════════════════════════════════════════════════
+
+
+function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag,
+                               getViewFn, setViewFn, getZoomFn, setZoomFn, redrawFn) {
+  requestAnimationFrame(() => {
+    const c = getCanvas();
+    let dragBtn = -1;          // active drag button: 0=left(place), 2=right(pan)
+    let dragLast = null;       // {x,y} last drag position for pan
+
+    function canvasPx(e) {
+      const r = c.getBoundingClientRect();
+      return [(e.clientX - r.left) * (c.width  / r.width),
+              (e.clientY - r.top)  * (c.height / r.height)];
+    }
+
+    // Left-drag: place cursor
+    function place(e) {
+      if (!state.nii) return;
+      const [ex, ey] = canvasPx(e);
+      const newRas = vr.canvasToRas(planeKey, ex, ey, tag);
+      if (newRas) setCursorFn(newRas);
+    }
+
+    c.addEventListener('mousedown', e => {
+      e.preventDefault();
+      dragBtn = e.button;
+      dragLast = {x: e.clientX, y: e.clientY};
+      if (e.button === 0) place(e);
+    });
+
+    c.addEventListener('mousemove', e => {
+      if (dragBtn === 0) {
+        place(e);
+      } else if (dragBtn === 1 || dragBtn === 2) {
+        // Pan: move viewCentre in-plane opposite to drag direction
+        if (!state.nii || !dragLast) return;
+        const dx = e.clientX - dragLast.x;
+        const dy = e.clientY - dragLast.y;
+        dragLast = {x: e.clientX, y: e.clientY};
+        const p = vr._planeParams[planeKey + tag];
+        if (!p) return;
+        const mpp = p.mm_per_px;
+        const fuMm = -dx * mpp;
+        const fvMm =  dy * mpp;
+        const u_dir = vr._rot_dirs[p.uAx];
+        const v_dir = vr._rot_dirs[p.vAx];
+        // Only update THIS plane's viewCentre — moving another plane's viewCentre
+        // along directions that include that plane's normal would shift its slice depth.
+        const vc = getViewFn(planeKey);
+        setViewFn(planeKey, [
+          vc[0] + fuMm*u_dir[0] + fvMm*v_dir[0],
+          vc[1] + fuMm*u_dir[1] + fvMm*v_dir[1],
+          vc[2] + fuMm*u_dir[2] + fvMm*v_dir[2],
+        ]);
+        redrawFn();
+      }
+    });
+
+    document.addEventListener('mouseup', () => { dragBtn = -1; dragLast = null; });
+
+    // Right-click: suppress context menu
+    c.addEventListener('contextmenu', e => e.preventDefault());
+
+    c.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (!state.nii) return;
+
+      if (e.ctrlKey) {
+        // Ctrl+scroll: zoom at mouse position
+        const [ex, ey] = canvasPx(e);
+        const factor = e.deltaY > 0 ? 1/1.1 : 1.1;
+        const oldZoom = getZoomFn();
+        const newZoom = Math.max(0.1, Math.min(20, oldZoom * factor));
+
+        // Keep the RAS point under the mouse fixed:
+        // rasUnder = viewCentre + offset_at_old_zoom
+        // After zoom, shift viewCentre so rasUnder stays at (ex,ey)
+        // offset in mm at old zoom:
+        const p = vr._planeParams[planeKey + tag];
+        if (p) {
+          const mppOld = p.mm_per_px;  // mm/px at old zoom (already baked in)
+          const fuOld = (ex/p.W - 0.5) * mppOld * p.W;
+          const fvOld = (0.5 - ey/p.H) * mppOld * p.H;
+          const mppNew = mppOld * (oldZoom / newZoom);
+          const fuNew = (ex/p.W - 0.5) * mppNew * p.W;
+          const fvNew = (0.5 - ey/p.H) * mppNew * p.H;
+          const dfU = fuOld - fuNew;
+          const dfV = fvOld - fvNew;
+          const u_dir = vr._rot_dirs[p.uAx];
+          const v_dir = vr._rot_dirs[p.vAx];
+          // Only shift THIS plane's viewCentre to keep the point under the mouse fixed.
+          const vc = getViewFn(planeKey);
+          setViewFn(planeKey, [
+            vc[0] + dfU*u_dir[0] + dfV*v_dir[0],
+            vc[1] + dfU*u_dir[1] + dfV*v_dir[1],
+            vc[2] + dfU*u_dir[2] + dfV*v_dir[2],
+          ]);
+        }
+        setZoomFn(newZoom);
+        redrawFn();
+      } else {
+        // Plain scroll: step through slices
+        const dir = e.deltaY > 0 ? 1 : -1;
+        const normalAxis = vr._getNormalAxis(planeKey);
+        const n_dir  = vr._rot_dirs[normalAxis];
+        const voxSize = state.nii.decomp.S[normalAxis][normalAxis];
+        const cur = getCursorFn();
+        setCursorFn([
+          cur[0] + dir * voxSize * n_dir[0],
+          cur[1] + dir * voxSize * n_dir[1],
+          cur[2] + dir * voxSize * n_dir[2],
+        ]);
+      }
+    }, {passive: false});
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// 4.  THREE.JS + TRACKBALL
+// ═══════════════════════════════════════════════════════════
+const threeCanvas=document.getElementById('three-canvas');
+const renderer3=new THREE.WebGLRenderer({canvas:threeCanvas,antialias:true});
+slabRenderer = new SlabRenderer(renderer3);
+renderer3.setPixelRatio(window.devicePixelRatio);
+renderer3.setClearColor(0x080b0f);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,1,0.1,5000);
+camera.position.set(0,0,200);
+
+// TrackballControls (inlined)	
+const {EventDispatcher,Quaternion,Vector2,Vector3}=THREE;
+class TrackballControls extends EventDispatcher{
+  constructor(obj,el){
+    super();const sc=this;
+    const S={NONE:-1,ROTATE:0,ZOOM:1,PAN:2};
+    this.object=obj;this.domElement=el;el.style.touchAction='none';
+    this.enabled=true;this.screen={left:0,top:0,width:0,height:0};
+    this.rotateSpeed=2;this.zoomSpeed=1.2;this.panSpeed=0.5;
+    this.staticMoving=true;
+    this.target=new Vector3();
+    const EPS=1e-6,lp=new Vector3();
+    let st=S.NONE;
+    const eye=new Vector3(),mp=new Vector2(),mc=new Vector2(),
+          la=new Vector3(),zs=new Vector2(),ze=new Vector2(),
+          ps=new Vector2(),pe=new Vector2(),ptrs=[],ppos={};
+    this.target0=this.target.clone();this.position0=obj.position.clone();this.up0=obj.up.clone();
+    this.handleResize=()=>{const b=el.getBoundingClientRect(),d=el.ownerDocument.documentElement;sc.screen={left:b.left+pageXOffset-d.clientLeft,top:b.top+pageYOffset-d.clientTop,width:b.width,height:b.height};};
+    const gmc=(px,py)=>{const v=new Vector2();v.set(((px-sc.screen.width*.5-sc.screen.left)/(sc.screen.width*.5)),(sc.screen.height+2*(sc.screen.top-py))/sc.screen.width);return v;};
+    const gms=(px,py)=>{const v=new Vector2();v.set((px-sc.screen.left)/sc.screen.width,(py-sc.screen.top)/sc.screen.height);return v;};
+    this.rotateCamera=(()=>{const ax=new Vector3(),q=new Quaternion(),ed=new Vector3(),ou=new Vector3(),os=new Vector3(),md=new Vector3();return()=>{md.set(mc.x-mp.x,mc.y-mp.y,0);let a=md.length();if(a){eye.copy(sc.object.position).sub(sc.target);ed.copy(eye).normalize();ou.copy(sc.object.up).normalize();os.crossVectors(ou,ed).normalize();ou.setLength(mc.y-mp.y);os.setLength(mc.x-mp.x);md.copy(ou.add(os));ax.crossVectors(md,eye).normalize();a*=sc.rotateSpeed;q.setFromAxisAngle(ax,a);eye.applyQuaternion(q);sc.object.up.applyQuaternion(q);}mp.copy(mc);};})();
+    this.zoomCamera=()=>{if(st!==S.ZOOM&&st!==S.NONE)return;const f=1+(ze.y-zs.y)*sc.zoomSpeed;if(f!==1&&f>0)eye.multiplyScalar(f);if(sc.staticMoving)zs.copy(ze);};
+    this.panCamera=(()=>{const ch=new Vector2(),ou=new Vector3(),p=new Vector3();return()=>{ch.copy(pe).sub(ps);if(ch.lengthSq()){ch.multiplyScalar(eye.length()*sc.panSpeed);p.copy(eye).cross(sc.object.up).setLength(ch.x);p.add(ou.copy(sc.object.up).setLength(-ch.y));sc.object.position.add(p);sc.target.add(p);if(sc.staticMoving)ps.copy(pe);};};})();
+    this.update=()=>{eye.subVectors(sc.object.position,sc.target);sc.rotateCamera();sc.zoomCamera();sc.panCamera();sc.object.position.addVectors(sc.target,eye);sc.object.lookAt(sc.target);if(lp.distanceToSquared(sc.object.position)>EPS)lp.copy(sc.object.position);renderer3.render(scene,camera);};
+    const omd=e=>{if(st===S.NONE){if(e.button===0)st=S.ROTATE;else if(e.button===1)st=S.ZOOM;else if(e.button===2)st=S.PAN;}if(st===S.ROTATE){mc.copy(gmc(e.pageX,e.pageY));mp.copy(mc);}else if(st===S.ZOOM){zs.copy(gms(e.pageX,e.pageY));ze.copy(zs);}else if(st===S.PAN){ps.copy(gms(e.pageX,e.pageY));pe.copy(ps);}sc.update();};
+    const omm=e=>{if(st===S.ROTATE){mp.copy(mc);mc.copy(gmc(e.pageX,e.pageY));}else if(st===S.ZOOM)ze.copy(gms(e.pageX,e.pageY));else if(st===S.PAN)pe.copy(gms(e.pageX,e.pageY));sc.update();};
+    const omu=()=>{st=S.NONE;sc.update();};
+    const omw=e=>{if(!sc.enabled)return;e.preventDefault();if(e.deltaMode===2)zs.y-=e.deltaY*.025;else if(e.deltaMode===1)zs.y-=e.deltaY*.01;else zs.y-=e.deltaY*.00025;sc.update();};
+    const opd=e=>{if(!sc.enabled)return;if(ptrs.length===0){el.setPointerCapture(e.pointerId);el.addEventListener('pointermove',opm);el.addEventListener('pointerup',opu);}ptrs.push(e);if(e.pointerType==='touch'){}else omd(e);};
+    const opm=e=>{if(!sc.enabled)return;if(e.pointerType!=='touch')omm(e);};
+    const opu=e=>{if(!sc.enabled)return;omu();ptrs.splice(ptrs.findIndex(p=>p.pointerId===e.pointerId),1);if(ptrs.length===0){el.releasePointerCapture(e.pointerId);el.removeEventListener('pointermove',opm);el.removeEventListener('pointerup',opu);}};
+    el.addEventListener('contextmenu',e=>{if(sc.enabled)e.preventDefault();});
+    el.addEventListener('pointerdown',opd);
+    el.addEventListener('wheel',omw,{passive:false});
+    this.handleResize();this.update();
+  }
+}
+const controls=new TrackballControls(camera,threeCanvas);
+
+// ═══════════════════════════════════════════════════════════
+// 5.  TRACTOGRAM 3D
+// ═══════════════════════════════════════════════════════════
+let bgMesh=null,selMesh=null,probeSphere=null;
+// Slice plane meshes in 3D view
+const planeMeshes = {sag:null, cor:null, axi:null};
+const planeVisible = {sag:true, cor:true, axi:true};
+const PLANE_COLORS = {sag:0x3af8cc, cor:0xf8a03a, axi:0xa03af8};
+
+function makePlaneMesh(planeKey) {
+  if (!state.nii) return null;
+  const vc = state.viewB[planeKey] || state.cursorB;
+  const pc = vr.getPlaneCorners(planeKey, vc);
+  if (!pc) return null;
+  const [BL,BR,TR,TL] = pc;
+  const verts = new Float32Array([...BL,...BR,...TR,...BL,...TR,...TL]);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(verts,3));
+  const col = PLANE_COLORS[planeKey];
+  const fill = new THREE.Mesh(geo,
+    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.08,side:THREE.DoubleSide,depthWrite:false}));
+  const borderPts = new Float32Array([...BL,...BR,...TR,...TL,...BL]);
+  const borderGeo = new THREE.BufferGeometry();
+  borderGeo.setAttribute('position', new THREE.BufferAttribute(borderPts,3));
+  const border = new THREE.Line(borderGeo,
+    new THREE.LineBasicMaterial({color:col,transparent:true,opacity:0.7}));
+  const group = new THREE.Group();
+  group.add(fill); group.add(border);
+  return group;
+}
+
+function updatePlaneMeshes() {
+  for (const k of ['sag','cor','axi']) {
+    if (planeMeshes[k]) { scene.remove(planeMeshes[k]); planeMeshes[k]=null; }
+    if (planeVisible[k] && state.nii) {
+      planeMeshes[k] = makePlaneMesh(k);
+      if (planeMeshes[k]) scene.add(planeMeshes[k]);
+    }
+  }
+  renderer3.render(scene,camera);
+}
+
+// ═══════════════════════════════════════════════════════════
+// 5b. GLASS BRAIN  — fullscreen-quad ray-caster
+// ═══════════════════════════════════════════════════════════
+let glassBrainMesh = null;
+let glassBrainAlpha  = 5.0;
+let glassBrainThresh = 0.15;
+let glassBrainRimPow = 1.0;
+
+const GLASS_VS = `
+varying vec2 vNDC;
+void main() {
+  vNDC = position.xy;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}`;
+
+const GLASS_FS = `
+precision highp float;
+precision highp sampler3D;
+uniform sampler3D u_vol;
+uniform vec3  u_size;      // [nx, ny, nz] in voxels
+uniform vec3  u_voxMm;     // voxel size in mm
+uniform float u_alpha;
+uniform float u_thresh;
+uniform float u_rimPow;
+uniform float u_volDiagMm; // volume diagonal in mm — used to normalise accumulation
+uniform int   u_steps;
+uniform mat4  u_invPV;
+uniform mat4  u_invModel;
+uniform vec3  u_camPos;
+varying vec2 vNDC;
+
+vec2 boxHit(vec3 ro, vec3 rd) {
+  vec3 tMin = (vec3(0.0) - ro) / rd;
+  vec3 tMax = (u_size    - ro) / rd;
+  vec3 t1 = min(tMin, tMax);
+  vec3 t2 = max(tMin, tMax);
+  return vec2(max(max(t1.x, t1.y), t1.z),
+              min(min(t2.x, t2.y), t2.z));
+}
+
+float sampleVol(vec3 p) {
+  return texture(u_vol, p / u_size).r;
+}
+
+vec3 gradient(vec3 p) {
+  vec3 e = vec3(1.0, 0.0, 0.0);
+  return vec3(
+    sampleVol(p+e.xyz) - sampleVol(p-e.xyz),
+    sampleVol(p+e.zxy) - sampleVol(p-e.zxy),
+    sampleVol(p+e.yzx) - sampleVol(p-e.yzx)
+  );
+}
+
+void main() {
+  vec4 near_w = u_invPV * vec4(vNDC, -1.0, 1.0);
+  vec4 far_w  = u_invPV * vec4(vNDC,  1.0, 1.0);
+  near_w /= near_w.w;
+  far_w  /= far_w.w;
+
+  vec3 rd_world = normalize(far_w.xyz - near_w.xyz);
+  vec3 ro = (u_invModel * vec4(u_camPos, 1.0)).xyz + u_size * 0.5;
+  vec3 rd = normalize(mat3(u_invModel) * rd_world);
+
+  vec2 hit = boxHit(ro, rd);
+  if (hit.y < hit.x || hit.y < 0.0) discard;
+  float tStart   = max(hit.x, 0.0);
+  float tEnd     = hit.y;
+  float stepSize = (tEnd - tStart) / float(u_steps);
+
+  // Convert stepSize from voxel units to mm along the ray.
+  // rd is in voxel space; each component i contributes rd[i]*u_voxMm[i] mm.
+  // The effective mm per voxel step = length(rd * u_voxMm) — but rd is already
+  // normalised in voxel space, so the mm step is length(rd * u_voxMm) * stepSize.
+  float mmPerStep = length(rd * u_voxMm) * stepSize;
+
+  float accAlpha = 0.0;
+  vec3  accColor = vec3(0.0);
+
+  for (int i = 0; i < 256; i++) {
+    if (i >= u_steps) break;
+    float t = tStart + (float(i) + 0.5) * stepSize;
+    vec3 p = ro + t * rd;
+
+    float intensity = sampleVol(p);
+    if (intensity < u_thresh) continue;
+
+    vec3 grad = gradient(p);
+    float gLen = length(grad);
+    if (gLen < 0.0001) continue;
+
+    float rim = 1.0 - abs(dot(grad / gLen, rd));
+    rim = pow(rim, u_rimPow);
+
+    // mmPerStep: physical mm traversed per march step along this ray.
+    // Dividing by u_volDiagMm normalises so a full diagonal traversal
+    // gives ~1.0 total weight regardless of brain size or voxel anisotropy.
+    float normStep = mmPerStep / u_volDiagMm;
+
+    vec3  col = mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), intensity);
+    float a   = clamp(rim * u_alpha * normStep, 0.0, 1.0);
+    accColor += (1.0 - accAlpha) * a * col;
+    accAlpha += (1.0 - accAlpha) * a;
+    if (accAlpha > 0.95) break;
+  }
+
+  if (accAlpha < 0.002) discard;
+  gl_FragColor = vec4(accColor, accAlpha);
+}`;
+
+function buildGlassBrain(nii) {
+  if (glassBrainMesh) { scene.remove(glassBrainMesh); glassBrainMesh = null; }
+
+  const tex = new THREE.Data3DTexture(vr.texData, nii.nx, nii.ny, nii.nz);
+  tex.format          = THREE.RedFormat;
+  tex.type            = THREE.FloatType;
+  tex.internalFormat  = 'R32F';
+  tex.minFilter       = THREE.LinearFilter;
+  tex.magFilter       = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.unpackAlignment = 1;
+  tex.needsUpdate     = true;
+
+  const A  = nii.Ab;
+  const hx = nii.nx/2, hy = nii.ny/2, hz = nii.nz/2;
+  const tx = A[0][0]*hx + A[0][1]*hy + A[0][2]*hz + A[3][0];
+  const ty = A[1][0]*hx + A[1][1]*hy + A[1][2]*hz + A[3][1];
+  const tz = A[2][0]*hx + A[2][1]*hy + A[2][2]*hz + A[3][2];
+  const modelMatrix = new THREE.Matrix4().set(
+    A[0][0], A[0][1], A[0][2], tx,
+    A[1][0], A[1][1], A[1][2], ty,
+    A[2][0], A[2][1], A[2][2], tz,
+          0,       0,       0,  1
+  );
+  const invModel = modelMatrix.clone().invert();
+
+  const mat = new THREE.ShaderMaterial({
+    vertexShader:   GLASS_VS,
+    fragmentShader: GLASS_FS,
+    uniforms: {
+      u_vol:      { value: tex },
+      u_size:     { value: new THREE.Vector3(nii.nx, nii.ny, nii.nz) },
+      u_voxMm:      { value: new THREE.Vector3(nii.pixdim[1], nii.pixdim[2], nii.pixdim[3]) },
+      u_volDiagMm:  { value: Math.sqrt(
+                        (nii.nx*nii.pixdim[1])**2 +
+                        (nii.ny*nii.pixdim[2])**2 +
+                        (nii.nz*nii.pixdim[3])**2) },
+      u_alpha:    { value: glassBrainAlpha },
+      u_thresh:   { value: glassBrainThresh },
+      u_rimPow:   { value: glassBrainRimPow },
+      u_steps:    { value: 150 },
+      u_invPV:    { value: new THREE.Matrix4() },
+      u_invModel: { value: invModel },
+      u_camPos:   { value: new THREE.Vector3() },
+    },
+    transparent: true,
+    depthWrite:  false,
+    depthTest:   false,
+  });
+
+  const geo = new THREE.PlaneGeometry(2, 2);
+  glassBrainMesh = new THREE.Mesh(geo, mat);
+  glassBrainMesh.frustumCulled = false;
+  glassBrainMesh.renderOrder   = 999;
+  // Full-screen quad lives at world origin with no transform.
+  // matrixAutoUpdate stays true so Three.js keeps matrixWorld in sync
+  // and onBeforeRender fires reliably.
+
+  const _pv = new THREE.Matrix4();
+  glassBrainMesh.onBeforeRender = (renderer, scene, cam) => {
+    _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    mat.uniforms.u_invPV.value.copy(_pv).invert();
+    mat.uniforms.u_camPos.value.copy(cam.position);
+  };
+
+  scene.add(glassBrainMesh);
+  // Force a render so shader compiles now; any errors appear in console immediately.
+  renderer3.render(scene, camera);
+  if (renderer3.getContext().getError()) console.error('Glass brain: WebGL error after first render');
+}
+
+function updateGlassBrainUniforms() {
+  if (!glassBrainMesh) return;
+  const u = glassBrainMesh.material.uniforms;
+  u.u_alpha.value  = glassBrainAlpha;
+  u.u_thresh.value = glassBrainThresh;
+  u.u_rimPow.value = glassBrainRimPow;
+  renderer3.render(scene, camera);
+}
+
+
+
+const DEBUG_ENDPOINTS = false;  // set true to show orange spheres at tract endpoints
+
+function makeEndpointCloud(tracts){
+  if (!DEBUG_ENDPOINTS) return null;
+  const pos=new Float32Array(tracts.length*6);let vi=0;
+  for(const t of tracts){const n=t.length/3;pos[vi++]=t[0];pos[vi++]=t[1];pos[vi++]=t[2];pos[vi++]=t[3*(n-1)];pos[vi++]=t[3*(n-1)+1];pos[vi++]=t[3*(n-1)+2];}
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  return new THREE.Points(geo,new THREE.PointsMaterial({size:1.5,color:0xff6600,sizeAttenuation:true}));
+}
+
+function makeLineSegments(tracts){
+  let tv=0;
+  for(const t of tracts){const n=t.length/3;if(n>=2)tv+=2*(n-1);}
+  const pos=new Float32Array(tv*3);
+  const col=new Float32Array(tv*3);
+  const eDist=new Float32Array(tv);  // distance from nearest endpoint, per vertex
+  let vi=0;
+  for(const t of tracts){
+    const n=t.length/3; if(n<2) continue;
+    // Compute cumulative arc length from start
+    const arc=new Float32Array(n);
+    for(let i=1;i<n;i++){
+      const dx=t[3*i]-t[3*i-3],dy=t[3*i+1]-t[3*i-2],dz=t[3*i+2]-t[3*i-1];
+      arc[i]=arc[i-1]+Math.sqrt(dx*dx+dy*dy+dz*dz);
+    }
+    const totalLen=arc[n-1];
+    for(let i=0;i<n-1;i++){
+      const x0=t[3*i],y0=t[3*i+1],z0=t[3*i+2];
+      const x1=t[3*i+3],y1=t[3*i+4],z1=t[3*i+5];
+      const dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),dz=Math.abs(z1-z0);
+      const dl=Math.sqrt(dx*dx+dy*dy+dz*dz)||1;
+      pos[3*vi]=x0;pos[3*vi+1]=y0;pos[3*vi+2]=z0;
+      pos[3*vi+3]=x1;pos[3*vi+4]=y1;pos[3*vi+5]=z1;
+      col[3*vi]=col[3*vi+3]=dx/dl;
+      col[3*vi+1]=col[3*vi+4]=dy/dl;
+      col[3*vi+2]=col[3*vi+5]=dz/dl;
+      // endDist: min(dist from start, dist from end) for each vertex
+      eDist[vi]  = Math.min(arc[i],   totalLen-arc[i]);
+      eDist[vi+1]= Math.min(arc[i+1], totalLen-arc[i+1]);
+      vi+=2;
+    }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col,3));
+  geo.setAttribute('endDist',  new THREE.BufferAttribute(eDist,1));
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({vertexColors:true}));
+}
+
+function updateProbe(){
+  if(!gridIdx) return;
+  const [cx,cy,cz]=state.cursor;
+  if(probeSphere) scene.remove(probeSphere);
+  const sg=new THREE.SphereGeometry(radius,12,8);
+  probeSphere=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:0xffdd44,wireframe:true}));
+  probeSphere.position.set(cx,cy,cz); scene.add(probeSphere);
+  if(selMesh){scene.remove(selMesh);selMesh.geometry.dispose();selMesh=null;}
+  let ids;
+  if(probeEndsMm<=0){
+    const hitPts=gridIdx.queryRadius(cx,cy,cz,radius);
+    const hitSet=new Set();for(const pi of hitPts)hitSet.add(tractForPoint[pi]);
+    ids=Array.from(hitSet);
+  } else {
+    const r2=radius*radius,hitSet=new Set();
+    for(let si=0;si<allTracts.length;si++){
+      const t=allTracts[si],n=t.length/3;if(n<1)continue;
+      let arc=0;
+      for(let i=0;i<n;i++){
+        if(i>0){const dx=t[3*i]-t[3*i-3],dy=t[3*i+1]-t[3*i-2],dz=t[3*i+2]-t[3*i-1];arc+=Math.sqrt(dx*dx+dy*dy+dz*dz);}
+        if(arc>probeEndsMm)break;
+        const dx=t[3*i]-cx,dy=t[3*i+1]-cy,dz=t[3*i+2]-cz;
+        if(dx*dx+dy*dy+dz*dz<=r2){hitSet.add(si);break;}
+      }
+      if(hitSet.has(si))continue;
+      arc=0;
+      for(let i=n-1;i>=0;i--){
+        if(i<n-1){const dx=t[3*i]-t[3*i+3],dy=t[3*i+1]-t[3*i+4],dz=t[3*i+2]-t[3*i+5];arc+=Math.sqrt(dx*dx+dy*dy+dz*dz);}
+        if(arc>probeEndsMm)break;
+        const dx=t[3*i]-cx,dy=t[3*i+1]-cy,dz=t[3*i+2]-cz;
+        if(dx*dx+dy*dy+dz*dz<=r2){hitSet.add(si);break;}
+      }
+    }
+    ids=Array.from(hitSet);
+  }
+  selTracts=ids.map(i=>allTracts[i]);
+  document.getElementById('stat-sel').textContent=ids.length?ids.length.toLocaleString()+' selected':'';
+  if(ids.length){selMesh=makeLineSegments(selTracts);scene.add(selMesh);}
+  renderer3.render(scene,camera);
+  updateSlicesB();
+}
+
+function updateCoordHud(){
+  const [x,y,z]=state.cursor;
+  document.getElementById('hud-x').textContent=x.toFixed(1);
+  document.getElementById('hud-y').textContent=y.toFixed(1);
+  document.getElementById('hud-z').textContent=z.toFixed(1);
+}
+
+// ═══════════════════════════════════════════════════════════
+// 6.  LOAD HANDLERS
+// ═══════════════════════════════════════════════════════════
+function setProgress(msg){const el=document.getElementById('mprogress');if(el)el.textContent=msg;}
+function tick(){return new Promise(r=>setTimeout(r,20));}
+
+async function loadNii(file){
+  setProgress('reading '+file.name+'…'); await tick();
+  let nii;
+  try{ nii=await parseNifti(await file.arrayBuffer()); }
+  catch(e){alert('NIfTI error: '+e);setProgress('');return;}
+  state.nii=nii;
+  state.cursor  = mat3mulVec(nii.Ab, [nii.nx/2, nii.ny/2, nii.nz/2]);
+  state.cursorB = [...state.cursor];
+  for(const k of ['sag','cor','axi']){ state.viewA[k]=[...state.cursor]; state.viewB[k]=[...state.cursor]; }
+  setProgress('uploading 3D texture…'); await tick();
+  vr.upload(nii);
+  buildGlassBrain(nii);
+  // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
+  const [cx,cy,cz] = state.cursor;
+  const [ex,ey,ez] = vr._ras_extent;
+  const br = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
+  controls.target.set(cx, cy, cz);
+  camera.position.set(cx, cy, cz + br*2.5);
+  camera.near = br * 0.001;
+  camera.far  = br * 20;
+  camera.updateProjectionMatrix();
+  controls.update();
+  state.niiLoaded=true;
+  checkShowHud();
+  resizeAll();
+  updateSlices(); updateSlicesB(); updatePlaneMeshes();
+}
+
+let gridIdx=null,tractForPoint=null,allPts=null,allTracts=null;
+
+async function loadTck(buf){
+  setProgress('parsing .tck…'); await tick();
+  let parsed;
+  try{parsed=parseTck(buf);}catch(e){alert('TCK error: '+e);setProgress('');return;}
+  allTracts=parsed.tracts; tractForPoint=parsed.tractForPoint;
+  const np=tractForPoint.length;
+  setProgress(allTracts.length.toLocaleString()+' streamlines · building index…'); await tick();
+  allPts=new Float32Array(np*3); let off=0;
+  for(const t of allTracts){for(let i=0;i<t.length;i++)allPts[off+i]=+t[i];off+=t.length;}
+  gridIdx=new GridIndex(allPts,radius);
+  setProgress('uploading geometry…'); await tick();
+  if(bgMesh){scene.remove(bgMesh);bgMesh.geometry.dispose();}
+  bgMesh=makeEndpointCloud(allTracts); if(bgMesh) scene.add(bgMesh);
+  let cx=0,cy=0,cz=0;
+  for(let i=0;i<allPts.length;i+=3){cx+=allPts[i];cy+=allPts[i+1];cz+=allPts[i+2];}
+  cx/=np;cy/=np;cz/=np;
+  let md=0;for(let i=0;i<allPts.length;i+=3){const dx=allPts[i]-cx,dy=allPts[i+1]-cy,dz=allPts[i+2]-cz;md=Math.max(md,dx*dx+dy*dy+dz*dz);}
+  const br=Math.sqrt(md);
+  controls.target.set(cx,cy,cz);
+  camera.position.set(cx,cy,cz+br*2.5);
+  // Use whichever is larger: tract bounding radius or volume diagonal,
+  // so the glass brain never gets clipped when zooming out.
+  const [ex,ey,ez] = vr._ras_extent || [0,0,0];
+  const volR = Math.sqrt(ex*ex+ey*ey+ez*ez) / 2;
+  const safeR = Math.max(br, volR);
+  camera.near=safeR*.001; camera.far=safeR*20; camera.updateProjectionMatrix();
+  document.getElementById('stat-total').textContent=allTracts.length.toLocaleString()+' streamlines';
+  state.tckLoaded=true; setProgress(''); checkShowHud(); controls.update();
+  updateProbe();
+}
+
+function checkShowHud(){
+  if (state.niiLoaded) {
+    const w = document.getElementById('welcome');
+    if (w) w.style.display = 'none';
+    document.getElementById('middle-hud').style.display = 'block';
+    // Mark loaded files in load dropdown
+    const dzNii = document.getElementById('dz-nii');
+    if (dzNii) dzNii.querySelector('p').textContent = '✓ loaded';
+  }
+  if (state.tckLoaded) {
+    const dzTck = document.getElementById('dz-tck');
+    if (dzTck) dzTck.querySelector('p').textContent = '✓ loaded';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 7.  RESIZE
+// ═══════════════════════════════════════════════════════════
+function resizeAll(){
+  for(const k of ['sag','cor','axi']){
+    for(const c of [canvasA[k],canvasB[k]]){
+      if(!c)continue;
+      // only resize if dimensions actually changed (avoids clearing on no-op)
+      if(c.width!==c.clientWidth||c.height!==c.clientHeight){
+        c.width =c.clientWidth;
+        c.height=c.clientHeight;
+        if(vr._dbg) delete vr._dbg[Object.keys(PLANES).find(k2=>canvasA[k2]===c||canvasB[k2]===c)];
+      }
+    }
+  }
+  const mc=document.getElementById('middle');
+  renderer3.setSize(mc.clientWidth,mc.clientHeight,false);
+  camera.aspect=mc.clientWidth/mc.clientHeight;
+  camera.updateProjectionMatrix();
+  controls.handleResize();
+  renderer3.render(scene,camera);
+  if(state.nii){ updateSlices(); updateSlicesB(); }
+}
+new ResizeObserver(resizeAll).observe(document.body);
+
+// ═══════════════════════════════════════════════════════════
+// 8.  CONTROLS WIRING
+// ═══════════════════════════════════════════════════════════
+function updateRotation(){
+  const p=pitch*Math.PI/180, y=yaw*Math.PI/180, r=roll*Math.PI/180;
+  vr.setRotation(p,y,r);
+  // Re-sync view centres to cursor along the new normals, preserving in-plane positions
+  syncViewOOP(state.viewA, state.cursor);
+  syncViewOOP(state.viewB, state.cursorB);
+  updateSlices(); updateSlicesB(); updatePlaneMeshes();
+}
+document.getElementById('pitch-slider').addEventListener('input',e=>{pitch=+e.target.value;document.getElementById('pitch-val').textContent=pitch+'°';updateRotation();});
+document.getElementById('yaw-slider').addEventListener('input',e=>{yaw=+e.target.value;document.getElementById('yaw-val').textContent=yaw+'°';updateRotation();});
+document.getElementById('roll-slider').addEventListener('input',e=>{roll=+e.target.value;document.getElementById('roll-val').textContent=roll+'°';updateRotation();});
+['sag','cor','axi'].forEach(k=>{
+  document.getElementById('tog-'+k).addEventListener('change',e=>{
+    planeVisible[k]=e.target.checked;
+    updatePlaneMeshes();
+  });
+});
+// Button toggles
+function toggleDropdown(id, e) {
+  e.stopPropagation();
+  const el = document.getElementById(id);
+  const wasOpen = el.classList.contains('open');
+  // Close all dropdowns first
+  document.getElementById('settings-overlay').classList.remove('open');
+  document.getElementById('load-dropdown').classList.remove('open');
+  if (!wasOpen) el.classList.add('open');
+}
+document.getElementById('load-btn').addEventListener('click',     e => toggleDropdown('load-dropdown', e));
+document.getElementById('settings-btn').addEventListener('click', e => toggleDropdown('settings-overlay', e));
+document.addEventListener('click', () => {
+  document.getElementById('settings-overlay').classList.remove('open');
+  document.getElementById('load-dropdown').classList.remove('open');
+});
+document.getElementById('settings-overlay').addEventListener('click', e => e.stopPropagation());
+document.getElementById('load-dropdown').addEventListener('click',    e => e.stopPropagation());
+
+// ── Floating tooltip ──────────────────────────────────────
+const tipEl = document.getElementById('tip');
+document.querySelectorAll('[data-tip]').forEach(el => {
+  el.addEventListener('mouseenter', e => {
+    tipEl.textContent = el.dataset.tip.replace(/\\n/g, '\n');
+    tipEl.style.left = (e.clientX + 14) + 'px';
+    tipEl.style.top  = (e.clientY + 14) + 'px';
+    tipEl.style.display = 'block';
+  });
+  el.addEventListener('mousemove', e => {
+    tipEl.style.left = (e.clientX + 14) + 'px';
+    tipEl.style.top  = (e.clientY + 14) + 'px';
+  });
+  el.addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
+});
+document.getElementById('rot-reset').addEventListener('click',()=>{
+  pitch=yaw=roll=0;
+  ['pitch','yaw','roll'].forEach(a=>{document.getElementById(a+'-slider').value=0;document.getElementById(a+'-val').textContent='0°';});
+  updateRotation();
+});
+document.getElementById('radius-slider').addEventListener('input',e=>{
+  radius=+e.target.value;document.getElementById('radius-val').textContent=radius.toFixed(2)+' mm';
+  if(gridIdx&&gridIdx.cs!==radius)gridIdx=new GridIndex(allPts,radius);
+  updateProbeGap();
+  updateProbe();
+  updateSlices();
+});
+document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
+  glassBrainAlpha=+e.target.value;
+  document.getElementById('brain-alpha-val').textContent=glassBrainAlpha.toFixed(1);
+  updateGlassBrainUniforms();
+});
+document.getElementById('brain-thresh-slider').addEventListener('input',e=>{
+  glassBrainThresh=+e.target.value;
+  document.getElementById('brain-thresh-val').textContent=glassBrainThresh.toFixed(2);
+  updateGlassBrainUniforms();
+});
+document.getElementById('brain-rim-slider').addEventListener('input',e=>{
+  glassBrainRimPow=+e.target.value;
+  document.getElementById('brain-rim-val').textContent=glassBrainRimPow.toFixed(1);
+  updateGlassBrainUniforms();
+});
+
+function updateProbeGap() {
+  const p = vr._planeParams['axia'] || vr._planeParams['cora'] || vr._planeParams['saga'];
+  if (!p || !p.mm_per_px) return;
+  vr.setProbeRadius(radius / p.mm_per_px);
+}
+document.getElementById('probe-ends-slider').addEventListener('input',e=>{
+  probeEndsMm=+e.target.value;document.getElementById('probe-ends-val').textContent=probeEndsMm>0?probeEndsMm.toFixed(1)+' mm':'off';
+  updateProbe();
+});
+document.getElementById('slab-slider').addEventListener('input',e=>{
+  slabMultiplier=+e.target.value;document.getElementById('slab-val').textContent=slabMultiplier.toFixed(1)+'×';
+  updateSlicesB();
+});
+document.getElementById('ends-slider').addEventListener('input',e=>{
+  endsMm=+e.target.value;document.getElementById('ends-val').textContent=endsMm>0?endsMm.toFixed(1)+' mm':'off';
+  updateSlicesB();
+});
+document.getElementById('ends-color-picker').addEventListener('input', e => {
+  endsColor = e.target.value;
+  updateSlicesB();
+});
+
+// ═══════════════════════════════════════════════════════════
+// 9.  FILE DROP / PICK
+// ═══════════════════════════════════════════════════════════
+function setupDrop(dzId,inputId,handler){
+  const dz=document.getElementById(dzId);
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
+  document.getElementById(inputId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
+}
+setupDrop('dz-nii','fi-nii',f=>loadNii(f));setupDrop('dz-tck','fi-tck',f=>{const r=new FileReader();r.onload=e=>loadTck(e.target.result);r.readAsArrayBuffer(f);});
+document.body.addEventListener('dragover',e=>e.preventDefault());
+document.body.addEventListener('drop',e=>{
+  e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(ext==='tck'){const r=new FileReader();r.onload=ev=>loadTck(ev.target.result);r.readAsArrayBuffer(f);}
+  else loadNii(f);
+});
+
+// ═══════════════════════════════════════════════════════════
+// 10.  INIT
+// ═══════════════════════════════════════════════════════════
+// Force all sliders to their canonical script values, defeating browser autocomplete.
+(function initSliders() {
+  const set = (id, val, label) => {
+    document.getElementById(id).value = val;
+    if (label) document.getElementById(label[0]).textContent = label[1];
+  };
+  set('pitch-slider',        0,              ['pitch-val',       '0°']);
+  set('yaw-slider',          0,              ['yaw-val',         '0°']);
+  set('roll-slider',         0,              ['roll-val',        '0°']);
+  set('radius-slider',       radius,         ['radius-val',      radius.toFixed(2)+' mm']);
+  set('probe-ends-slider',   probeEndsMm,    ['probe-ends-val',  'off']);
+  set('slab-slider',         slabMultiplier, ['slab-val',        slabMultiplier.toFixed(1)+'×']);
+  set('ends-slider',         endsMm,         ['ends-val',        'off']);
+  set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val', glassBrainAlpha.toFixed(1)]);
+  set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
+  set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',   glassBrainRimPow.toFixed(1)]);
+})();
+
+// Wire canvases
+for(const k of ['sag','cor','axi']){
+  canvasA[k]=document.getElementById('cvs-'+k);
+  canvasB[k]=document.getElementById('cvs-'+k+'-b');
+  initSliceInteraction(k,
+    ()=>canvasA[k],
+    ()=>state.cursor,  setCursor,  'a',
+    (pk)=>state.viewA[pk],
+    (pk,v)=>{state.viewA[pk]=v;},
+    ()=>state.zoomA,
+    (z)=>{state.zoomA=z;},
+    updateSlices);
+  initSliceInteraction(k,
+    ()=>canvasB[k],
+    ()=>state.cursorB, setCursorB, 'b',
+    (pk)=>state.viewB[pk],
+    (pk,v)=>{state.viewB[pk]=v;},
+    ()=>state.zoomB,
+    (z)=>{state.zoomB=z;},
+    updateSlicesB);
+}
+resizeAll();
+
+// ═══════════════════════════════════════════════════════════
+// 11.  DEMO
+// ═══════════════════════════════════════════════════════════
+async function loadDemoNii(){
+  const res=await fetch('M01_T2w.nii.gz');
+  loadNii(new File([await res.blob()],'demo.nii.gz'));
+}
+async function loadDemoTck(){
+  loadTck(await (await fetch('sub-M01_ses-1_wholebrain_10k_1.tck')).arrayBuffer());
+}
+if (window.location.search.includes('demo')) {
+  async function tryDemoLoad() {
+    try { const r=await fetch('M01_T2w.nii.gz',{method:'HEAD'}); if(r.ok) loadNii(new File([await (await fetch('M01_T2w.nii.gz')).blob()],'demo.nii.gz')); } catch(e){}
+    try { const r=await fetch('sub-M01_ses-1_wholebrain_10k_1.tck',{method:'HEAD'}); if(r.ok) loadTck(await (await fetch('sub-M01_ses-1_wholebrain_10k_1.tck')).arrayBuffer()); } catch(e){}
+  }
+  tryDemoLoad();
+}
+
+</script>
+</body>
+</html>
