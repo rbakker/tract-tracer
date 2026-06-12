@@ -2,7 +2,7 @@
 // Self-contained NIfTI-1 parser. Handles sform + qform quaternion.
 // Returns a nii object with affine, inv, dims, pixdim, data, mn, mx.
 
-import { invertAffine, decomposeAffineKSP, matMul } from './affine.js';
+import { invertAffine, decomposeAffineKSP } from './affine.js';
 
 export async function parseNifti(buf) {
   // decompress gzip

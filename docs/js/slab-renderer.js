@@ -7,56 +7,114 @@ import * as THREE from 'three';
 
 const SLAB_VS = `
 varying vec3  vColor;
-varying float vSignedDist;  // signed mm from slice plane
-varying float vEndDist;     // mm from nearest tract endpoint
+varying float vSignedDist;
+varying float vEndDist;
+
 attribute vec3  color;
-attribute float endDist;
-uniform vec3  u_sliceNormal;  // unit normal of slice plane (RAS mm)
-uniform vec3  u_slicePt;      // any point on slice plane (RAS mm)
+attribute float arcFromStart;
+attribute float arcFromEnd;
+attribute float probedFlag;
+
+uniform vec3  u_sliceNormal;
+uniform vec3  u_slicePt;
+uniform float u_endsFlip;
+
 void main() {
-  vColor      = color;
-  vEndDist    = endDist;
-  vSignedDist = dot(position - u_slicePt, u_sliceNormal);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vColor = color;
+
+  vec3 pos = position;
+  vSignedDist = dot(pos - u_slicePt, u_sliceNormal);
+
+  vEndDist = (u_endsFlip > 0.5) ? arcFromEnd : arcFromStart;
+
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
 }`;
 
-// Pass 0: in-slab segments only — full brightness, writes depth.
-// Rendered first so its depth values protect these fragments from being
-// overwritten by the dimmer behind-plane fragments in pass 1.
-const SLAB_FS_NEAR = `
+const SLAB_FS = `
 precision highp float;
+
 varying vec3  vColor;
 varying float vSignedDist;
 varying float vEndDist;
+
 uniform float u_slabHalf;
 uniform float u_endsMm;
 uniform vec3  u_endsColor;
+
 void main() {
-  float absDist = abs(vSignedDist);
-  if (absDist > u_slabHalf) discard;
-  if (u_endsMm > 0.0 && vEndDist > u_endsMm) discard;
-  vec3 col = (u_endsMm > 0.0) ? u_endsColor : vColor;
-  gl_FragColor = vec4(col, 1.0);
+    float d = vSignedDist;
+
+    // --- NEAR PASS: front fragments --------------------------------
+    #ifdef NEAR_PASS
+        if (d < 0.0) discard;
+        if (d > u_slabHalf) discard;
+        if (u_endsMm > 0.0 && vEndDist > u_endsMm) discard;
+
+        vec3 col = (u_endsMm > 0.0) ? u_endsColor : vColor;
+        gl_FragColor = vec4(col, 1.0);
+    #endif
+
+    // --- FAR PASS: back fragments ----------------------------------
+    #ifdef FAR_PASS
+        if (d >= 0.0) discard;
+        if (d < -u_slabHalf) discard;
+        if (u_endsMm > 0.0 && vEndDist > u_endsMm) discard;
+
+        float br = 0.5; // constant dimming factor
+        vec3 col = (u_endsMm > 0.0) ? u_endsColor : vColor;
+        gl_FragColor = vec4(col * br, 1.0);
+    #endif
 }`;
 
-// Pass 1: behind-plane halo — dimmed, depth-write OFF so it can never
-// overwrite a bright fragment that pass 0 already wrote to the depth buffer.
-const SLAB_FS_FAR = `
+
+const DOTS_VS = `
+varying vec3 vColor;
+varying float vSignedDist;
+
+uniform vec3  u_sliceNormal;
+uniform vec3  u_slicePt;
+uniform float u_pointSize;
+
+attribute vec3 color;
+
+void main() {
+    vColor = color;
+
+    // Signed distance to slicing plane
+    vSignedDist = dot(position - u_slicePt, u_sliceNormal);
+
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = u_pointSize;
+}`;
+
+const DOTS_FS = `
 precision highp float;
+
 varying vec3  vColor;
 varying float vSignedDist;
-varying float vEndDist;
+
 uniform float u_slabHalf;
-uniform float u_endsMm;
-uniform vec3  u_endsColor;
+
 void main() {
-  float absDist = abs(vSignedDist);
-  if (absDist <= u_slabHalf) discard;
-  if (absDist > u_slabHalf * 4.0) discard;
-  if (u_endsMm > 0.0 && vEndDist > u_endsMm) discard;
-  float br = max(0.15, 1.0 - (absDist - u_slabHalf) / (u_slabHalf * 3.0));
-  vec3 col = (u_endsMm > 0.0) ? u_endsColor : vColor;
-  gl_FragColor = vec4(col * br, 1.0);
+    // circular mask
+	float r = length(gl_PointCoord - vec2(0.5));
+	float alpha = 1.0 - smoothstep(0.48, 0.52, r);
+	if (alpha <= 0.0) discard;
+
+    float d = vSignedDist;
+
+    #ifdef NEAR_PASS
+        if (d < 0.0) discard;
+        if (d > u_slabHalf) discard;
+        gl_FragColor = vec4(vColor, alpha);
+    #endif
+
+    #ifdef FAR_PASS
+        if (d >= 0.0) discard;
+        if (d < -u_slabHalf) discard;
+        float br = 0.5; // constant dimming factor
+        gl_FragColor = vec4(vColor*br, alpha);
+    #endif
 }`;
 
 export class SlabRenderer {
@@ -71,9 +129,12 @@ export class SlabRenderer {
 
     // Two cached clones of selMesh — share geometry, each uses one material.
     // Rebuilt only when selMesh identity changes (tracked by _srcMesh).
-    this._meshNear = null;
-    this._meshFar  = null;
-    this._srcMesh  = null;
+    this._meshNear  = null;
+    this._meshFar   = null;
+    this._dotsNear  = null;  // endpoint dots, same two-pass scheme
+    this._dotsFar   = null;
+    this._srcMesh   = null;
+    this._srcDots   = null;
   }
 
   _ensureRT(W, H) {
@@ -90,56 +151,124 @@ export class SlabRenderer {
     this._pixels = new Uint8Array(W * H * 4);
   }
 
-  _makeUniforms() {
+  _slabUniforms() {
     return {
       u_sliceNormal: { value: new THREE.Vector3() },
       u_slicePt:     { value: new THREE.Vector3() },
       u_slabHalf:    { value: 1.0 },
       u_endsMm:      { value: 0.0 },
       u_endsColor:   { value: new THREE.Vector3(1, 1, 0.93) },
+      u_endsFlip:    { value: 0.0 }
+    };
+  }
+
+  _dotsUniforms() {
+    return {
+      u_sliceNormal: { value: new THREE.Vector3() },
+      u_slicePt:     { value: new THREE.Vector3() },
+      u_slabHalf:    { value: 1.0 },
+      u_endsFlip:    { value: 0.0 },
+      u_pointSize:   { value: 6.0 }
     };
   }
 
   _ensureMats() {
     if (this._matNear) return;
+
+    // --- NEAR PASS (front fragments, full brightness) ---
+    // selected streamlines
     this._matNear = new THREE.ShaderMaterial({
       vertexShader:   SLAB_VS,
-      fragmentShader: SLAB_FS_NEAR,
-      uniforms:       this._makeUniforms(),
-      depthWrite:     true,   // writes depth — protects bright fragments
+      fragmentShader: SLAB_FS,
+      uniforms:       this._slabUniforms(),
+      defines:        { NEAR_PASS: 1 },
+      depthWrite:     true,
       depthTest:      true,
+      transparent:    false
     });
+    // streamline ends
+    this._dmatNear = new THREE.ShaderMaterial({
+      vertexShader:   DOTS_VS,
+      fragmentShader: DOTS_FS,
+      uniforms:       this._dotsUniforms(),
+      defines:        { NEAR_PASS: 1 },
+      depthWrite:     false,
+      depthTest:      true,
+      transparent:    true
+    });
+
+    // --- FAR PASS (back fragments, dimmed) ---
+    // selected streamlines
     this._matFar = new THREE.ShaderMaterial({
       vertexShader:   SLAB_VS,
-      fragmentShader: SLAB_FS_FAR,
-      uniforms:       this._makeUniforms(),
-      depthWrite:     false,  // never overwrites pass-0 depth values
+      fragmentShader: SLAB_FS,
+      uniforms:       this._slabUniforms(),
+      defines:        { FAR_PASS: 1 },
+      depthWrite:     false,
       depthTest:      true,
+      transparent:    true
+    });
+    // streamline ends
+    this._dmatFar = new THREE.ShaderMaterial({
+      vertexShader:   DOTS_VS,
+      fragmentShader: DOTS_FS,
+      uniforms:       this._dotsUniforms(),
+      defines:        { FAR_PASS: 1 },
+      depthWrite:     false,
+      depthTest:      true,
+      transparent:    true
     });
   }
 
   // Call this whenever selMesh is replaced (e.g. after updateProbe rebuilds it).
   // Safe to call with null to clear.
-  invalidate(newSelMesh) {
+  invalidate(newSelMesh, newDotsMesh) {
     this._meshNear = null;
     this._meshFar  = null;
+    this._dotsNear = null;
+    this._dotsFar  = null;
     this._srcMesh  = newSelMesh;
+    this._srcDots  = null;//newDotsMesh || null;
   }
 
-  _ensureSliceMeshes(selMesh) {
-    if (this._meshNear && this._srcMesh === selMesh) return;
-    this._ensureMats();
-    // clone() shares geometry buffers — no data copy
-    const near = selMesh.clone();
-    near.geometry = selMesh.geometry;
-    near.material = this._matNear;
-    const far = selMesh.clone();
-    far.geometry = selMesh.geometry;
-    far.material = this._matFar;
-    this._meshNear = near;
-    this._meshFar  = far;
-    this._srcMesh  = selMesh;
+_ensureSliceMeshes(selMesh, dotsMesh) {
+  if (this._meshNear && this._srcMesh === selMesh && this._srcDots === dotsMesh) return;
+
+  this._ensureMats();
+
+  // --- SLAB NEAR ---
+  const near = selMesh.clone();
+  near.geometry = selMesh.geometry;
+  near.material = this._matNear;
+  this._meshNear = near;
+
+  // --- SLAB FAR ---
+  const far = selMesh.clone();
+  far.geometry = selMesh.geometry;
+  far.material = this._matFar;
+  this._meshFar = far;
+
+  // --- DOTS (if provided) ---
+  if (dotsMesh) {
+    // --- DOT NEAR (front, full brightness) ---
+    const dnear = dotsMesh.clone();
+    dnear.geometry = dotsMesh.geometry;
+    dnear.material = this._dmatNear;
+    this._dotsNear = dnear;
+
+    // --- DOT FAR (back, dimmed) ---
+    const dfar = dotsMesh.clone();
+    dfar.geometry = dotsMesh.geometry;
+    dfar.material = this._dmatFar;
+    this._dotsFar  = dfar;
+  } else {
+    this._dotsNear = null;
+    this._dotsFar  = null;
   }
+
+  this._srcMesh = selMesh;
+  this._srcDots = dotsMesh || null;
+}
 
   // Render slab for one plane onto canvas2d.
   //
@@ -151,13 +280,14 @@ export class SlabRenderer {
   // state    : app state (for viewA/viewB)
   // opts     : { slabMultiplier, endsMm, endsColor, pixdim }
   render(canvas2d, planeKey, cursor, tag, vr, state, opts) {
-    const selMesh = opts.selMesh;
+    const selMesh  = opts.selMesh;
+    const dotsMesh = opts.dotsMesh || null;
     if (!selMesh) return;
     const W = canvas2d.width, H = canvas2d.height;
     if (W <= 0 || H <= 0) return;
     this._ensureRT(W, H);
     this._ensureMats();
-    this._ensureSliceMeshes(selMesh);
+    this._ensureSliceMeshes(selMesh, dotsMesh);
 
     const r   = this._r;
     const nii = state.nii;
@@ -201,42 +331,54 @@ export class SlabRenderer {
     cam.updateProjectionMatrix();
 
     // ── Update uniforms on both materials ─────────────────
-    // They share the same values — only the depth-write flag differs.
     const ec = new THREE.Color(opts.endsColor);
-    for (const mat of [this._matNear, this._matFar]) {
+    const endsFlipVal = (opts.endsMm > 0 && opts.endsFlip) ? 1.0 : 0.0;
+    for (const mat of [this._matNear, this._matFar, this._dmatNear,this._dmatFar]) {
       const u = mat.uniforms;
       u.u_sliceNormal.value.set(nDir[0], nDir[1], nDir[2]);
       u.u_slicePt.value.set(cursor[0], cursor[1], cursor[2]);
       u.u_slabHalf.value = halfThickMm;
-      u.u_endsMm.value   = opts.endsMm;
-      u.u_endsColor.value.set(ec.r, ec.g, ec.b);
+      if (u.u_endsMm) {
+		u.u_endsMm.value   = opts.endsMm;
+		u.u_endsFlip.value = endsFlipVal;
+		u.u_endsColor.value.set(ec.r, ec.g, ec.b);
+	  }
     }
 
-    // ── Two-pass render into offscreen RT ─────────────────
-    // Pass 0 (near): bright in-slab segments, depth-write ON.
-    //   Their depth values are written to the RT's depth buffer.
-    // Pass 1 (far):  dim behind-plane segments, depth-write OFF.
-    //   depthTest still runs, so any fragment that would land on top
-    //   of a pass-0 pixel is correctly discarded.
     const savedRT    = r.getRenderTarget();
     const savedBg    = r.getClearColor(new THREE.Color());
     const savedAlpha = r.getClearAlpha();
 
     if (!this._scene) this._scene = new THREE.Scene();
+
+    // ── Two-pass render into offscreen RT ─────────────────
+    // Painter's algorithm: draw dim far fragments first, then bright
+    // near fragments on top.  No depth buffer trickery needed — we simply
+    // let the second draw overwrite the first wherever they overlap.
+    // depthWrite:false on both so Three.js doesn't interfere.
+
     r.setRenderTarget(this._rt);
     r.setClearColor(0x000000, 0);
     r.clear();
 
-    // pass 0 — near
-    this._scene.add(this._meshNear);
-    r.render(this._scene, cam);
-    this._scene.remove(this._meshNear);
+    const savedAutoClear = r.autoClear;
+    r.autoClear = false;  // must be off so pass 1 doesn't wipe pass 0's pixels
 
-    // pass 1 — far (depth-write off, so it loses to any pass-0 fragment)
+    // pass 0 — far (dim, drawn first so near will overwrite)
     this._scene.add(this._meshFar);
+    if (this._dotsFar)  this._scene.add(this._dotsFar);
     r.render(this._scene, cam);
     this._scene.remove(this._meshFar);
+    if (this._dotsFar)  this._scene.remove(this._dotsFar);
 
+    // pass 1 — near (bright, drawn on top)
+    this._scene.add(this._meshNear);
+    if (this._dotsNear) this._scene.add(this._dotsNear);
+    r.render(this._scene, cam);
+    this._scene.remove(this._meshNear);
+    if (this._dotsNear) this._scene.remove(this._dotsNear);
+
+    r.autoClear = savedAutoClear;
     r.setRenderTarget(savedRT);
     r.setClearColor(savedBg, savedAlpha);
 

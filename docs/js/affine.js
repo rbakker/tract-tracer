@@ -52,14 +52,6 @@ export function matMul(A, B) {
   );
 }
 
-export function voxToRas(Ab, v) {
-  return mat3mulVec(Ab, v)
-}
-
-export function rasToVox(invAb, r) {
-  return mat3mulVec(invAb, r);
-}
-
 // Build rotation matrix from pitch (X), yaw (Y), roll (Z) in radians
 // Order: Rz * Ry * Rx  (roll applied first, then yaw, then pitch)
 export function eulerToMat3(pitch, yaw, roll) {
@@ -73,65 +65,6 @@ export function eulerToMat3(pitch, yaw, roll) {
     [ cp*sy*cr + sp*sr,  cp*sy*sr - sp*cr,  cp*cy ],
   ];
 }
-
-/**
- * Decomposes a 3x3 affine matrix A (row-major nested array) and translation b
- * into permutation P, pixel-size scaling S, residual shear/rotation K.
- * A = P * S * K  (approximately, for typical NIfTI affines)
- *
- * @param {number[][]} A - 3x3 nested row-major array
- * @param {number[]}   b - [tx, ty, tz] translation
- * @returns {{ P, S, K, b, vox_size }}
- */
-export function decomposeAffine(Ab) {
-  const A = [Ab[0],Ab[1],Ab[2]]
-  const b = Ab[3]
-	
-  // Sort voxel columns by confidence so strongest axis gets first pick
-  const order = [0,1,2].sort((a,bx) =>
-    Math.max(...[0,1,2].map(r => Math.abs(A[r][bx]))) -
-    Math.max(...[0,1,2].map(r => Math.abs(A[r][a])))
-  );
-  const P = [[0,0,0],[0,0,0],[0,0,0]];
-  const rowAssigned = [false,false,false];
-  for (const col of order) {
-    let maxVal=-1, chosenRow=-1, sign=1;
-    for (let row=0; row<3; row++) {
-      if (rowAssigned[row]) continue;
-      const absVal = Math.abs(A[row][col]);
-      if (absVal > maxVal) {
-        maxVal=absVal; chosenRow=row;
-        sign = A[row][col] >= 0 ? 1 : -1;
-      }
-    }
-    if (chosenRow === -1)
-      chosenRow = [0,1,2].find(r => !rowAssigned[r]);
-    P[chosenRow][col] = sign;
-    rowAssigned[chosenRow] = true;
-  }
-
-  // D = P^T * A  (P is orthogonal so P^T = P^-1)
-  const D = [[0,0,0],[0,0,0],[0,0,0]];
-  for (let r=0; r<3; r++)
-    for (let c=0; c<3; c++)
-      D[r][c] = P[0][r]*A[0][c] + P[1][r]*A[1][c] + P[2][r]*A[2][c];
-
-  // S: diagonal pixel sizes from D diagonal
-  const dx = Math.abs(D[0][0]) || 1;
-  const dy = Math.abs(D[1][1]) || 1;
-  const dz = Math.abs(D[2][2]) || 1;
-  const S = [[dx,0,0],[0,dy,0],[0,0,dz]];
-
-  // K = S^-1 * D  (residual shear/rotation, unit diagonal)
-  const K = [
-    [D[0][0]/dx, D[0][1]/dx, D[0][2]/dx],
-    [D[1][0]/dy, D[1][1]/dy, D[1][2]/dy],
-    [D[2][0]/dz, D[2][1]/dz, D[2][2]/dz],
-  ];
-
-  return { P, S, K, b, vox_size: [dx, dy, dz] };
-}
-
 
 /**
  * Decomposes a 3x3 affine matrix A (row-major nested array) and translation b

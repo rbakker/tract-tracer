@@ -234,15 +234,24 @@ export function makePlaneMesh(planeKey, vr, viewCentre) {
 // ═══════════════════════════════════════════════════════════
 // Tractogram geometry helpers
 // ═══════════════════════════════════════════════════════════
-export function makeLineSegments(tracts) {
+
+// probedEnds (optional): Uint8Array, one entry per tract.
+//   0 = start end was probed  (ends-only mode, show the far/end terminus)
+//   1 = last  end was probed  (ends-only mode, show the near/start terminus)
+//   2 = both / pass-through   (normal mode, show both ends)
+export function makeLineSegments(tracts, probedEnds) {
   let tv = 0;
   for (const t of tracts) { const n = t.length / 3; if (n >= 2) tv += 2 * (n - 1); }
-  const pos   = new Float32Array(tv * 3);
-  const col   = new Float32Array(tv * 3);
-  const eDist = new Float32Array(tv);
+  const pos          = new Float32Array(tv * 3);
+  const col          = new Float32Array(tv * 3);
+  const arcFromStart = new Float32Array(tv);  // arc-length from first point
+  const arcFromEnd   = new Float32Array(tv);  // arc-length from last point
+  const probedFlag   = new Float32Array(tv);  // 0=start, 1=end, 2=both
   let vi = 0;
-  for (const t of tracts) {
+  for (let si = 0; si < tracts.length; si++) {
+    const t = tracts[si];
     const n = t.length / 3; if (n < 2) continue;
+    const flag = probedEnds ? probedEnds[si] : 2;
     const arc = new Float32Array(n);
     for (let i = 1; i < n; i++) {
       const dx = t[3*i] - t[3*i-3], dy = t[3*i+1] - t[3*i-2], dz = t[3*i+2] - t[3*i-1];
@@ -259,27 +268,75 @@ export function makeLineSegments(tracts) {
       col[3*vi] = col[3*vi+3] = dx / dl;
       col[3*vi+1] = col[3*vi+4] = dy / dl;
       col[3*vi+2] = col[3*vi+5] = dz / dl;
-      eDist[vi]   = Math.min(arc[i],   totalLen - arc[i]);
-      eDist[vi+1] = Math.min(arc[i+1], totalLen - arc[i+1]);
+      arcFromStart[vi]   = arc[i];
+      arcFromStart[vi+1] = arc[i+1];
+      arcFromEnd[vi]     = totalLen - arc[i];
+      arcFromEnd[vi+1]   = totalLen - arc[i+1];
+      probedFlag[vi]     = flag;
+      probedFlag[vi+1]   = flag;
       vi += 2;
     }
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
-  geo.setAttribute('endDist',  new THREE.BufferAttribute(eDist, 1));
+  geo.setAttribute('position',     new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color',        new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('arcFromStart', new THREE.BufferAttribute(arcFromStart, 1));
+  geo.setAttribute('arcFromEnd',   new THREE.BufferAttribute(arcFromEnd,   1));
+  geo.setAttribute('probedFlag',   new THREE.BufferAttribute(probedFlag,   1));
   return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true }));
 }
 
-export function makeEndpointCloud(tracts) {
-  const pos = new Float32Array(tracts.length * 6); let vi = 0;
-  for (const t of tracts) {
+
+// Endpoint dots — a Points geometry with one point per tract endpoint.
+// probedEnds: same array as makeLineSegments. When endsFlip is active,
+// only the far endpoint of each tract is included.
+export function makeEndpointDots(tracts, probedEnds) {
+  // Count points: 2 per tract in pass-through, 1 per tract in ends-only
+  let np = 0;
+  for (let i = 0; i < tracts.length; i++) {
+    const t = tracts[i]; if (t.length < 3) continue;
+    const flag = probedEnds ? probedEnds[i] : 2;
+    np += (flag === 2) ? 2 : 1;
+  }
+  const pos = new Float32Array(np * 3);
+  const col = new Float32Array(np * 3);
+  let vi = 0;
+  for (let i = 0; i < tracts.length; i++) {
+    const t = tracts[i]; if (t.length < 3) continue;
     const n = t.length / 3;
-    pos[vi++] = t[0]; pos[vi++] = t[1]; pos[vi++] = t[2];
-    pos[vi++] = t[3*(n-1)]; pos[vi++] = t[3*(n-1)+1]; pos[vi++] = t[3*(n-1)+2];
+    const flag = probedEnds ? probedEnds[i] : 2;
+    // Compute direction colour at each end (from first/last segment)
+    const dirCol = (ax, ay, az, bx, by, bz) => {
+      const dx = Math.abs(bx-ax), dy = Math.abs(by-ay), dz = Math.abs(bz-az);
+      const dl = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
+      return [dx/dl, dy/dl, dz/dl];
+    };
+    // start endpoint
+    const addStart = () => {
+      pos[vi*3]   = t[0]; pos[vi*3+1] = t[1]; pos[vi*3+2] = t[2];
+      const [r,g,b] = dirCol(t[0],t[1],t[2], t[3],t[4],t[5]);
+      col[vi*3]=r; col[vi*3+1]=g; col[vi*3+2]=b;
+      vi++;
+    };
+    const addEnd = () => {
+      pos[vi*3]   = t[3*(n-1)]; pos[vi*3+1] = t[3*(n-1)+1]; pos[vi*3+2] = t[3*(n-1)+2];
+      const [r,g,b] = dirCol(t[3*(n-2)],t[3*(n-2)+1],t[3*(n-2)+2], t[3*(n-1)],t[3*(n-1)+1],t[3*(n-1)+2]);
+      col[vi*3]=r; col[vi*3+1]=g; col[vi*3+2]=b;
+      vi++;
+    };
+    if (flag === 0) addEnd();        // start was probed → show end dot
+    else if (flag === 1) addStart(); // end was probed   → show start dot
+    else { addStart(); addEnd(); }   // both             → show both dots
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  return new THREE.Points(geo,
-    new THREE.PointsMaterial({ size: 1.5, color: 0xff6600, sizeAttenuation: true }));
+  geo.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, vi*3), 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col.slice(0, vi*3), 3));
+
+  return new THREE.Points(
+	geo,
+	new THREE.PointsMaterial({
+	  vertexColors: true
+	})
+  );
 }
+

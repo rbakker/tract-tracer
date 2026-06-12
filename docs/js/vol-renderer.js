@@ -1,7 +1,7 @@
 // ── vol-renderer.js ───────────────────────────────────────
 // WebGL2 3D-texture volume renderer.
 
-import { eulerToMat3, absVec, mat3mulVec, rasToVox } from './affine.js';
+import { eulerToMat3, absVec, mat3mulVec } from './affine.js';
 
 const VS = `#version 300 es
 in vec2 a_pos;
@@ -248,21 +248,6 @@ export class VolRenderer {
       p.viewCentre_ras[2] + fu*u_dir[2] + fv*v_dir[2]
     ];
   }
-
-  // panDelta: returns new cursor_ras so anatomy under (x0,y0) moves to (x1,y1)
-  /*panDelta(planeKey, x0, y0, x1, y1, tag='a') {
-    const p = this._planeParams[planeKey+tag];
-    if (!p) return null;
-    const dU = ((x1-x0)/p.W) * this._ras_extent[p.uAx];
-    const dV = -((y1-y0)/p.H) * this._ras_extent[p.vAx];
-    const u_dir = this._rot_dirs[p.uAx];
-    const v_dir = this._rot_dirs[p.vAx];    
-    return [
-      p.viewCentre_ras[0] - dU*u_dir[0] - dV*v_dir[0],
-      p.viewCentre_ras[1] - dU*u_dir[1] - dV*v_dir[1],
-      p.viewCentre_ras[2] - dU*u_dir[2] - dV*v_dir[2],
-    ];
-  }*/
 
   // Convert RAS mm to canvas pixel using cached plane params.
   // Return the 4 RAS corners of a slice plane, using the same axis logic as renderSlice.

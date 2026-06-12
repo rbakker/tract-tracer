@@ -1,78 +1,95 @@
 // ── tck.js ────────────────────────────────────────────────
 // MRtrix3 .tck parser + writer.
-// parseTck  → { tracts, tractForPoint, rawHeader }
-// writeTck  → ArrayBuffer
 
+/**
+ * Detect whether the host system is little‑endian.
+ * @returns {boolean}
+ */
 function sysLE() {
   const t = new Uint16Array(1); t[0] = 348;
   return new DataView(t.buffer).getUint16(0, true) === 348;
 }
 
-// ── parseHeaderTuples ──────────────────────────────────────
-// Common routine: reads the ASCII header and returns an ordered
-// array of [key, value] pairs, preserving duplicates (e.g. multiple
-// command_history lines) and order.  The first entry is always
-// ['_magic', 'mrtrix tracks'].  Entries after END are not included.
-// Also returns byteLength of the header (up to and including 'END\n').
-function parseHeaderTuples(buf) {
+/**
+ * Parse the text header of a .tck file into a JS object.
+ * Handles multi‑line fields and command_history arrays.
+ * @param {ArrayBuffer} buf
+ * @returns {Object} Parsed header fields
+ */
+function parseTckHeader(buf) {
+  const arrayFields = ['command_history'];
   const maxScan = Math.min(16384, buf.byteLength);
-  const text = new TextDecoder().decode(new Uint8Array(buf, 0, maxScan));
-  const endMatch = text.match(/\nEND\n/);
+  const text = new TextDecoder('utf-8', { fatal: false })
+    .decode(new Uint8Array(buf, 0, maxScan));
+
+  const endMatch = text.match(/(^|\n)END(\r?\n|$)/);
   if (!endMatch) throw 'Could not find END in .tck header';
+
   const headerText = text.slice(0, endMatch.index + endMatch[0].length);
   const lines = headerText.split('\n');
+  const header = {};
 
-  const tuples = [];
   if (!lines[0].startsWith('mrtrix tracks')) throw 'Not a .tck file';
-  tuples.push(['_magic', 'mrtrix tracks']);
+
+  let lastKey = null;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     if (line.trim() === 'END') break;
-    // Key: value  (key is word characters, value is rest of line)
-    const m = line.match(/^([\w]+):\s?(.*)/);
+
+    const m = line.match(/^([^:]+):\s*(.*)$/);
     if (m) {
-      tuples.push([m[1], m[2]]);
-    } else if (tuples.length > 1 && line !== '') {
-      // Continuation line — append to previous value (handles multi-line values)
-      tuples[tuples.length - 1][1] += '\n' + line;
+      const k = m[1], v = m[2];
+
+      if (arrayFields.indexOf(k) > -1) {
+        if (k in header) header[k].push(v);
+        else header[k] = [v];
+      } else {
+        header[k] = v;
+      }
+
+      lastKey = k;
+    } else if (lastKey !== null) {
+      if (arrayFields.indexOf(lastKey) > -1) {
+        header[lastKey][header[lastKey].length - 1] += '\n' + line;
+      } else {
+        header[lastKey] += '\n' + line;
+      }
     }
   }
-  return { tuples, headerByteLength: new TextEncoder().encode(headerText).byteLength };
+
+  return header;
 }
 
-// Build a plain object from tuples (last value wins for duplicates,
-// except command_history which is not needed as an object key).
-function tuplesToObj(tuples) {
-  const h = {};
-  for (const [k, v] of tuples) h[k] = v;
-  return h;
-}
-
-// Build raw header string from tuples, omitting count/total_count/file
-// (those are owned by writeTck).  Returned string starts with 'mrtrix tracks'
-// and does NOT end with a newline.
-function tuplesToRaw(tuples) {
+/**
+ * Convert a header object back into raw .tck header text.
+ * @param {Object} header
+ * @returns {string}
+ */
+function headerToRaw(header) {
   const lines = [];
-  for (const [k, v] of tuples) {
-    if (k === '_magic') { lines.push('mrtrix tracks'); continue; }
-    if (k === 'count' || k === 'total_count' || k === 'file') continue;
-    lines.push(k + ': ' + v);
+  for (const [k, v] of Object.entries(header)) {
+    const values = Array.isArray(v) ? v : [v];
+    for (const s of values) lines.push(`${k}: ${s}`);
   }
-  return lines.join('\n');
+  return 'mrtrix tracks\n' + lines.join('\n') + '\nEND\n';
 }
 
+/**
+ * Parse a full .tck file into streamlines + metadata.
+ * @param {ArrayBuffer} buf
+ * @returns {{tracts: Array, streamlineLookup: Int32Array, header: Object}}
+ */
 export function parseTck(buf) {
-  const { tuples } = parseHeaderTuples(buf);
-  const h = tuplesToObj(tuples);
-  const rawHeader = tuplesToRaw(tuples);
-
-  const byteOffset = parseInt(h.file.split(' ').pop());
-  const m = h.datatype.match(/^([a-zA-Z]+)(\d+)([a-zA-Z]+)$/);
+  const header = parseTckHeader(buf);
+  const byteOffset = parseInt(header.file.split(' ').pop());
+  const m = header.datatype.trim().match(/^float(32|64)(le|be)?$/i);
   if (!m) throw 'Bad TCK datatype';
-  const bpe = parseInt(m[2]) / 8;
+
+  const bpe = parseInt(m[1]) / 8;
   const Dtype = bpe === 4 ? Float32Array : Float64Array;
-  const le = m[3] === 'LE';
+  const le = (m[2] || 'LE').toUpperCase() === 'LE';
+
   let data;
   if (le === sysLE()) {
     data = byteOffset % bpe
@@ -82,67 +99,83 @@ export function parseTck(buf) {
     const len = (buf.byteLength - byteOffset) / bpe;
     data = new Dtype(len);
     const dv = new DataView(buf, byteOffset);
-    const g = 'get' + Dtype.name.replace('Array', '');
-    for (let i = 0; i < len; i++) data[i] = dv[g](i * bpe, le);
+    const getter = bpe === 4 ? dv.getFloat32.bind(dv) : dv.getFloat64.bind(dv);
+    for (let i = 0; i < len; i++) data[i] = getter(i * bpe, le);
   }
 
-  const tracts = [], tractForPoint = [];
+  const streamlines = [], streamlineLookup = [];
+  const nPoints = data.length / 3;
   let iPrev = 0;
-  for (let i = 0; i < data.length / 3; i++) {
-    const v = data[3 * i];
-    if (isNaN(v) || !isFinite(v)) {
-      const len = i - iPrev;
-      if (len > 0) {
-        const si = tracts.length;
-        const off = data.byteOffset + 3 * iPrev * data.BYTES_PER_ELEMENT;
-        tracts.push(new data.constructor(data.buffer, off, 3 * len));
-        for (let k = 0; k < len; k++) tractForPoint.push(si);
-      }
+
+  // Push a streamline slice [start,end)
+  function pushStreamline(start, end) {
+    const len = end - start;
+    if (len <= 0) return;
+
+    const si = streamlines.length;
+    const off = data.byteOffset + 3 * start * data.BYTES_PER_ELEMENT;
+    streamlines.push(new data.constructor(data.buffer, off, 3 * len));
+
+    for (let k = 0; k < len; k++) streamlineLookup.push(si);
+  }
+
+  for (let i = 0; i < nPoints; i++) {
+    const x = data[3*i], y = data[3*i+1], z = data[3*i+2];
+    if (!isFinite(x) || !isFinite(y) || !isFinite(z)) {
+      pushStreamline(iPrev, i);
       iPrev = i + 1;
     }
   }
-  return { tracts, tractForPoint: new Int32Array(tractForPoint), rawHeader };
+
+  pushStreamline(iPrev, nPoints);
+
+  return { streamlines, streamlineLookup: new Int32Array(streamlineLookup), header };
 }
 
-// ── writeTck ───────────────────────────────────────────────
-// tracts      : Float32Array[] as returned by parseTck
-// rawHeader   : string from parseTck (no count/total_count/file lines)
-// commandLine : appended as a new command_history entry
-// Returns ArrayBuffer.
-export function writeTck(tracts, rawHeader, commandLine) {
-  const n = tracts.length;
+/**
+ * Write streamlines + header into a valid .tck file.
+ * @param {Array<Float32Array>} streamlines
+ * @param {Object} header
+ * @param {string} commandLine
+ * @returns {ArrayBuffer}
+ */
+export function writeTck(streamlines, header, commandLine) {
+  const n = streamlines.length;
+  header = structuredClone(header);
 
-  // Binary payload: each tract's points + NaN,NaN,NaN separator (and final terminator)
+  // Build float payload with NaN separators
   let nFloats = 0;
-  for (const t of tracts) nFloats += t.length + 3;
+  for (const t of streamlines) nFloats += t.length + 3;
+
   const data = new Float32Array(nFloats);
   let off = 0;
-  for (const t of tracts) {
+
+  for (const t of streamlines) {
     for (let i = 0; i < t.length; i++) data[off++] = t[i];
     data[off++] = NaN; data[off++] = NaN; data[off++] = NaN;
   }
 
-  // Header text: rawHeader already starts with 'mrtrix tracks'
   const enc = new TextEncoder();
-  const headerLines = [
-    rawHeader,
-    'command_history: ' + commandLine,
-    'count: ' + n,
-    'total_count: ' + n,
-  ];
+  if (!header.command_history) header.command_history = [];
+  header.command_history.push(commandLine);
 
-  // The 'file: . <offset>' line depends on its own byte position — solve by
-  // measuring header length with a placeholder, then align to Float32 (4 bytes).
-  const placeholder = headerLines.join('\n') + '\nfile: . 0000000000\nEND\n';
+  header.count = n;
+  header.total_count = n;
+  header.file = '. 0000000000';
+
+  const placeholder = headerToRaw(header);
   const dataOffset = Math.ceil(enc.encode(placeholder).byteLength / 4) * 4;
+  header.file = `. ${dataOffset}`;
 
-  const fullHeader = headerLines.join('\n') + '\nfile: . ' + dataOffset + '\nEND\n';
+  const fullHeader = headerToRaw(header);
   const headerBytes = enc.encode(fullHeader);
+
   if (headerBytes.byteLength > dataOffset)
-    throw 'writeTck: header overflowed estimated offset — please report';
+    throw 'writeTck: header overflowed estimated offset.';
 
   const out = new ArrayBuffer(dataOffset + data.byteLength);
   new Uint8Array(out).set(headerBytes, 0);
   new Float32Array(out, dataOffset).set(data);
+
   return out;
 }

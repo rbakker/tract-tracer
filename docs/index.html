@@ -8,7 +8,7 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
-  --bg:#080b0f;--panel:#0c1018;--border:#1a2030;
+  --bg:#080b0f;--panel:#0c1018;--border:#2a3550;
   --accent:#4af;--accent2:#f84;--dim:#9ad;
   --text:#8899aa;--bright:#ccdde8;
   --sag:#3af8cc;--cor:#f8a03a;--axi:#a03af8;
@@ -39,7 +39,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 /* ── SETTINGS BUTTON + LOAD BUTTON ── */
 #top-btns{position:absolute;top:10px;left:12px;z-index:10;
   display:flex;gap:8px;pointer-events:all;}
-.top-btn{background:rgba(8,11,15,0.82);border:1px solid var(--border);
+.top-btn{background:rgba(8,11,15,0.82);border:2px solid var(--border);
   color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:11px;
   letter-spacing:0.12em;padding:5px 14px;cursor:pointer;
   transition:border-color 0.15s,color 0.15s;}
@@ -49,22 +49,42 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 /* ── SETTINGS OVERLAY ── */
 #settings-overlay{position:absolute;top:36px;left:12px;
   z-index:200;width:310px;max-height:calc(100vh - 80px);overflow-y:auto;
-  background:rgba(8,11,15,0.93);border:1px solid var(--border);
+  background:rgba(8,11,15,0.95);border:2px solid var(--border);
   backdrop-filter:blur(6px);padding:14px 16px;display:none;pointer-events:all;}
 #settings-overlay.open{display:block;}
 
 /* ── LOAD DROPDOWN + DROP ZONES ── */
-#load-dropdown{position:absolute;top:36px;left:12px;z-index:200;
-  background:rgba(8,11,15,0.93);border:1px solid var(--border);
-  backdrop-filter:blur(6px);padding:16px;display:none;pointer-events:all;gap:14px;}
+#load-dropdown{position:absolute;top:36px;left:12px;z-index:200;width:320px;
+  background:rgba(8,11,15,0.95);border:2px solid var(--border);
+  backdrop-filter:blur(6px);padding:14px;display:none;flex-direction:column;
+  pointer-events:all;gap:10px;}
 #load-dropdown.open{display:flex;}
-.drop-zone{border:1px solid var(--border);padding:1.2rem 1.5rem;text-align:center;
-  cursor:pointer;transition:border-color 0.2s;min-width:130px;}
-.drop-zone:hover,.drop-zone.over{border-color:var(--accent);}
-.drop-zone .tag{color:var(--accent);font-size:10px;margin-bottom:4px;}
-.drop-zone .name{color:var(--bright);margin:4px 0;font-size:10px;}
-.drop-zone p{color:var(--dim);font-size:10px;margin-top:4px;}
-.drop-zone p.is-loading{color:var(--accent);animation:pulse 1s ease-in-out infinite;}
+.dz-row{display:flex;align-items:stretch;border:1px solid var(--border);}
+.dz-row:hover{border-color:var(--accent);}
+.drop-zone{padding:10px 14px;cursor:pointer;flex:1;min-width:0;}
+.drop-zone .tag{color:var(--accent);font-size:10px;margin-bottom:3px;letter-spacing:0.1em;}
+.drop-zone .name{color:var(--bright);font-size:10px;}
+.dz-right{display:flex;flex-direction:column;justify-content:center;gap:6px;
+  padding:8px 12px;min-width:100px;}
+.dz-right p{color:var(--dim);font-size:10px;}
+.dz-right p.is-loading{color:var(--accent);animation:pulse 1s ease-in-out infinite;}
+a.accent-link,button.accent-link{color:var(--accent);font-family:'JetBrains Mono',monospace;
+  font-size:10px;letter-spacing:0.08em;background:none;border:none;padding:0;
+  cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
+#hdr-panel{position:fixed;top:80px;left:12px;z-index:300;width:430px;
+  max-height:70vh;overflow-y:auto;background:rgba(8,11,15,0.97);
+  border:2px solid var(--accent);backdrop-filter:blur(6px);
+  padding:14px 16px;display:none;pointer-events:all;}
+#hdr-panel.open{display:block;}
+#hdr-panel pre{color:var(--text);font-size:9px;line-height:1.7;
+  white-space:pre-wrap;word-break:break-all;user-select:text;margin-top:8px;}
+#hdr-panel-head{display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);padding-bottom:6px;}
+#hdr-panel-title{color:var(--accent);font-size:9px;letter-spacing:0.18em;}
+#hdr-panel-close{background:none;border:none;color:var(--dim);font-size:16px;
+  cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:1;padding:0;}
+#hdr-panel-close:hover{color:var(--accent);}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
 /* inline toggle inside a ctl-row */
 .ctl-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
@@ -82,6 +102,7 @@ input[type=file]{display:none;}
 #welcome{position:absolute;inset:0;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:12px;pointer-events:none;
   z-index:1;}
+#welcome a,#welcome button{pointer-events:all;}
 #welcome h2{color:var(--bright);letter-spacing:0.3em;font-size:14px;font-weight:400;}
 #welcome p{color:var(--dim);font-size:10px;letter-spacing:0.15em;}
 
@@ -170,23 +191,47 @@ input[type=file]{display:none;}
 
   <!-- Load dropdown -->
   <div id="load-dropdown">
-    <div class="drop-zone" id="dz-nii" onclick="document.getElementById('fi-nii').click()">
-      <div class="tag">ANATOMY</div>
-      <div class="name">.nii / .nii.gz</div>
-      <p>drop or click</p>
-      <input type="file" id="fi-nii" accept=".nii,.gz">
+    <div class="dz-row">
+      <div class="drop-zone" id="dz-nii" onclick="document.getElementById('fi-nii').click()">
+        <div class="tag">ANATOMY</div>
+        <div class="name">.nii / .nii.gz</div>
+        <input type="file" id="fi-nii" accept=".nii,.gz">
+      </div>
+      <div class="dz-right">
+        <p id="dz-nii-status">drop or click</p>
+        <button class="accent-link" id="btn-nii-hdr">show header</button>
+      </div>
     </div>
-    <div class="drop-zone" id="dz-tck" onclick="document.getElementById('fi-tck').click()">
-      <div class="tag">TRACTOGRAM</div>
-      <div class="name">.tck</div>
-      <p>drop or click</p>
-      <input type="file" id="fi-tck" accept=".tck">
+    <div class="dz-row">
+      <div class="drop-zone" id="dz-tck" onclick="document.getElementById('fi-tck').click()">
+        <div class="tag">TRACTOGRAM</div>
+        <div class="name">.tck</div>
+        <input type="file" id="fi-tck" accept=".tck">
+      </div>
+      <div class="dz-right">
+        <p id="dz-tck-status">drop or click</p>
+        <button class="accent-link" id="btn-tck-hdr">show header</button>
+      </div>
     </div>
-    <div class="drop-zone" id="dz-save" style="cursor:pointer;">
-      <div class="tag">SAVE SELECTION</div>
-      <div class="name">.tck</div>
-      <p id="save-status">select streamlines first</p>
+    <div class="dz-row">
+      <div class="drop-zone" id="dz-save">
+        <div class="tag">SAVE SELECTION</div>
+        <div class="name">.tck</div>
+      </div>
+      <div class="dz-right">
+        <p id="save-status">select streamlines first</p>
+        <button class="accent-link" id="btn-show-indices" style="display:none;">show indices</button>
+      </div>
     </div>
+  </div>
+
+  <!-- Header / indices panel -->
+  <div id="hdr-panel">
+    <div id="hdr-panel-head">
+      <span id="hdr-panel-title">HEADER</span>
+      <button id="hdr-panel-close">×</button>
+    </div>
+    <pre id="hdr-panel-pre"></pre>
   </div>
 
   <!-- Settings overlay -->
@@ -282,7 +327,8 @@ input[type=file]{display:none;}
   <!-- Welcome screen (shown when no data loaded) -->
   <div id="welcome">
     <h2>TRACT TRACER</h2>
-    <p>Use the LOAD… menu to get started</p>
+    <p>Use the FILE menu to get started</p>
+    <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">DEMO</a></p>
     <div id="mprogress"></div>
   </div>
 
@@ -334,7 +380,7 @@ import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
-         makeLineSegments, makeEndpointCloud } from './js/scene3d.js';
+         makeLineSegments, makeEndpointDots } from './js/scene3d.js';
 
 'use strict';
 // ═══════════════════════════════════════════════════════════
@@ -398,50 +444,39 @@ const PLANES = {
 };
 const canvasA={}, canvasB={};
 
-function drawSlice(planeKey) {
-  const cvs = canvasA[planeKey];
-  if (!cvs||!state.nii) return;
-  vr.renderSlice(cvs, planeKey, state.viewA[planeKey], state.cursor, PLANES[planeKey].chColor, 'a', state.zoomA);
-  // Slab overlay — rendered after anatomy so it composites on top.
-  // The probe ring is drawn by the WebGL slice shader so it appears above the slab.
+// Unified slice draw for both panel sets.
+// tag='a': left panels (probe, full streamlines, probe ring)
+// tag='b': right panels (result, ends-filtered, no probe ring)
+function drawSlice(planeKey, tag) {
+  const cvs    = tag === 'a' ? canvasA[planeKey] : canvasB[planeKey];
+  const cursor = tag === 'a' ? state.cursor      : state.cursorB;
+  const view   = tag === 'a' ? state.viewA       : state.viewB;
+  const zoom   = tag === 'a' ? state.zoomA       : state.zoomB;
+  // Left panels show the probe ring; right panels suppress it (probeRadius=0).
+  const probeRadius = tag === 'a' ? undefined : 0;
+  if (!cvs || !state.nii) return;
+  vr.renderSlice(cvs, planeKey, view[planeKey], cursor, PLANES[planeKey].chColor, tag, zoom, probeRadius);
   if (selTracts.length && slabRenderer) {
-    slabRenderer.render(cvs, planeKey, state.cursor, 'a', vr, state,
-      { selMesh, slabMultiplier, endsMm: 0, endsColor });
+    // Left: full streamlines, no ends filter. Right: ends filter active.
+    const slabOpts = tag === 'a'
+      ? { selMesh, dotsMesh, slabMultiplier, endsMm: 0,    endsColor, endsFlip: false }
+      : { selMesh, dotsMesh, slabMultiplier, endsMm,       endsColor, endsFlip: probeEndsOnly };
+    slabRenderer.render(cvs, planeKey, cursor, tag, vr, state, slabOpts);
   }
-  updateCoordLabel(planeKey, state.cursor);
+  updateCoordLabel(planeKey, cursor, tag);
 }
 
-function drawSliceB(planeKey) {
-  const cvs = canvasB[planeKey];
-  if (!cvs||!state.nii) return;
-  // Pass zoom=zoomB, probeRadius=0 (no circle on right panels)
-  vr.renderSlice(cvs, planeKey, state.viewB[planeKey], state.cursorB, PLANES[planeKey].chColor, 'b', state.zoomB, 0);
-  if (selTracts.length && slabRenderer) {
-    slabRenderer.render(cvs, planeKey, state.cursorB, 'b', vr, state,
-      { selMesh, slabMultiplier, endsMm, endsColor });
-  }
-  updateCoordLabelB(planeKey);
-}
+function updateSlices()  { for (const k of ['sag','cor','axi']) drawSlice(k, 'a'); updateProbeGap(); }
+function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'b'); }
 
-function updateSlices()  { for (const k of ['sag','cor','axi']) drawSlice(k); updateProbeGap(); }
-function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSliceB(k); }
-
-function updateCoordLabel(planeKey, cursor) {
+function updateCoordLabel(planeKey, cursor, tag) {
   if (!state.nii) return;
-  const vox = mat3mulVec(state.nii.invAb, cursor).map(Math.round);
-  const ids  = {sag:'coord-sag', cor:'coord-cor', axi:'coord-axi'};
-  const axes = {sag:'x', cor:'y', axi:'z'};
-  const idx  = {sag:0,   cor:1,   axi:2};
-  document.getElementById(ids[planeKey]).textContent = axes[planeKey]+'='+vox[idx[planeKey]];
-}
-
-function updateCoordLabelB(planeKey) {
-  if (!state.nii) return;
-  const vox = mat3mulVec(state.nii.invAb, state.cursorB).map(Math.round);
-  const ids  = {sag:'coord-sag-b', cor:'coord-cor-b', axi:'coord-axi-b'};
-  const axes = {sag:'x', cor:'y', axi:'z'};
-  const idx  = {sag:0,   cor:1,   axi:2};
-  document.getElementById(ids[planeKey]).textContent = axes[planeKey]+'='+vox[idx[planeKey]];
+  const suffix = tag === 'b' ? '-b' : '';
+  const vox  = mat3mulVec(state.nii.invAb, cursor).map(Math.round);
+  const ids  = { sag: `coord-sag${suffix}`, cor: `coord-cor${suffix}`, axi: `coord-axi${suffix}` };
+  const axes = { sag: 'x', cor: 'y', axi: 'z' };
+  const idx  = { sag: 0,   cor: 1,   axi: 2 };
+  document.getElementById(ids[planeKey]).textContent = axes[planeKey] + '=' + vox[idx[planeKey]];
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -589,7 +624,7 @@ controls._renderFn = () => renderer3.render(scene, camera);
 // ═══════════════════════════════════════════════════════════
 // 5.  TRACTOGRAM 3D
 // ═══════════════════════════════════════════════════════════
-let bgMesh=null,selMesh=null,probeSphere=null;
+let selMesh=null,dotsMesh=null,probeSphere=null;
 // Slice plane meshes in 3D view
 const planeMeshes = {sag:null, cor:null, axi:null};
 const planeVisible = {sag:true, cor:true, axi:true};
@@ -629,8 +664,6 @@ function updateGlassBrainUniforms() {
   renderer3.render(scene, camera);
 }
 
-const DEBUG_ENDPOINTS = false;  // set true to show orange spheres at tract endpoints
-
 function updateProbe(){
   if(!gridIdx) return;
   const [cx,cy,cz]=state.cursor;
@@ -639,44 +672,54 @@ function updateProbe(){
   probeSphere=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:0xffdd44,wireframe:true}));
   probeSphere.position.set(cx,cy,cz); scene.add(probeSphere);
   if(selMesh){scene.remove(selMesh);selMesh.geometry.dispose();selMesh=null;}
+  if(dotsMesh){dotsMesh.geometry.dispose();dotsMesh=null;}
   let ids;
+  let probedEnds = null;  // per-tract: 0=start probed, 1=end probed, 2=both/pass-through
   if(!probeEndsOnly){
-    // All streamlines passing through the sphere
     const hitPts=gridIdx.queryRadius(cx,cy,cz,radius);
-    const hitSet=new Set();for(const pi of hitPts)hitSet.add(tractForPoint[pi]);
+    const hitSet=new Set(); for(const pi of hitPts) hitSet.add(streamlineLookup[pi]);
     ids=Array.from(hitSet);
+    // pass-through mode: no flip needed, probedEnds stays null (=all 2)
   } else {
-    // Only streamlines whose first or last point is within the sphere
-    const r2=radius*radius, hitSet=new Set();
-    for(let si=0;si<allTracts.length;si++){
-      const t=allTracts[si],n=t.length/3; if(n<1) continue;
-      // Check start point
-      let dx=t[0]-cx,dy=t[1]-cy,dz=t[2]-cz;
-      if(dx*dx+dy*dy+dz*dz<=r2){hitSet.add(si);continue;}
-      // Check end point
+    const r2=radius*radius;
+    const startHit=new Set(), endHit=new Set();
+    for(let si=0;si<allStreamlines.length;si++){
+      const t=allStreamlines[si], n=t.length/3; if(n<1) continue;
+      let dx=t[0]-cx, dy=t[1]-cy, dz=t[2]-cz;
+      if(dx*dx+dy*dy+dz*dz<=r2) startHit.add(si);
       dx=t[3*(n-1)]-cx; dy=t[3*(n-1)+1]-cy; dz=t[3*(n-1)+2]-cz;
-      if(dx*dx+dy*dy+dz*dz<=r2) hitSet.add(si);
+      if(dx*dx+dy*dy+dz*dz<=r2) endHit.add(si);
     }
+    const hitSet=new Set([...startHit,...endHit]);
     ids=Array.from(hitSet);
+    // Build per-tract probedEnds: 0=start, 1=end, 2=both
+    probedEnds=new Uint8Array(ids.length);
+    ids.forEach((si,i)=>{
+      const s=startHit.has(si), e=endHit.has(si);
+      probedEnds[i] = (s && e) ? 2 : s ? 0 : 1;
+    });
   }
-  selTracts=ids.map(i=>allTracts[i]);
+  selTracts=ids.map(i=>allStreamlines[i]);
   const selText=ids.length?ids.length.toLocaleString()+' selected':'';
   document.getElementById('stat-sel').textContent=selText;
   // Update save zone status
   const sp=document.getElementById('save-status');
   if(sp) sp.textContent=ids.length?ids.length.toLocaleString()+' streamlines':'select streamlines first';
+  const idxBtn=document.getElementById('btn-show-indices');
+  if(idxBtn) idxBtn.style.display=ids.length?'':'none';
   if(ids.length){
-    selMesh=makeLineSegments(selTracts);
+    selMesh=makeLineSegments(selTracts, probedEnds);
     scene.add(selMesh);
+    dotsMesh=makeEndpointDots(selTracts, probedEnds);
   }
-  if(slabRenderer) slabRenderer.invalidate(selMesh);
+  if(slabRenderer) slabRenderer.invalidate(selMesh, dotsMesh);
   renderer3.render(scene,camera);
   updateSlices(); updateSlicesB();
 }
 
 function saveTck(){
   if(!selTracts||selTracts.length===0){alert('No streamlines selected.');return;}
-  if(!rawHeader){alert('No tractogram loaded.');return;}
+  if(!tckHeader){alert('No tractogram loaded.');return;}
   const [cx,cy,cz]=state.cursor;
   const n=selTracts.length;
   const r=radius.toFixed(2);
@@ -686,7 +729,7 @@ function saveTck(){
     ? `${url}/tract-tracer selected ${n} streamlines with a start- or end point in a sphere with radius ${r} around ras-coordinate [${xyz}]`
     : `${url}/tract-tracer selected ${n} streamlines passing through a sphere with radius ${r} around ras-coordinate [${xyz}]`;
   let buf;
-  try { buf=writeTck(selTracts,rawHeader,cmd); }
+  try { buf=writeTck(selTracts,tckHeader,cmd); }
   catch(e){alert('Save error: '+e);return;}
   const blob=new Blob([buf],{type:'application/octet-stream'});
   const a=document.createElement('a');
@@ -710,13 +753,12 @@ function setProgress(msg){const el=document.getElementById('mprogress');if(el)el
 function tick(){return new Promise(r=>setTimeout(r,20));}
 
 async function loadNii(file){
-  const dzNii = document.getElementById('dz-nii');
-  const dzNiiP = dzNii && dzNii.querySelector('p');
+  const dzNiiP = document.getElementById('dz-nii-status');
   if (dzNiiP) { dzNiiP.textContent = 'loading…'; dzNiiP.className = 'is-loading'; }
   setProgress('reading '+file.name+'…'); await tick();
   let nii;
   try{ nii=await parseNifti(await file.arrayBuffer()); }
-  catch(e){alert('NIfTI error: '+e);if(dzNiiP){dzNiiP.textContent='';dzNiiP.className='';}setProgress('');return;}
+  catch(e){alert('NIfTI error: '+e);if(dzNiiP){dzNiiP.textContent='drop or click';dzNiiP.className='';}setProgress('');return;}
   state.nii=nii;
   state.cursor  = mat3mulVec(nii.Ab, [nii.nx/2, nii.ny/2, nii.nz/2]);
   state.cursorB = [...state.cursor];
@@ -740,26 +782,23 @@ async function loadNii(file){
   updateSlices(); updateSlicesB(); updatePlaneMeshes();
 }
 
-let gridIdx=null,tractForPoint=null,allPts=null,allTracts=null,rawHeader=null,tckFileName='selection';
+let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,tckHeader=null,tckFileName='tractogram';
 
-async function loadTck(buf, fileName='tractogram'){
+async function loadTck(buf, fileName='tractogram.tck'){
   tckFileName = fileName.replace(/\.tck$/i, '');
-  const dzTck = document.getElementById('dz-tck');
-  const dzTckP = dzTck && dzTck.querySelector('p');
+  const dzTckP = document.getElementById('dz-tck-status');
   if (dzTckP) { dzTckP.textContent = 'loading…'; dzTckP.className = 'is-loading'; }
   setProgress('parsing .tck…'); await tick();
   let parsed;
-  try{parsed=parseTck(buf);}catch(e){alert('TCK error: '+e);if(dzTckP){dzTckP.textContent='';dzTckP.className='';}setProgress('');return;}
-  rawHeader=parsed.rawHeader;
-  allTracts=parsed.tracts; tractForPoint=parsed.tractForPoint;
-  const np=tractForPoint.length;
-  setProgress(allTracts.length.toLocaleString()+' streamlines · building index…'); await tick();
+  try{parsed=parseTck(buf);}catch(e){alert('TCK error: '+e);if(dzTckP){dzTckP.textContent='drop or click';dzTckP.className='';}setProgress('');return;}
+  tckHeader=parsed.header;
+  allStreamlines=parsed.streamlines; streamlineLookup=parsed.streamlineLookup;
+  const np=streamlineLookup.length;
+  setProgress(allStreamlines.length.toLocaleString()+' streamlines · building index…'); await tick();
   allPts=new Float32Array(np*3); let off=0;
-  for(const t of allTracts){for(let i=0;i<t.length;i++)allPts[off+i]=+t[i];off+=t.length;}
+  for(const t of allStreamlines){for(let i=0;i<t.length;i++)allPts[off+i]=+t[i];off+=t.length;}
   gridIdx=new GridIndex(allPts,radius);
   setProgress('uploading geometry…'); await tick();
-  if(bgMesh){scene.remove(bgMesh);bgMesh.geometry.dispose();}
-  if(DEBUG_ENDPOINTS){ bgMesh=makeEndpointCloud(allTracts); if(bgMesh) scene.add(bgMesh); }
   let cx=0,cy=0,cz=0;
   for(let i=0;i<allPts.length;i+=3){cx+=allPts[i];cy+=allPts[i+1];cz+=allPts[i+2];}
   cx/=np;cy/=np;cz/=np;
@@ -773,7 +812,7 @@ async function loadTck(buf, fileName='tractogram'){
   const volR = Math.sqrt(ex*ex+ey*ey+ez*ez) / 2;
   const safeR = Math.max(br, volR);
   camera.near=safeR*.001; camera.far=safeR*20; camera.updateProjectionMatrix();
-  document.getElementById('stat-total').textContent=allTracts.length.toLocaleString()+' streamlines';
+  document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines';
   state.tckLoaded=true; setProgress(''); checkShowHud(); controls.update();
   updateProbe();
 }
@@ -784,12 +823,12 @@ function checkShowHud(){
     if (w) w.style.display = 'none';
     document.getElementById('middle-hud').style.display = 'block';
     // Mark loaded files in load dropdown
-    const dzNii = document.getElementById('dz-nii');
-    if (dzNii) { const p = dzNii.querySelector('p'); p.textContent = '✓ loaded'; p.className = ''; }
+    const dzNiiS = document.getElementById('dz-nii-status');
+    if (dzNiiS) { dzNiiS.textContent = '✓ loaded'; dzNiiS.className = ''; }
   }
   if (state.tckLoaded) {
-    const dzTck = document.getElementById('dz-tck');
-    if (dzTck) { const p = dzTck.querySelector('p'); p.textContent = '✓ loaded'; p.className = ''; }
+    const dzTckS = document.getElementById('dz-tck-status');
+    if (dzTckS) { dzTckS.textContent = '✓ loaded'; dzTckS.className = ''; }
   }
 }
 
@@ -851,6 +890,43 @@ function toggleDropdown(id, e) {
 document.getElementById('load-btn').addEventListener('click',     e => toggleDropdown('load-dropdown', e));
 document.getElementById('settings-btn').addEventListener('click', e => toggleDropdown('settings-overlay', e));
 document.getElementById('dz-save').addEventListener('click', () => saveTck());
+
+function showHeaderPanel(title, text) {
+  document.getElementById('hdr-panel-title').textContent = title;
+  document.getElementById('hdr-panel-pre').textContent = text;
+  document.getElementById('hdr-panel').classList.add('open');
+}
+document.getElementById('hdr-panel-close').addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('hdr-panel').classList.remove('open');
+});
+document.getElementById('hdr-panel').addEventListener('click', e => e.stopPropagation());
+document.getElementById('btn-nii-hdr').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!state.nii) return;
+  const n = state.nii, A = n.Ab;
+  showHeaderPanel('NIFTI HEADER', JSON.stringify({
+    dimensions: { nx: n.nx, ny: n.ny, nz: n.nz },
+    pixdim_mm: n.pixdim.slice(1,4).map(v => +v.toFixed(6)),
+    data_range: { min: +n.mn.toFixed(4), max: +n.mx.toFixed(4) },
+    affine_A: [A[0],A[1],A[2]].map(r => r.map(v => +v.toFixed(6))),
+    affine_translation: A[3].map(v => +v.toFixed(6)),
+  }, null, 2));
+});
+document.getElementById('btn-tck-hdr').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!tckHeader) return;
+  showHeaderPanel('TCK HEADER', JSON.stringify(tckHeader, null, 2));
+});
+document.getElementById('btn-show-indices').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!selTracts || !allStreamlines) return;
+  const selSet = new Set(selTracts);
+  const indices = [];
+  for (let i = 0; i < allStreamlines.length; i++)
+    if (selSet.has(allStreamlines[i])) indices.push(i);
+  showHeaderPanel('SELECTED INDICES (' + indices.length + ')', JSON.stringify(indices));
+});
 document.addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.remove('open');
   document.getElementById('load-dropdown').classList.remove('open');
@@ -988,17 +1064,12 @@ resizeAll();
 // ═══════════════════════════════════════════════════════════
 // 11.  DEMO
 // ═══════════════════════════════════════════════════════════
-async function loadDemoNii(){
-  const res=await fetch('M01_T2w.nii.gz');
-  loadNii(new File([await res.blob()],'demo.nii.gz'));
-}
-async function loadDemoTck(){
-  loadTck(await (await fetch('sub-M01_ses-1_wholebrain_10k_1.tck')).arrayBuffer());
-}
 if (window.location.search.includes('demo')) {
+  const demoAnat = 'M01_T2w.nii.gz';
+  const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
-    try { const r=await fetch('M01_T2w.nii.gz',{method:'HEAD'}); if(r.ok) loadNii(new File([await (await fetch('M01_T2w.nii.gz')).blob()],'demo.nii.gz')); } catch(e){}
-    try { const r=await fetch('sub-M01_ses-1_wholebrain_10k_1.tck',{method:'HEAD'}); if(r.ok) loadTck(await (await fetch('sub-M01_ses-1_wholebrain_10k_1.tck')).arrayBuffer()); } catch(e){}
+    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) loadNii(new File([await (await fetch(demoAnat)).blob()],demoAnat)); } catch(e){}
+    try { const r=await fetch(demoTck,{method:'HEAD'}); if(r.ok) loadTck(await (await fetch(demoTck)).arrayBuffer(),demoTck); } catch(e){}
   }
   tryDemoLoad();
 }
