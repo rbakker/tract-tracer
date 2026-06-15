@@ -1219,7 +1219,7 @@ function setupDrop(dzId,inputId,handler){
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
   document.getElementById(inputId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
 }
-setupDrop('dz-nii','fi-nii',f=>loadNii(f));setupDrop('dz-trck','fi-trck',f=>e=>loadTrck(f));
+setupDrop('dz-nii','fi-nii',f=>loadNii(f));setupDrop('dz-trck','fi-trck',f=>loadTrck(f));
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{
   e.preventDefault();const f=e.dataTransfer.files[0];if(!f){console.log('File drop failed.');return}

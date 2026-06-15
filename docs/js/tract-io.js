@@ -339,7 +339,7 @@ export function parseTrkHeader(fileAsArrayBuffer) {
 * @param {number} [maxNumTracts=0] - Maximum number of tracts to extract, 0 to extract all.
 * @return {Array} Extracted header and tracts
 */
-export async function parseTrk(file, maxNumTracts = 0) {
+export async function parseTrk(file, space='vox_mm',maxNumTracts = 0) {
   const buf = await file.arrayBuffer();
 
   const header = parseTrkHeader(buf);
@@ -354,11 +354,20 @@ export async function parseTrk(file, maxNumTracts = 0) {
   if (maxNumTracts) numTracts = Math.min(maxNumTracts, numTracts);
 
   const vox2ras = header.vox_to_ras;
+  const vs = header.voxel_size;
 
   // Precompute affine rows for speed
-  const r0 = vox2ras[0], r1 = vox2ras[1], r2 = vox2ras[2];
+  let r0, r1, r2;
+  if (space === 'vox') {
+    r0 = [...vox2ras[0]]; r1 = [...vox2ras[1]]; r2 = [...vox2ras[2]];
+  } else if (space === 'vox_mm') {
+    r0 = [vox2ras[0][0]/vs[0], vox2ras[0][1]/vs[1], vox2ras[0][2]/vs[2], vox2ras[0][3]];
+    r1 = [vox2ras[1][0]/vs[0], vox2ras[1][1]/vs[1], vox2ras[1][2]/vs[2], vox2ras[1][3]];
+    r2 = [vox2ras[2][0]/vs[0], vox2ras[2][1]/vs[1], vox2ras[2][2]/vs[2], vox2ras[2][3]];
+  } else if (space === 'ras') {
+    r0 = [1, 0, 0, 0]; r1 = [0, 1, 0, 0]; r2 = [0, 0, 1, 0];
+  }
   const streamlines = [];
-  const streamlineLookup = [];
 
   // We accumulate all points into one big Float32Array
   // (same as TCK reader)
@@ -403,12 +412,13 @@ export async function parseTrk(file, maxNumTracts = 0) {
   }
 
   // Build streamline views + lookup (same as TCK)
-  const lookup = new Int32Array(numTracts + 1);
+  const lookup = new Int32Array(totalPoints);
   let base = 0;
 
+  let pi = 0;
   for (let tr = 0; tr < numTracts; tr++) {
     const n = pointCounts[tr];
-    lookup[tr] = base;
+    for (let i=0; i<n; i++) { lookup[pi] = tr; pi++ }
 
     const byteOff = base * 3 * 4;
     streamlines.push(
@@ -423,6 +433,7 @@ export async function parseTrk(file, maxNumTracts = 0) {
   }
   lookup[numTracts] = base;
 
+console.log(streamlines,lookup)
   return {
     header,
     streamlines,
