@@ -19,32 +19,46 @@ uniform vec3  u_origin;
 uniform vec3  u_axisU;
 uniform vec3  u_axisV;
 uniform vec2  u_window;
-uniform vec3  u_chColor;
+uniform vec3  u_chColorH;
+uniform vec3  u_chColorV;
+uniform float u_wH;
+uniform float u_wV;
 uniform vec2  u_crosshair;
 uniform vec2  u_res;
-uniform float u_probeRadius; // probe sphere radius in canvas pixels
+uniform float u_probeRadius;
+uniform vec3 u_probeColor;
 in  vec2 v_uv;
 out vec4 fragColor;
 void main(){
-  vec3 tc = u_origin + v_uv.x*u_axisU + v_uv.y*u_axisV;
-  if(any(lessThan(tc,vec3(0.0)))||any(greaterThan(tc,vec3(1.0)))){
-    fragColor=vec4(0,0,0,1); return;
-  }
-  float raw = texture(u_vol, tc).r;
-  float v   = clamp((raw - u_window.x)/u_window.y, 0.0, 1.0);
-  vec3 col  = vec3(v);
   vec2 px = v_uv * u_res;
   vec2 cp = u_crosshair * u_res;
   vec2 dp = abs(px - cp);
-  // Crosshair lines with fixed small gap
-  float gap=8.0, w=1.0;
-  float ch = step(dp.x,w)*step(gap,dp.y) + step(dp.y,w)*step(gap,dp.x);
-  col = mix(col, u_chColor, ch*0.9);
-  // Probe circle
+  float gap = 8.0;
+
+  // Cursor geometry (independent of volume)
+  float chH = smoothstep(1.5, 0.5, dp.x) * step(gap, dp.y);
+  float chV = smoothstep(1.5, 0.5, dp.y) * step(gap, dp.x);
+  float onLeftEdge   = smoothstep(1.5, 0.5, px.x - 1.0);
+  float onRightEdge  = smoothstep(1.5, 0.5, u_res.x - 1.0 - px.x);
+  float onTopEdge    = smoothstep(1.5, 0.5, px.y - 1.0);
+  float onBottomEdge = smoothstep(1.5, 0.5, u_res.y - 1.0 - px.y);
+  float capV = (onLeftEdge + onRightEdge) * step(dp.y, u_wV);
+  float capH = (onTopEdge + onBottomEdge) * step(dp.x, u_wH);
+
+  // Volume sample
+  vec3 tc = u_origin + v_uv.x*u_axisU + v_uv.y*u_axisV;
+  bool inVol = !any(lessThan(tc,vec3(0.0))) && !any(greaterThan(tc,vec3(1.0)));
+  float raw = inVol ? texture(u_vol, tc).r : 0.0;
+  float v   = clamp((raw - u_window.x)/u_window.y, 0.0, 1.0);
+  vec3 col  = inVol ? vec3(v) : vec3(0.0);
+
+  col = mix(col, u_chColorH, clamp(chH + capH, 0.0, 1.0) * 0.9);
+  col = mix(col, u_chColorV, clamp(chV + capV, 0.0, 1.0) * 0.9);
+
   float dist = length(px - cp);
-  float ring = smoothstep(1.5, 0.0, abs(dist - u_probeRadius));
-  col = mix(col, u_chColor, ring*0.85);
-  fragColor = vec4(col,1);
+  float ring = (u_probeRadius < 0.0) ? 0.0 : smoothstep(1.5, 0.0, abs(dist - u_probeRadius));
+  col = mix(col, u_probeColor, ring * 0.9);
+  fragColor = vec4(col, 1);
 }`;
 
 export class VolRenderer {
@@ -133,7 +147,7 @@ export class VolRenderer {
   // Renders an oblique slice centred on cursor (RAS mm).
   // All geometry is computed in RAS mm space, then converted to
   // texture coords only for the shader uniform.
-  renderSlice(canvas2d, planeKey, viewCentre, cursor, chColor, tag='a', zoom=1.0, probeRadius=null) {
+  renderSlice(canvas2d, planeKey, viewCentre, cursor, chColorH, chColorV, wH, wV, probeColor, tag='a', zoom=1.0, probeRadius=null) {
     if (!this._texture||!this._nii) return null;
     const nii=this._nii, gl=this.gl;
     const W=canvas2d.width, H=canvas2d.height;
@@ -213,7 +227,11 @@ export class VolRenderer {
     gl.uniform2fv(gl.getUniformLocation(this._prog,'u_res'),[W,H]);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_probeRadius'),
       probeRadius !== null ? probeRadius : (this._probeRadiusPx||0));
-    gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColor'),chColor);
+    gl.uniform3fv(gl.getUniformLocation(this._prog, 'u_probeColor'), probeColor);
+    gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorH'),chColorH);
+    gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorV'),chColorV);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_wH'), wH);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_wV'), wV);
     gl.bindVertexArray(this._quad);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -248,6 +266,21 @@ export class VolRenderer {
       p.viewCentre_ras[2] + fu*u_dir[2] + fv*v_dir[2]
     ];
   }
+
+  // panDelta: returns new cursor_ras so anatomy under (x0,y0) moves to (x1,y1)
+  /*panDelta(planeKey, x0, y0, x1, y1, tag='a') {
+    const p = this._planeParams[planeKey+tag];
+    if (!p) return null;
+    const dU = ((x1-x0)/p.W) * this._ras_extent[p.uAx];
+    const dV = -((y1-y0)/p.H) * this._ras_extent[p.vAx];
+    const u_dir = this._rot_dirs[p.uAx];
+    const v_dir = this._rot_dirs[p.vAx];    
+    return [
+      p.viewCentre_ras[0] - dU*u_dir[0] - dV*v_dir[0],
+      p.viewCentre_ras[1] - dU*u_dir[1] - dV*v_dir[1],
+      p.viewCentre_ras[2] - dU*u_dir[2] - dV*v_dir[2],
+    ];
+  }*/
 
   // Convert RAS mm to canvas pixel using cached plane params.
   // Return the 4 RAS corners of a slice plane, using the same axis logic as renderSlice.

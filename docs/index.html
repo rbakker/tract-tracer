@@ -29,9 +29,13 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .slice-row:last-child{border-bottom:none;}
 .slice-label{position:absolute;top:6px;left:8px;z-index:2;letter-spacing:0.15em;
   font-size:10px;font-weight:500;pointer-events:none;}
-.slice-label.sag{color:var(--sag);}
-.slice-label.cor{color:var(--cor);}
-.slice-label.axi{color:var(--axi);}
+.slice-label.sag{ color:var(--sag); }
+.slice-label.cor{ color:var(--cor); }
+.slice-label.axi{ color:var(--axi); }
+.slice-label .plane-id { color:#080b0f; padding:1px 3px; margin-right: 3px; border-radius:2px; }
+.slice-label.sag .plane-id { background:var(--sag); }
+.slice-label.cor .plane-id { background:var(--cor); }
+.slice-label.axi .plane-id { background:var(--axi); }
 .slice-coord{position:absolute;top:6px;right:8px;z-index:2;color:var(--dim);
   font-size:10px;pointer-events:none;}
 .slice-canvas{width:100%;height:100%;display:block;cursor:crosshair;}
@@ -85,6 +89,7 @@ a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
 #hdr-panel-close{background:none;border:none;color:var(--dim);font-size:16px;
   cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:1;padding:0;}
 #hdr-panel-close:hover{color:var(--accent);}
+.accent-link.disabled{opacity:0.35;pointer-events:none;cursor:default;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
 /* inline toggle inside a ctl-row */
 .ctl-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
@@ -138,6 +143,14 @@ input[type=file]{display:none;}
 .pt-sag .pill{border-color:var(--sag);background:var(--sag);}
 .pt-cor .pill{border-color:var(--cor);background:var(--cor);}
 .pt-axi .pill{border-color:var(--axi);background:var(--axi);}
+.radio-opt {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  accent-color: var(--accent2);
+}
 
 /* reset button */
 #rot-reset{background:none;border:1px solid var(--border);color:var(--dim);
@@ -163,17 +176,17 @@ input[type=file]{display:none;}
 <!-- LEFT: slice viewers A -->
 <div id="left">
   <div class="slice-row">
-    <div class="slice-label sag">SAG·probe</div>
+    <div class="slice-label sag"><span class="plane-id">SAG</span>probe</div>
     <div class="slice-coord" id="coord-sag">—</div>
     <canvas class="slice-canvas" id="cvs-sag"></canvas>
   </div>
   <div class="slice-row">
-    <div class="slice-label cor">COR·probe</div>
+    <div class="slice-label cor"><span class="plane-id">COR</span>probe</div>
     <div class="slice-coord" id="coord-cor">—</div>
     <canvas class="slice-canvas" id="cvs-cor"></canvas>
   </div>
   <div class="slice-row">
-    <div class="slice-label axi">AXI·probe</div>
+    <div class="slice-label axi"><span class="plane-id">AXI</span>probe</div>
     <div class="slice-coord" id="coord-axi">—</div>
     <canvas class="slice-canvas" id="cvs-axi"></canvas>
   </div>
@@ -199,18 +212,18 @@ input[type=file]{display:none;}
       </div>
       <div class="dz-right">
         <p id="dz-nii-status">drop or click</p>
-        <button class="accent-link" id="btn-nii-hdr">show header</button>
+        <button class="accent-link disabled" id="btn-nii-hdr">show header</button>
       </div>
     </div>
     <div class="dz-row">
-      <div class="drop-zone" id="dz-tck" onclick="document.getElementById('fi-tck').click()">
+      <div class="drop-zone" id="dz-trck" onclick="document.getElementById('fi-trck').click()">
         <div class="tag">TRACTOGRAM</div>
-        <div class="name">.tck</div>
-        <input type="file" id="fi-tck" accept=".tck">
+        <div class="name">.tck / .trk</div>
+        <input type="file" id="fi-trck" accept=".tck,.trk">
       </div>
       <div class="dz-right">
-        <p id="dz-tck-status">drop or click</p>
-        <button class="accent-link" id="btn-tck-hdr">show header</button>
+        <p id="dz-trck-status">drop or click</p>
+        <button class="accent-link disabled" id="btn-trck-hdr">show header</button>
       </div>
     </div>
     <div class="dz-row">
@@ -220,11 +233,20 @@ input[type=file]{display:none;}
       </div>
       <div class="dz-right">
         <p id="save-status">select streamlines first</p>
-        <button class="accent-link" id="btn-show-indices" style="display:none;">show indices</button>
+        <button class="accent-link disabled" id="btn-show-indices">show indices</button>
+      </div>
+    </div>
+    <div class="dz-row">
+      <div class="drop-zone" id="dz-state">
+        <div class="tag">SESSION STATE</div>
+        <div class="name">.json</div>
+      </div>
+      <div class="dz-right">
+        <button class="accent-link" id="btn-show-state">show state</button>
       </div>
     </div>
   </div>
-
+    
   <!-- Header / indices panel -->
   <div id="hdr-panel">
     <div id="hdr-panel-head">
@@ -243,7 +265,7 @@ input[type=file]{display:none;}
       <input type="range" id="radius-slider" min="0.25" max="10" value="5" step="0.25">
       <span class="ctl-val" id="radius-val">5.0 mm</span>
     </div>
-    <div class="ctl-row" data-tip="When on: only streamlines with a start or end point\nwithin the probe sphere are selected.\nWhen off: all streamlines passing through the sphere.">
+    <div class="ctl-row" data-tip="When on: only streamlines with a start or end point within the probe sphere are selected.\nWhen off: all streamlines passing through the sphere.">
       <label>ENDS·ONLY</label>
       <label class="ctl-toggle">
         <input type="checkbox" id="probe-ends-toggle">
@@ -251,21 +273,44 @@ input[type=file]{display:none;}
       </label>
     </div>
 
-    <div class="cfg-section" data-tip="Streamlines selected by the probe are shown\nin both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">RESULTING STREAMLINES</div>
-    <div class="ctl-row" data-tip="Show streamline segments within a slab of this\nthickness (× voxel size) around each slice plane.">
-      <label>SLAB</label>
-      <input type="range" id="slab-slider" min="0.5" max="20" value="2" step="0.5">
-      <span class="ctl-val" id="slab-val">2.0×</span>
+    <div class="cfg-section" data-tip="Streamlines selected by the probe are shown in both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">STREAMLINE RENDERING</div>
+
+<div class="ctl-row" data-tip="Streamline color: None to switch off, RAS for directional coloring, or custom uniform color.">
+  <label>LINE·COLOR</label>
+  <label class="radio-opt"><input type="radio" name="lines-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" name="lines-color" value="ras" checked>
+    <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
+  </label>
+  <label class="radio-opt"><input type="radio" name="lines-color" value="flat"><input type="color" id="line-color-picker" value="#ff6600" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
+<div class="ctl-row" data-tip="SRC dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
+  <label>SRC·COLOR</label>
+  <label class="radio-opt"><input type="radio" name="src-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" name="src-color" value="ras" checked>
+    <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
+  </label>
+  <label class="radio-opt"><input type="radio" name="src-color" value="flat"><input type="color" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
+<div class="ctl-row" data-tip="TGT dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
+  <label>TGT·COLOR</label>
+  <label class="radio-opt"><input type="radio" name="tgt-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" name="tgt-color" value="ras">
+    <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
+  </label>
+  <label class="radio-opt"><input type="radio" name="tgt-color" value="flat" checked><input type="color" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
+<div class="ctl-row" data-tip="SRC and TGT dot size in screen pixels.">
+  <label>ENDS·SIZE</label>
+  <input type="range" id="ends-size" min="1" max="16" step="0.5" value="6">
+  <span class="slider-val" id="ends-size-val">6</span>
+</div>
+
+    <div class="ctl-row" data-tip="Show streamline segments within a slab of this thickness (× voxel size) around each slice plane.">
+      <label>CLIPPING</label>
+      <input type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
+      <span class="ctl-val" id="slab-val">3.0×</span>
     </div>
-    <div class="ctl-row" data-tip="In the right panels: only draw segments near a\nstreamline start or end point (mm from tip).\n0 = show full streamlines.">
-      <label>SHOW·ENDS</label>
-      <input type="range" id="ends-slider" min="0" max="30" value="0" step="0.5">
-      <span class="ctl-val" id="ends-val">off</span>
-    </div>
-    <div class="ctl-row" data-tip="Colour used for streamline ends when ends-only is active.">
-      <label>ENDS·COLOR</label>
-      <input type="color" id="ends-color-picker" value="#ffffee" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding:0;">
-    </div>
+
 
     <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.">VOLUME RENDERING</div>
     <div class="ctl-row" data-tip="Opacity multiplier for the glass brain silhouette.\nNot a percentage — higher values accumulate more\nopacity along each ray. ~5 = subtle, ~15 = opaque.">
@@ -321,7 +366,6 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="roll-val">0°</span>
     </div>
     <button id="rot-reset">RESET PLANES</button>
-
   </div><!-- /settings-overlay -->
 
   <!-- Welcome screen (shown when no data loaded) -->
@@ -348,17 +392,17 @@ input[type=file]{display:none;}
 <!-- RIGHT: slice viewers B -->
 <div id="right">
   <div class="slice-row">
-    <div class="slice-label sag">SAG·result</div>
+    <div class="slice-label sag"><span class="plane-id">SAG</span>result</div>
     <div class="slice-coord" id="coord-sag-b">—</div>
     <canvas class="slice-canvas" id="cvs-sag-b"></canvas>
   </div>
   <div class="slice-row">
-    <div class="slice-label cor">COR·result</div>
+    <div class="slice-label cor"><span class="plane-id">COR</span>result</div>
     <div class="slice-coord" id="coord-cor-b">—</div>
     <canvas class="slice-canvas" id="cvs-cor-b"></canvas>
   </div>
   <div class="slice-row">
-    <div class="slice-label axi">AXI·result</div>
+    <div class="slice-label axi"><span class="plane-id">AXI</span>result</div>
     <div class="slice-coord" id="coord-axi-b">—</div>
     <canvas class="slice-canvas" id="cvs-axi-b"></canvas>
   </div>
@@ -374,7 +418,7 @@ input[type=file]{display:none;}
 <script type="module">
 import * as THREE from 'three';
 import { parseNifti }   from './js/nifti.js';
-import { parseTck, writeTck } from './js/tck.js';
+import { parseTck, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
@@ -387,7 +431,7 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
 // 0.  STATE
 // ═══════════════════════════════════════════════════════════
 const state = {
-  cursor:  [0,0,0],
+  cursorA:  [0,0,0],
   cursorB: [0,0,0],
   viewA: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
   viewB: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
@@ -395,7 +439,7 @@ const state = {
   zoomB: 1.0,   // zoom for right panel set
   nii: null,
   niiLoaded: false,
-  tckLoaded: false,
+  trckLoaded: false,
 };
 // Out-of-plane axis index per plane — used by syncViewOOP
 
@@ -417,16 +461,20 @@ function syncViewOOP(views, cursor) {
     views[key] = [vc[0]+d*n[0], vc[1]+d*n[1], vc[2]+d*n[2]];
   }
 }
-let radius=2, probeEndsOnly=false, slabMultiplier=2, endsMm=0;
-let endsColor = '#ffffee';
+let radius=2, probeEndsOnly=false, slabMultiplier=3, endsPx=6;
+const readColorState = (pickerId, mode) => [mode, document.getElementById(pickerId).value];
+let lineStyle = readColorState('line-color-picker', 'ras');
+let srcStyle  = readColorState('src-color-picker',  'ras');
+let tgtStyle  = readColorState('tgt-color-picker',  'flat');
+
 let pitch=0, yaw=0, roll=0;
 const vr = new VolRenderer();
 window._vr = vr;  // debug access
 
-function setCursor(ras) {
-  state.cursor = ras;
+function setCursorA(ras) {
+  state.cursorA = ras;
   syncViewOOP(state.viewA, ras);
-  updateSlices(); updateProbe(); updateCoordHud(); updatePlaneMeshes();
+  updateSlicesA(); updateProbe(); updateCoordHud(); updatePlaneMeshes();
 }
 function setCursorB(ras) {
   state.cursorB = ras;
@@ -438,9 +486,9 @@ function setCursorB(ras) {
 // 1.  SLICE RENDERING  (delegates to VolRenderer)
 // ═══════════════════════════════════════════════════════════
 const PLANES = {
-  sag: { key:'sag', chColor:[0.23,0.97,0.8],  scrollAxis:0 },
-  cor: { key:'cor', chColor:[0.97,0.63,0.23],  scrollAxis:1 },
-  axi: { key:'axi', chColor:[0.63,0.23,0.97],  scrollAxis:2 },
+  sag: { key:'sag', chColorH:[0.97,0.63,0.23], chColorV:[0.63,0.23,0.97], scrollAxis:0 }, // H=COR orange, V=AXI purple
+  cor: { key:'cor', chColorH:[0.23,0.97,0.80], chColorV:[0.63,0.23,0.97], scrollAxis:1 }, // H=SAG cyan,   V=AXI purple
+  axi: { key:'axi', chColorH:[0.97,0.63,0.23], chColorV:[0.23,0.97,0.80], scrollAxis:2 }, // H=COR orange, V=SAG cyan
 };
 const canvasA={}, canvasB={};
 
@@ -449,24 +497,57 @@ const canvasA={}, canvasB={};
 // tag='b': right panels (result, ends-filtered, no probe ring)
 function drawSlice(planeKey, tag) {
   const cvs    = tag === 'a' ? canvasA[planeKey] : canvasB[planeKey];
-  const cursor = tag === 'a' ? state.cursor      : state.cursorB;
+  const cursor = tag === 'a' ? state.cursorA     : state.cursorB;
   const view   = tag === 'a' ? state.viewA       : state.viewB;
   const zoom   = tag === 'a' ? state.zoomA       : state.zoomB;
-  // Left panels show the probe ring; right panels suppress it (probeRadius=0).
-  const probeRadius = tag === 'a' ? undefined : 0;
+  // Left panels show the probe ring; right panels suppress it (probeRadius=-1).
+  const probeRadius = tag === 'a' ? undefined : -1;
   if (!cvs || !state.nii) return;
-  vr.renderSlice(cvs, planeKey, view[planeKey], cursor, PLANES[planeKey].chColor, tag, zoom, probeRadius);
-  if (selTracts.length && slabRenderer) {
-    // Left: full streamlines, no ends filter. Right: ends filter active.
-    const slabOpts = tag === 'a'
-      ? { selMesh, dotsMesh, slabMultiplier, endsMm: 0,    endsColor, endsFlip: false }
-      : { selMesh, dotsMesh, slabMultiplier, endsMm,       endsColor, endsFlip: probeEndsOnly };
-    slabRenderer.render(cvs, planeKey, cursor, tag, vr, state, slabOpts);
+  
+  const nii = state.nii;
+  const mpp = vr._planeParams[planeKey + tag]?.mm_per_px;
+
+  // Each arm's width = slab half-thickness of the plane that arm represents.
+  // SAG arm (V on SAG, V on COR, V on AXI) uses SAG voxel size (pixdim[1]).
+  // COR arm uses pixdim[2], AXI arm uses pixdim[3].
+  // Which arm is H and which is V depends on the plane — matches the colour mapping.
+  const slabH = (mm, mpp) => mpp ? slabMultiplier * mm / 2 / mpp : 1.0;
+
+  const armWidths = {
+    sag: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[3], mpp) }, // H=COR, V=AXI
+    cor: { wH: slabH(nii.pixdim[1], mpp), wV: slabH(nii.pixdim[3], mpp) }, // H=SAG, V=AXI
+    axi: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[1], mpp) }, // H=COR, V=SAG
+  };
+  const { wH, wV } = armWidths[planeKey];
+
+  // Parse srcStyle setting into an [r,g,b] triple for the probe ring.
+  // srcStyle is '#rrggbb' when flat, 'RAS' when directional, null when off.
+  const hex = srcStyle.rgb;
+  const probeColor = [parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255];
+
+  vr.renderSlice(cvs, planeKey, view[planeKey], cursor,
+               PLANES[planeKey].chColorH, PLANES[planeKey].chColorV,
+               wH, wV, probeColor, tag, zoom, probeRadius);
+               
+  if (setStreamlines.length && slabRenderer) {
+	// Left panel: near dots (probed end). Right panel: far dots (target end).
+	// srcDots = closest endpoint to cursor; tgtDots = farthest. Both shown in all panels.
+	const slabOpts = {
+	  selMesh,
+	  srcMesh: srcDots,
+	  tgtMesh: tgtDots,
+	  slabMultiplier,
+	  lineStyle,
+	  srcStyle,
+	  tgtStyle,
+	  endsPx,
+	};
+	slabRenderer.render(cvs, planeKey, cursor, tag, vr, state, slabOpts);
   }
   updateCoordLabel(planeKey, cursor, tag);
 }
 
-function updateSlices()  { for (const k of ['sag','cor','axi']) drawSlice(k, 'a'); updateProbeGap(); }
+function updateSlicesA() { for (const k of ['sag','cor','axi']) drawSlice(k, 'a'); updateProbeGap(); }
 function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'b'); }
 
 function updateCoordLabel(planeKey, cursor, tag) {
@@ -482,15 +563,13 @@ function updateCoordLabel(planeKey, cursor, tag) {
 // ═══════════════════════════════════════════════════════════
 // 2.  GPU SLAB RENDERER  — see js/slab-renderer.js
 // ═══════════════════════════════════════════════════════════
-let selTracts = [];
+let setStreamlines = [];
 
 let slabRenderer = null;  // initialised after renderer3 exists
 
 // ═══════════════════════════════════════════════════════════
 // 3.  SLICE INTERACTION
 // ═══════════════════════════════════════════════════════════
-
-
 function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag,
                                getViewFn, setViewFn, getZoomFn, setZoomFn, redrawFn) {
   requestAnimationFrame(() => {
@@ -624,7 +703,8 @@ controls._renderFn = () => renderer3.render(scene, camera);
 // ═══════════════════════════════════════════════════════════
 // 5.  TRACTOGRAM 3D
 // ═══════════════════════════════════════════════════════════
-let selMesh=null,dotsMesh=null,probeSphere=null;
+let selMesh=null, srcDots=null, tgtDots=null, probeSphere=null;
+let _lastProbedEnds=null, _lastCursor=[0,0,0];
 // Slice plane meshes in 3D view
 const planeMeshes = {sag:null, cor:null, axi:null};
 const planeVisible = {sag:true, cor:true, axi:true};
@@ -666,13 +746,14 @@ function updateGlassBrainUniforms() {
 
 function updateProbe(){
   if(!gridIdx) return;
-  const [cx,cy,cz]=state.cursor;
+  const [cx,cy,cz]=state.cursorA;
   if(probeSphere) scene.remove(probeSphere);
   const sg=new THREE.SphereGeometry(radius,12,8);
-  probeSphere=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:0xffdd44,wireframe:true}));
+  probeSphere=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:srcStyle.rgb,wireframe:true}));
   probeSphere.position.set(cx,cy,cz); scene.add(probeSphere);
   if(selMesh){scene.remove(selMesh);selMesh.geometry.dispose();selMesh=null;}
-  if(dotsMesh){dotsMesh.geometry.dispose();dotsMesh=null;}
+  if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
+  if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
   let ids;
   let probedEnds = null;  // per-tract: 0=start probed, 1=end probed, 2=both/pass-through
   if(!probeEndsOnly){
@@ -699,29 +780,90 @@ function updateProbe(){
       probedEnds[i] = (s && e) ? 2 : s ? 0 : 1;
     });
   }
-  selTracts=ids.map(i=>allStreamlines[i]);
+  setStreamlines=ids.map(i=>allStreamlines[i]);
   const selText=ids.length?ids.length.toLocaleString()+' selected':'';
   document.getElementById('stat-sel').textContent=selText;
   // Update save zone status
   const sp=document.getElementById('save-status');
   if(sp) sp.textContent=ids.length?ids.length.toLocaleString()+' streamlines':'select streamlines first';
   const idxBtn=document.getElementById('btn-show-indices');
-  if(idxBtn) idxBtn.style.display=ids.length?'':'none';
-  if(ids.length){
-    selMesh=makeLineSegments(selTracts, probedEnds);
-    scene.add(selMesh);
-    dotsMesh=makeEndpointDots(selTracts, probedEnds);
+  if(idxBtn){
+    if(ids.length) idxBtn.classList.remove('disabled');
+    else idxBtn.classList.add('disabled');
   }
-  if(slabRenderer) slabRenderer.invalidate(selMesh, dotsMesh);
-  renderer3.render(scene,camera);
-  updateSlices(); updateSlicesB();
+  if(ids.length){
+    selMesh=makeLineSegments(setStreamlines);
+    _lastCursor=[cx,cy,cz];
+    _lastProbedEnds=probedEnds;
+    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, probedEnds, [cx,cy,cz], endsPx));
+  }
+  if(slabRenderer) slabRenderer.invalidate(selMesh);
+  updateScene3d();
+  updateSlicesA(); updateSlicesB();
 }
 
+function rebuildDots() {
+  if (!setStreamlines || !setStreamlines.length) return;
+  if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
+  if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
+  ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, _lastProbedEnds, _lastCursor, endsPx));
+  if(slabRenderer) slabRenderer.invalidate(selMesh);
+  updateScene3d();
+}
+
+function updateScene3d() {
+  if (selMesh)  scene.remove(selMesh);
+  if (srcDots)  scene.remove(srcDots);
+  if (tgtDots)  scene.remove(tgtDots);
+
+  // ── Lines ──────────────────────────────────────────────
+  if (lineStyle.mode !== 'hide' && selMesh) {
+    const mat = selMesh.material;
+    if (lineStyle.mode === 'ras') {
+      mat.vertexColors = true;
+      mat.color.set(0xffffff);
+    } else {
+      mat.vertexColors = false;
+      mat.color.set(lineStyle.rgb);
+    }
+    mat.needsUpdate = true;
+    selMesh.renderOrder = 0;
+    scene.add(selMesh);
+  }
+
+  // ── Helper: apply colour to a dots Points object ───────
+  const applyDotColor = (dots, colorVal) => {
+    if (!dots) return;
+    const u = dots.material.uniforms;
+    if (colorVal.mode === 'ras') {
+      u.u_autoColor.value = 1;
+    } else {
+      u.u_autoColor.value = 0;
+      const c = new THREE.Color(colorVal.rgb);
+      u.u_dotColor.value.set(c.r, c.g, c.b);
+    }
+  };
+
+  if (srcStyle.mode !== 'hide' && srcDots) {
+    applyDotColor(srcDots, srcStyle);
+    srcDots.renderOrder = 1;
+    scene.add(srcDots);
+  }
+  if (tgtStyle.mode !== 'hide' && tgtDots) {
+    applyDotColor(tgtDots, tgtStyle);
+    tgtDots.renderOrder = 2;
+    scene.add(tgtDots);
+  }
+
+  renderer3.render(scene, camera);
+}
+
+
 function saveTck(){
-  if(!selTracts||selTracts.length===0){alert('No streamlines selected.');return;}
-  if(!tckHeader){alert('No tractogram loaded.');return;}
-  const [cx,cy,cz]=state.cursor;
-  const n=selTracts.length;
+  if(!setStreamlines||setStreamlines.length===0){alert('No streamlines selected.');return;}
+  if(!trckHeader){alert('No tractogram loaded.');return;}
+  const [cx,cy,cz]=state.cursorA;
+  const n=setStreamlines.length;
   const r=radius.toFixed(2);
   const xyz=`${cx.toFixed(1)},${cy.toFixed(1)},${cz.toFixed(1)}`;
   const url=location.origin+location.pathname;
@@ -729,18 +871,45 @@ function saveTck(){
     ? `${url}/tract-tracer selected ${n} streamlines with a start- or end point in a sphere with radius ${r} around ras-coordinate [${xyz}]`
     : `${url}/tract-tracer selected ${n} streamlines passing through a sphere with radius ${r} around ras-coordinate [${xyz}]`;
   let buf;
-  try { buf=writeTck(selTracts,tckHeader,cmd); }
+  try { buf=writeTck(setStreamlines,trckHeader,cmd); }
   catch(e){alert('Save error: '+e);return;}
   const blob=new Blob([buf],{type:'application/octet-stream'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=tckFileName+'_subset.tck';
+  a.download=trckFileName+'_subset.tck';
   a.click();
   URL.revokeObjectURL(a.href);
 }
 
+function collectState() {
+  return {
+    settings: {
+      radius, probeEndsOnly, slabMultiplier, endsPx,
+      lineStyle, srcStyle, tgtStyle,
+      glassBrainAlpha, glassBrainThresh, glassBrainRimPow,
+      pitch, yaw, roll,
+      showSag: document.getElementById('tog-sag')?.checked ?? true,
+      showCor: document.getElementById('tog-cor')?.checked ?? true,
+      showAxi: document.getElementById('tog-axi')?.checked ?? true,
+    },
+    cursorA: state.cursorA,
+    cursorB: state.cursorB,
+    files: {
+      anatomy:    document.getElementById('dz-nii-status')?.textContent ?? '',
+      tractogram: document.getElementById('dz-trck-status')?.textContent ?? '',
+    }
+  };
+}
+
+function saveState() {
+  const data = JSON.stringify(collectState(), null, 2);
+  const blob = new Blob([data], {type: 'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'tract-tracer-state.json'; a.click(); URL.revokeObjectURL(a.href);
+};
+
 function updateCoordHud(){
-  const [x,y,z]=state.cursor;
+  const [x,y,z]=state.cursorA;
   document.getElementById('hud-x').textContent=x.toFixed(1);
   document.getElementById('hud-y').textContent=y.toFixed(1);
   document.getElementById('hud-z').textContent=z.toFixed(1);
@@ -760,14 +929,14 @@ async function loadNii(file){
   try{ nii=await parseNifti(await file.arrayBuffer()); }
   catch(e){alert('NIfTI error: '+e);if(dzNiiP){dzNiiP.textContent='drop or click';dzNiiP.className='';}setProgress('');return;}
   state.nii=nii;
-  state.cursor  = mat3mulVec(nii.Ab, [nii.nx/2, nii.ny/2, nii.nz/2]);
-  state.cursorB = [...state.cursor];
-  for(const k of ['sag','cor','axi']){ state.viewA[k]=[...state.cursor]; state.viewB[k]=[...state.cursor]; }
+  state.cursorA = mat3mulVec(nii.Ab, [nii.nx/2, nii.ny/2, nii.nz/2]);
+  state.cursorB = [...state.cursorA];
+  for(const k of ['sag','cor','axi']){ state.viewA[k]=[...state.cursorA]; state.viewB[k]=[...state.cursorA]; }
   setProgress('uploading 3D texture…'); await tick();
   vr.upload(nii);
   buildGlassBrainLocal(nii);
   // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
-  const [cx,cy,cz] = state.cursor;
+  const [cx,cy,cz] = state.cursorA;
   const [ex,ey,ez] = vr._ras_extent;
   const br = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
   controls.target.set(cx, cy, cz);
@@ -777,21 +946,34 @@ async function loadNii(file){
   camera.updateProjectionMatrix();
   controls.update();
   state.niiLoaded=true;
+  document.getElementById('btn-nii-hdr').classList.remove('disabled');
   checkShowHud();
   resizeAll();
-  updateSlices(); updateSlicesB(); updatePlaneMeshes();
+  updateSlicesA(); updateSlicesB(); updatePlaneMeshes(); updateCoordHud();
 }
 
-let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,tckHeader=null,tckFileName='tractogram';
+let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeader=null,trckFileName='tractogram';
 
-async function loadTck(buf, fileName='tractogram.tck'){
-  tckFileName = fileName.replace(/\.tck$/i, '');
-  const dzTckP = document.getElementById('dz-tck-status');
-  if (dzTckP) { dzTckP.textContent = 'loading…'; dzTckP.className = 'is-loading'; }
-  setProgress('parsing .tck…'); await tick();
+function splitExt(fname) {
+  const i = fname.lastIndexOf('.');
+  return i === -1
+    ? [fname, '']
+    : [fname.slice(0, i), fname.slice(i)];
+}
+
+async function loadTrck(f){
+  let [ baseName, ext ] = splitExt(f.name); ext = ext.toLowerCase();
+  trckFileName = baseName;
+  const dTrckP = document.getElementById('dz-trck-status');
+  if (dTrckP) { dTrckP.textContent = 'loading…'; dTrckP.className = 'is-loading'; }
+  setProgress(`parsing .${ext}…`); await tick();
   let parsed;
-  try{parsed=parseTck(buf);}catch(e){alert('TCK error: '+e);if(dzTckP){dzTckP.textContent='drop or click';dzTckP.className='';}setProgress('');return;}
-  tckHeader=parsed.header;
+  try {
+	  parsed=(ext=='.tck'?await parseTck(f):await parseTrk(f))
+  } catch(e){
+	  alert(`${ext.toUpperCase()} error: `+e);if(dTrckP){dTrckP.textContent='drop or click';dTrckP.className=''}setProgress('');return;
+  }
+  trckHeader=parsed.header;
   allStreamlines=parsed.streamlines; streamlineLookup=parsed.streamlineLookup;
   const np=streamlineLookup.length;
   setProgress(allStreamlines.length.toLocaleString()+' streamlines · building index…'); await tick();
@@ -813,8 +995,10 @@ async function loadTck(buf, fileName='tractogram.tck'){
   const safeR = Math.max(br, volR);
   camera.near=safeR*.001; camera.far=safeR*20; camera.updateProjectionMatrix();
   document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines';
-  state.tckLoaded=true; setProgress(''); checkShowHud(); controls.update();
-  updateProbe();
+  document.getElementById('btn-trck-hdr').classList.remove('disabled');
+  state.trckLoaded=true; setProgress(''); checkShowHud(); controls.update();
+  probeEndsOnly = document.getElementById('probe-ends-toggle').checked; // bit of a hack
+  updateProbe(); updateCoordHud();
 }
 
 function checkShowHud(){
@@ -826,9 +1010,9 @@ function checkShowHud(){
     const dzNiiS = document.getElementById('dz-nii-status');
     if (dzNiiS) { dzNiiS.textContent = '✓ loaded'; dzNiiS.className = ''; }
   }
-  if (state.tckLoaded) {
-    const dzTckS = document.getElementById('dz-tck-status');
-    if (dzTckS) { dzTckS.textContent = '✓ loaded'; dzTckS.className = ''; }
+  if (state.trckLoaded) {
+    const dzTrckS = document.getElementById('dz-trck-status');
+    if (dzTrckS) { dzTrckS.textContent = '✓ loaded'; dzTrckS.className = ''; }
   }
 }
 
@@ -853,7 +1037,7 @@ function resizeAll(){
   camera.updateProjectionMatrix();
   controls.handleResize();
   renderer3.render(scene,camera);
-  if(state.nii){ updateSlices(); updateSlicesB(); }
+  if(state.nii){ updateSlicesA(); updateSlicesB(); }
 }
 new ResizeObserver(resizeAll).observe(document.body);
 
@@ -864,9 +1048,9 @@ function updateRotation(){
   const p=pitch*Math.PI/180, y=yaw*Math.PI/180, r=roll*Math.PI/180;
   vr.setRotation(p,y,r);
   // Re-sync view centres to cursor along the new normals, preserving in-plane positions
-  syncViewOOP(state.viewA, state.cursor);
+  syncViewOOP(state.viewA, state.cursorA);
   syncViewOOP(state.viewB, state.cursorB);
-  updateSlices(); updateSlicesB(); updatePlaneMeshes();
+  updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
 }
 document.getElementById('pitch-slider').addEventListener('input',e=>{pitch=+e.target.value;document.getElementById('pitch-val').textContent=pitch+'°';updateRotation();});
 document.getElementById('yaw-slider').addEventListener('input',e=>{yaw=+e.target.value;document.getElementById('yaw-val').textContent=yaw+'°';updateRotation();});
@@ -890,6 +1074,7 @@ function toggleDropdown(id, e) {
 document.getElementById('load-btn').addEventListener('click',     e => toggleDropdown('load-dropdown', e));
 document.getElementById('settings-btn').addEventListener('click', e => toggleDropdown('settings-overlay', e));
 document.getElementById('dz-save').addEventListener('click', () => saveTck());
+document.getElementById('dz-state').addEventListener('click', () => saveState());
 
 function showHeaderPanel(title, text) {
   document.getElementById('hdr-panel-title').textContent = title;
@@ -906,27 +1091,34 @@ document.getElementById('btn-nii-hdr').addEventListener('click', e => {
   if (!state.nii) return;
   const n = state.nii, A = n.Ab;
   showHeaderPanel('NIFTI HEADER', JSON.stringify({
-    dimensions: { nx: n.nx, ny: n.ny, nz: n.nz },
-    pixdim_mm: n.pixdim.slice(1,4).map(v => +v.toFixed(6)),
+    dimensions: [ n.nx, n.ny, n.nz ],
+    voxel_size: n.pixdim.slice(1,4).map(v => +v.toFixed(6)),
     data_range: { min: +n.mn.toFixed(4), max: +n.mx.toFixed(4) },
-    affine_A: [A[0],A[1],A[2]].map(r => r.map(v => +v.toFixed(6))),
-    affine_translation: A[3].map(v => +v.toFixed(6)),
+    affine: { 
+		A: [A[0],A[1],A[2]].map(r => r.map(v => +v.toFixed(6))),
+        b: A[3].map(v => +v.toFixed(6))
+    }
   }, null, 2));
 });
-document.getElementById('btn-tck-hdr').addEventListener('click', e => {
+document.getElementById('btn-trck-hdr').addEventListener('click', e => {
   e.stopPropagation();
-  if (!tckHeader) return;
-  showHeaderPanel('TCK HEADER', JSON.stringify(tckHeader, null, 2));
+  if (!trckHeader) return;
+  showHeaderPanel('TRACTS HEADER', JSON.stringify(trckHeader, null, 2));
 });
 document.getElementById('btn-show-indices').addEventListener('click', e => {
   e.stopPropagation();
-  if (!selTracts || !allStreamlines) return;
-  const selSet = new Set(selTracts);
+  if (!setStreamlines || !allStreamlines) return;
+  const selSet = new Set(setStreamlines);
   const indices = [];
   for (let i = 0; i < allStreamlines.length; i++)
     if (selSet.has(allStreamlines[i])) indices.push(i);
   showHeaderPanel('SELECTED INDICES (' + indices.length + ')', JSON.stringify(indices));
 });
+document.getElementById('btn-show-state').addEventListener('click', e => {
+  e.stopPropagation();
+  showHeaderPanel('STATE', JSON.stringify(collectState(), null, 2));
+});
+
 document.addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.remove('open');
   document.getElementById('load-dropdown').classList.remove('open');
@@ -959,7 +1151,7 @@ document.getElementById('radius-slider').addEventListener('input',e=>{
   if(gridIdx&&gridIdx.cs!==radius)gridIdx=new GridIndex(allPts,radius);
   updateProbeGap();
   updateProbe();
-  updateSlices();
+  updateSlicesA();
 });
 document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
   glassBrainAlpha=+e.target.value;
@@ -988,16 +1180,34 @@ document.getElementById('probe-ends-toggle').addEventListener('change',e=>{
 });
 document.getElementById('slab-slider').addEventListener('input',e=>{
   slabMultiplier=+e.target.value;document.getElementById('slab-val').textContent=slabMultiplier.toFixed(1)+'×';
-  updateSlicesB();
+  updateSlicesA(); updateSlicesB();
 });
-document.getElementById('ends-slider').addEventListener('input',e=>{
-  endsMm=+e.target.value;document.getElementById('ends-val').textContent=endsMm>0?endsMm.toFixed(1)+' mm':'off';
-  updateSlicesB();
+document.getElementById('ends-size').addEventListener('input',e=>{
+  endsPx=+e.target.value;document.getElementById('ends-size-val').textContent=endsPx.toFixed(1)+' px';
+  rebuildDots(); updateSlicesA(); updateSlicesB();
 });
-document.getElementById('ends-color-picker').addEventListener('input', e => {
-  endsColor = e.target.value;
-  updateSlicesB();
-});
+// Single function to wire a color radio group + picker to a JS variable.
+// setVar: function(value) that stores the result and triggers redraws.
+// On call, reads current checked radio so JS var matches HTML state immediately.
+function initColorRadio(radioName, pickerId, setVar, redraw) {
+  const readRadio = () => {
+    const v = document.querySelector(`input[name="${radioName}"]:checked`)?.value;
+    const hex = document.getElementById(pickerId).value;
+    setVar({mode:v,rgb:hex});
+  };
+  document.querySelectorAll(`input[name="${radioName}"]`).forEach(r =>
+    r.addEventListener('change', () => { readRadio(); redraw(); })
+  );
+  document.getElementById(pickerId).addEventListener('input', e => {
+    readRadio(); redraw();
+  });
+  readRadio(); // sync JS var to HTML default on init
+}
+
+const redrawAll = () => { updateScene3d(); updateSlicesA(); updateSlicesB(); };
+initColorRadio('lines-color', 'line-color-picker', v => lineStyle = v, redrawAll);
+initColorRadio('src-color',   'src-color-picker',  v => srcStyle  = v, redrawAll);
+initColorRadio('tgt-color',   'tgt-color-picker',  v => tgtStyle  = v, redrawAll);
 
 // ═══════════════════════════════════════════════════════════
 // 9.  FILE DROP / PICK
@@ -1009,12 +1219,12 @@ function setupDrop(dzId,inputId,handler){
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
   document.getElementById(inputId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
 }
-setupDrop('dz-nii','fi-nii',f=>loadNii(f));setupDrop('dz-tck','fi-tck',f=>{const r=new FileReader();r.onload=e=>loadTck(e.target.result,f.name);r.readAsArrayBuffer(f);});
+setupDrop('dz-nii','fi-nii',f=>loadNii(f));setupDrop('dz-trck','fi-trck',f=>e=>loadTrck(f));
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{
-  e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;
-  const ext=f.name.split('.').pop().toLowerCase();
-  if(ext==='tck'){const r=new FileReader();r.onload=ev=>loadTck(ev.target.result,f.name);r.readAsArrayBuffer(f);}
+  e.preventDefault();const f=e.dataTransfer.files[0];if(!f){console.log('File drop failed.');return}
+  let [base,ext]=splitExt(f.name); ext = ext.toLowerCase();
+  if(ext==='.tck' || ext=='.trk') loadTrck(f);
   else loadNii(f);
 });
 
@@ -1027,12 +1237,12 @@ document.body.addEventListener('drop',e=>{
     document.getElementById(id).value = val;
     if (label) document.getElementById(label[0]).textContent = label[1];
   };
+  set('ends-size', endsPx, ['ends-size-val', endsPx.toFixed(1) + ' px']);
   set('pitch-slider',        0,              ['pitch-val',       '0°']);
   set('yaw-slider',          0,              ['yaw-val',         '0°']);
   set('roll-slider',         0,              ['roll-val',        '0°']);
   set('radius-slider',       radius,         ['radius-val',      radius.toFixed(2)+' mm']);
   set('slab-slider',         slabMultiplier, ['slab-val',        slabMultiplier.toFixed(1)+'×']);
-  set('ends-slider',         endsMm,         ['ends-val',        'off']);
   set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val', glassBrainAlpha.toFixed(1)]);
   set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
   set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',   glassBrainRimPow.toFixed(1)]);
@@ -1044,12 +1254,12 @@ for(const k of ['sag','cor','axi']){
   canvasB[k]=document.getElementById('cvs-'+k+'-b');
   initSliceInteraction(k,
     ()=>canvasA[k],
-    ()=>state.cursor,  setCursor,  'a',
+    ()=>state.cursorA,  setCursorA,  'a',
     (pk)=>state.viewA[pk],
     (pk,v)=>{state.viewA[pk]=v;},
     ()=>state.zoomA,
     (z)=>{state.zoomA=z;},
-    updateSlices);
+    updateSlicesA);
   initSliceInteraction(k,
     ()=>canvasB[k],
     ()=>state.cursorB, setCursorB, 'b',
@@ -1069,11 +1279,10 @@ if (window.location.search.includes('demo')) {
   const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
     try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) loadNii(new File([await (await fetch(demoAnat)).blob()],demoAnat)); } catch(e){}
-    try { const r=await fetch(demoTck,{method:'HEAD'}); if(r.ok) loadTck(await (await fetch(demoTck)).arrayBuffer(),demoTck); } catch(e){}
+    try { const r=await fetch(demoTck,{method:'HEAD'}); if(r.ok) loadTrck(new File([await (await fetch(demoTck)).blob()],demoTck)); } catch(e){}
   }
   tryDemoLoad();
 }
-
 </script>
 </body>
 </html>
