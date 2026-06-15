@@ -987,7 +987,10 @@ async function loadTrck(f){
   let md=0;for(let i=0;i<allPts.length;i+=3){const dx=allPts[i]-cx,dy=allPts[i+1]-cy,dz=allPts[i+2]-cz;md=Math.max(md,dx*dx+dy*dy+dz*dz);}
   const br=Math.sqrt(md);
   controls.target.set(cx,cy,cz);
-  camera.position.set(cx,cy,cz+br*2.5);
+  camera.position.set(cx + br*2.5, cy, cz);
+  camera.up.set(0, 0, 1);  // Superior = up
+  controls.target.set(cx, cy, cz);
+  controls.update();
   // Use whichever is larger: tract bounding radius or volume diagonal,
   // so the glass brain never gets clipped when zooming out.
   const [ex,ey,ez] = vr._ras_extent || [0,0,0];
