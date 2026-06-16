@@ -207,6 +207,7 @@ export class VolRenderer {
     const origin_tex = BL_tex;
     const axisU_tex  = [BR_tex[0]-BL_tex[0], BR_tex[1]-BL_tex[1], BR_tex[2]-BL_tex[2]];
     const axisV_tex  = [TL_tex[0]-BL_tex[0], TL_tex[1]-BL_tex[1], TL_tex[2]-BL_tex[2]];
+console.log(planeKey,probeColor)
 
     // ── Step 5: draw ────────────────────────────────────
     gl.useProgram(this._prog);
