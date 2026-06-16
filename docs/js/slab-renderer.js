@@ -67,6 +67,7 @@ export class SlabRenderer {
       minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat, type: THREE.UnsignedByteType, depthBuffer: true,
     });
+    this._rt.texture.colorSpace = THREE.SRGBColorSpace;
     this._rtW = W; this._rtH = H;
     this._pixels = new Uint8Array(W * H * 4);
   }
@@ -264,6 +265,6 @@ export class SlabRenderer {
       imgData.data.set(this._pixels.subarray(srcRow, srcRow + W * 4), y * W * 4);
     }
     offCtx.putImageData(imgData, 0, 0);
-    canvas2d.getContext('2d', {colorSpace: 'rgb'}).drawImage(this._offCanvas, 0, 0);
+    canvas2d.getContext('2d', {colorSpace: 'srgb'}).drawImage(this._offCanvas, 0, 0);
   }
 }
