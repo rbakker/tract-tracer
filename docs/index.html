@@ -17,46 +17,48 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
   display:flex;height:100vh;overflow:hidden;font-size:11px;}
 
 /* ── PANELS ── */
-#left{display:flex;flex-direction:column;background:var(--panel);flex-shrink:0;border-right:1px solid var(--border);}
-#right{display:flex;flex-direction:column;background:var(--panel);flex-shrink:0;border-left:1px solid var(--border);}
-#middle{flex:1;position:relative;overflow:visible;z-index:10;}
+#left,#right{width:33.333%;min-width:0;display:flex;flex-direction:column;background:var(--panel);flex-shrink:0;}
+#left{border-right:1px solid var(--border);}
+#right{border-left:1px solid var(--border);}
+#left .slice-row,#right .slice-row{flex:1;min-height:0;}
+#middle{flex:1;position:relative;overflow:visible;z-index:10;min-width:0;}
 #three-canvas{width:100%;height:100%;display:block;}
-
-/* ── LAYOUT: ALL (default 3-column) ── */
-body[data-layout="all"] #left  { width:33.333%; }
-body[data-layout="all"] #right { width:33.333%; }
-body[data-layout="all"] #left  .slice-row { flex:1; min-height:0; }
-body[data-layout="all"] #right .slice-row { flex:1; min-height:0; }
-
-/* ── LAYOUT: SINGLE PLANE (2-column) ── */
-body[data-layout="sag"] #left,
-body[data-layout="cor"] #left,
-body[data-layout="axi"] #left { width:50%; }
-body[data-layout="sag"] #right,
-body[data-layout="cor"] #right,
-body[data-layout="axi"] #right { display:none; }
-body[data-layout="sag"] #left .slice-row,
-body[data-layout="cor"] #left .slice-row,
-body[data-layout="axi"] #left .slice-row { display:none; }
-body[data-layout="sag"] #left .slice-row.row-sag { display:flex; flex:1; min-height:0; }
-body[data-layout="cor"] #left .slice-row.row-cor { display:flex; flex:1; min-height:0; }
-body[data-layout="axi"] #left .slice-row.row-axi { display:flex; flex:1; min-height:0; }
 
 /* ── SLICE ROWS ── */
 .slice-row{display:flex;flex-direction:column;position:relative;border-bottom:1px solid var(--border);}
 .slice-row:last-child{border-bottom:none;}
-.slice-label{position:absolute;top:6px;left:8px;z-index:2;letter-spacing:0.15em;
-  font-size:10px;font-weight:500;pointer-events:none;}
-.slice-label.sag{ color:var(--sag); }
-.slice-label.cor{ color:var(--cor); }
-.slice-label.axi{ color:var(--axi); }
-.slice-label .plane-id { color:#080b0f; padding:1px 3px; margin-right: 3px; border-radius:2px; }
-.slice-label.sag .plane-id { background:var(--sag); }
-.slice-label.cor .plane-id { background:var(--cor); }
-.slice-label.axi .plane-id { background:var(--axi); }
-.slice-coord{position:absolute;top:6px;right:8px;z-index:2;color:var(--dim);
-  font-size:10px;pointer-events:none;}
 .slice-canvas{width:100%;height:100%;display:block;cursor:crosshair;}
+
+.slice-label{font-size:10px;font-weight:500;letter-spacing:0.15em;line-height:1;}
+.slice-label.sag{color:var(--sag);}
+.slice-label.cor{color:var(--cor);}
+.slice-label.axi{color:var(--axi);}
+.slice-label .plane-id{color:#080b0f;padding:1px 3px;margin-right:3px;border-radius:2px;}
+.slice-label.sag .plane-id{background:var(--sag);}
+.slice-label.cor .plane-id{background:var(--cor);}
+.slice-label.axi .plane-id{background:var(--axi);}
+.slice-coord{display:none;}
+.slice-titlebar{position:absolute;top:0;left:0;right:0;z-index:2;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:4px 8px;min-height:24px;
+  background:none;}
+.slice-title-left{display:flex;align-items:center;gap:0;}
+.slice-title-right{display:flex;align-items:center;gap:8px;pointer-events:all;}
+.slice-coord-inline{font-size:10px;color:var(--dim);cursor:copy;
+  user-select:none;letter-spacing:0.05em;}
+.slice-coord-inline:hover{color:var(--bright);}
+.row-pill{position:relative;width:26px;height:12px;border-radius:6px;
+  border:1px solid;cursor:pointer;flex-shrink:0;transition:background 0.15s,opacity 0.15s;}
+.row-pill::after{content:'';position:absolute;top:1px;left:1px;
+  width:8px;height:8px;border-radius:50%;background:#fff;transition:left 0.15s;}
+.row-pill.on::after{left:15px;}
+.row-pill.off{background:transparent!important;opacity:0.45;}
+.row-pill.disabled{opacity:0.2;cursor:default;}
+.row-pill.sag{border-color:var(--sag);background:var(--sag);}
+.row-pill.cor{border-color:var(--cor);background:var(--cor);}
+.row-pill.axi{border-color:var(--axi);background:var(--axi);}
+.slice-row.collapsed{flex:none!important;}
+.slice-row.collapsed .slice-canvas{display:none;}
 
 /* ── SETTINGS BUTTON + LOAD BUTTON ── */
 #top-btns{position:absolute;top:10px;left:12px;z-index:10;
@@ -109,6 +111,7 @@ a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
 #hdr-panel-close:hover{color:var(--accent);}
 .accent-link.disabled{opacity:0.35;pointer-events:none;cursor:default;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+/* inline toggle inside a ctl-row */
 .ctl-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
 .ctl-toggle input[type=checkbox]{display:none;}
 .ctl-toggle .pill{position:relative;width:26px;height:12px;border-radius:6px;
@@ -134,15 +137,18 @@ input[type=file]{display:none;}
   border-radius:2px;box-shadow:0 2px 10px rgba(0,0,0,0.6);
   pointer-events:none;z-index:9999;display:none;max-width:240px;white-space:pre-wrap;}
 
+/* section headings */
 .cfg-section{margin-top:12px;margin-bottom:6px;color:var(--accent);
   font-size:9px;letter-spacing:0.2em;border-bottom:1px solid var(--border);padding-bottom:4px;}
 .cfg-section:first-child{margin-top:0;}
 
+/* rows */
 .ctl-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
 .ctl-row label{color:var(--dim);letter-spacing:0.08em;font-size:9px;
-  white-space:nowrap;min-width:56px;}
+  white-space:nowrap;min-width:64px;}
 .ctl-row input[type=range]{flex:1;accent-color:var(--accent2);min-width:0;}
 .ctl-val{color:var(--text);font-size:9px;min-width:42px;text-align:right;}
+/* reset button */
 .plane-toggles{display:flex;gap:10px;margin-bottom:4px;margin-left:62px;}
 .plane-toggle{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;}
 .plane-toggle input[type=checkbox]{display:none;}
@@ -157,8 +163,16 @@ input[type=file]{display:none;}
 .pt-sag .pill{border-color:var(--sag);background:var(--sag);}
 .pt-cor .pill{border-color:var(--cor);background:var(--cor);}
 .pt-axi .pill{border-color:var(--axi);background:var(--axi);}
-.radio-opt{display:flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;accent-color:var(--accent2);}
+.radio-opt {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  accent-color: var(--accent2);
+}
 
+/* reset button */
 #rot-reset{background:none;border:1px solid var(--border);color:var(--dim);
   font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 8px;
   cursor:pointer;letter-spacing:0.1em;margin-left:62px;margin-top:4px;}
@@ -173,39 +187,66 @@ input[type=file]{display:none;}
 #middle-info span{color:var(--text);}
 #mprogress{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   color:var(--dim);letter-spacing:0.2em;text-align:center;line-height:2;}
+
+/* ── RESIZE SEPARATORS ── */
+.sep{width:3px;flex-shrink:0;background:var(--border);cursor:col-resize;
+  position:relative;z-index:20;transition:background 0.15s;}
+.sep:hover,.sep.dragging{background:var(--accent);}
 </style>
 </head>
-<body data-layout="all">
+<body>
 <div id="tip"></div>
 
 <!-- LEFT: slice viewers A -->
 <div id="left">
-  <div class="slice-row row-sag">
-    <div class="slice-label sag"><span class="plane-id">SAG</span>probe</div>
-    <div class="slice-coord" id="coord-sag">—</div>
+  <div class="slice-row" id="row-sag-a">
+    <div class="slice-titlebar">
+      <div class="slice-title-left">
+	    <span class="slice-label sag"><span class="plane-id">SAG</span>probe</span>
+      </div>
+      <div class="slice-title-right">
+        <span class="slice-coord-inline" id="coord-sag" title="click to copy">—</span>
+        <div class="row-pill sag on" id="pill-sag-a" data-plane="sag" data-panel="a"></div>
+      </div>
+    </div>
     <canvas class="slice-canvas" id="cvs-sag"></canvas>
   </div>
-  <div class="slice-row row-cor">
-    <div class="slice-label cor"><span class="plane-id">COR</span>probe</div>
-    <div class="slice-coord" id="coord-cor">—</div>
+  <div class="slice-row" id="row-cor-a">
+    <div class="slice-titlebar">
+      <div class="slice-title-left">
+        <span class="slice-label cor"><span class="plane-id">COR</span>probe</span>
+      </div>
+      <div class="slice-title-right">
+        <span class="slice-coord-inline" id="coord-cor" title="click to copy">—</span>
+        <div class="row-pill cor on" id="pill-cor-a" data-plane="cor" data-panel="a"></div>
+      </div>
+    </div>
     <canvas class="slice-canvas" id="cvs-cor"></canvas>
   </div>
-  <div class="slice-row row-axi">
-    <div class="slice-label axi"><span class="plane-id">AXI</span>probe</div>
-    <div class="slice-coord" id="coord-axi">—</div>
+  <div class="slice-row" id="row-axi-a">
+    <div class="slice-titlebar">
+      <div class="slice-title-left">
+        <span class="slice-label axi"><span class="plane-id">AXI</span>probe</span>
+      </div>
+      <div class="slice-title-right">
+        <span class="slice-coord-inline" id="coord-axi" title="click to copy">—</span>
+        <div class="row-pill axi on" id="pill-axi-a" data-plane="axi" data-panel="a"></div>
+      </div>
+    </div>
     <canvas class="slice-canvas" id="cvs-axi"></canvas>
   </div>
-</div>
+</div><div class="sep" id="sep-left"></div>
 
 <!-- MIDDLE: 3D view -->
 <div id="middle">
   <canvas id="three-canvas"></canvas>
-
+  <!-- Top-left buttons -->
   <div id="top-btns">
     <button class="top-btn" id="load-btn"><span class="icon">⊞</span>FILE</button>
     <button class="top-btn" id="settings-btn"><span class="icon">⚙</span>SETTINGS</button>
   </div>
 
+  <!-- Load dropdown -->
   <div id="load-dropdown">
     <div class="dz-row">
       <div class="drop-zone" id="dz-nii" onclick="document.getElementById('fi-nii').click()">
@@ -249,7 +290,8 @@ input[type=file]{display:none;}
       </div>
     </div>
   </div>
-
+    
+  <!-- Header / indices panel -->
   <div id="hdr-panel">
     <div id="hdr-panel-head">
       <span id="hdr-panel-title">HEADER</span>
@@ -258,6 +300,7 @@ input[type=file]{display:none;}
     <pre id="hdr-panel-pre"></pre>
   </div>
 
+  <!-- Settings overlay -->
   <div id="settings-overlay">
 
     <div class="cfg-section" data-tip="Left-click or drag to move the probe.\nScroll to step through slices.\nCtrl+Scroll to zoom.\nRight-drag to pan.">STREAMLINE PROBE</div>
@@ -275,43 +318,46 @@ input[type=file]{display:none;}
     </div>
 
     <div class="cfg-section" data-tip="Streamlines selected by the probe are shown in both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">STREAMLINE RENDERING</div>
-    <div class="ctl-row" data-tip="Streamline color: None to switch off, RAS for directional coloring, or custom uniform color.">
-      <label>LINE·COLOR</label>
-      <label class="radio-opt"><input type="radio" name="lines-color" value="hide"> None</label>
-      <label class="radio-opt"><input type="radio" name="lines-color" value="ras" checked>
-        <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
-      </label>
-      <label class="radio-opt"><input type="radio" name="lines-color" value="flat"><input type="color" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
-    </div>
-    <div class="ctl-row" data-tip="SRC dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
-      <label>SRC·COLOR</label>
-      <label class="radio-opt"><input type="radio" name="src-color" value="hide"> None</label>
-      <label class="radio-opt"><input type="radio" name="src-color" value="ras" checked>
-        <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
-      </label>
-      <label class="radio-opt"><input type="radio" name="src-color" value="flat"><input type="color" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
-    </div>
-    <div class="ctl-row" data-tip="TGT dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
-      <label>TGT·COLOR</label>
-      <label class="radio-opt"><input type="radio" name="tgt-color" value="hide"> None</label>
-      <label class="radio-opt"><input type="radio" name="tgt-color" value="ras">
-        <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
-      </label>
-      <label class="radio-opt"><input type="radio" name="tgt-color" value="flat" checked><input type="color" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
-    </div>
-    <div class="ctl-row" data-tip="SRC and TGT dot size in screen pixels.">
-      <label>ENDS·SIZE</label>
-      <input type="range" id="ends-size" min="1" max="16" step="0.5" value="6">
-      <span class="slider-val" id="ends-size-val">6</span>
-    </div>
+
+<div class="ctl-row" data-tip="Streamline color: None to switch off, RAS for directional coloring, or custom uniform color.">
+  <label>LINE·COLOR</label>
+  <label class="radio-opt"><input type="radio" name="lines-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" name="lines-color" value="ras" checked>
+    <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
+  </label>
+  <label class="radio-opt"><input type="radio" name="lines-color" value="flat"><input type="color" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
+<div class="ctl-row" data-tip="SRC dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
+  <label>SRC·COLOR</label>
+  <label class="radio-opt"><input type="radio" name="src-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" name="src-color" value="ras" checked>
+    <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
+  </label>
+  <label class="radio-opt"><input type="radio" name="src-color" value="flat"><input type="color" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
+<div class="ctl-row" data-tip="TGT dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
+  <label>TGT·COLOR</label>
+  <label class="radio-opt"><input type="radio" name="tgt-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" name="tgt-color" value="ras">
+    <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
+  </label>
+  <label class="radio-opt"><input type="radio" name="tgt-color" value="flat" checked><input type="color" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
+<div class="ctl-row" data-tip="SRC and TGT dot size in screen pixels.">
+  <label>ENDS·SIZE</label>
+  <input type="range" id="ends-size" min="1" max="16" step="0.5" value="6">
+  <span class="slider-val" id="ends-size-val">6</span>
+</div>
+
     <div class="ctl-row" data-tip="Show streamline segments within a slab of this thickness (× voxel size) around each slice plane.">
       <label>CLIPPING</label>
       <input type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
       <span class="ctl-val" id="slab-val">3.0×</span>
     </div>
 
+
     <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.">VOLUME RENDERING</div>
-    <div class="ctl-row" data-tip="Opacity multiplier for the glass brain silhouette.">
+    <div class="ctl-row" data-tip="Opacity multiplier for the glass brain silhouette.\nNot a percentage — higher values accumulate more\nopacity along each ray. ~5 = subtle, ~15 = opaque.">
       <label>OPACITY</label>
       <input type="range" id="brain-alpha-slider" min="0" max="20" value="5" step="0.5">
       <span class="ctl-val" id="brain-alpha-val">5.0</span>
@@ -321,7 +367,7 @@ input[type=file]{display:none;}
       <input type="range" id="brain-thresh-slider" min="0" max="0.8" value="0.15" step="0.01">
       <span class="ctl-val" id="brain-thresh-val">0.15</span>
     </div>
-    <div class="ctl-row" data-tip="Rim sharpness.">
+    <div class="ctl-row" data-tip="Rim sharpness. Higher = thinner silhouette edges,\nlower = broader, more filled glass brain.">
       <label>RIM</label>
       <input type="range" id="brain-rim-slider" min="0.2" max="2" value="1" step="0.05">
       <span class="ctl-val" id="brain-rim-val">1.0</span>
@@ -347,16 +393,7 @@ input[type=file]{display:none;}
       </div>
     </div>
 
-    <div class="cfg-section" data-tip="Choose between 3x1x3 or 2x1 layout.">SCREEN LAYOUT</div>
-    <div class="ctl-row" data-tip="Select 'All' to have 3 probe-control sections on the left and 3 result-browsing sections on the right, with the 3d visualization in the middle.\nSelect 'SAG', 'COR' or 'AXI' to have two of the selected sections on the left, one to control the probe and one to browse the result.">
-      <label>VIEW</label>
-      <label class="radio-opt"><input type="radio" name="layout" value="all" checked> ALL</label>
-      <label class="radio-opt"><input type="radio" name="layout" value="sag"> <span style="color:var(--sag)">SAG</span></label>
-      <label class="radio-opt"><input type="radio" name="layout" value="cor"> <span style="color:var(--cor)">COR</span></label>
-      <label class="radio-opt"><input type="radio" name="layout" value="axi"> <span style="color:var(--axi)">AXI</span></label>
-    </div>
-
-    <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.">SECTION PLANES</div>
+    <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.\nPitch = left-right axis · Yaw = up-down · Roll = front-back.\nUse Reset Planes to return to standard orientation.">SECTION PLANES</div>
     <div class="ctl-row" data-tip="Rotate all section planes around the left-right axis.">
       <label>PITCH</label>
       <input type="range" id="pitch-slider" min="-90" max="90" value="0" step="1">
@@ -373,9 +410,9 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="roll-val">0°</span>
     </div>
     <button id="rot-reset">RESET PLANES</button>
-
   </div><!-- /settings-overlay -->
 
+  <!-- Welcome screen (shown when no data loaded) -->
   <div id="welcome">
     <h2>TRACT TRACER</h2>
     <p>Use the FILE menu to get started</p>
@@ -394,23 +431,44 @@ input[type=file]{display:none;}
       Z <span id="hud-z">—</span> mm
     </div>
   </div>
-</div>
+</div><div class="sep" id="sep-right"></div>
 
-<!-- RIGHT: slice viewers B (populated here initially; moved to #left in single-plane layout) -->
+<!-- RIGHT: slice viewers B -->
 <div id="right">
-  <div class="slice-row row-sag">
-    <div class="slice-label sag"><span class="plane-id">SAG</span>result</div>
-    <div class="slice-coord" id="coord-sag-b">—</div>
+  <div class="slice-row" id="row-sag-b">
+    <div class="slice-titlebar">
+      <div class="slice-title-left">
+        <span class="slice-label sag"><span class="plane-id">SAG</span>result</span>
+      </div>
+      <div class="slice-title-right">
+        <span class="slice-coord-inline" id="coord-sag-b" title="click to copy">—</span>
+        <div class="row-pill sag on" id="pill-sag-b" data-plane="sag" data-panel="b"></div>
+      </div>
+    </div>
     <canvas class="slice-canvas" id="cvs-sag-b"></canvas>
   </div>
-  <div class="slice-row row-cor">
-    <div class="slice-label cor"><span class="plane-id">COR</span>result</div>
-    <div class="slice-coord" id="coord-cor-b">—</div>
+  <div class="slice-row" id="row-cor-b">
+    <div class="slice-titlebar">
+      <div class="slice-title-left">
+        <span class="slice-label cor"><span class="plane-id">COR</span>result</span>
+      </div>
+      <div class="slice-title-right">
+        <span class="slice-coord-inline" id="coord-cor-b" title="click to copy">—</span>
+        <div class="row-pill cor on" id="pill-cor-b" data-plane="cor" data-panel="b"></div>
+      </div>
+    </div>
     <canvas class="slice-canvas" id="cvs-cor-b"></canvas>
   </div>
-  <div class="slice-row row-axi">
-    <div class="slice-label axi"><span class="plane-id">AXI</span>result</div>
-    <div class="slice-coord" id="coord-axi-b">—</div>
+  <div class="slice-row" id="row-axi-b">
+    <div class="slice-titlebar">
+      <div class="slice-title-left">
+        <span class="slice-label axi"><span class="plane-id">AXI</span>result</span>
+      </div>
+      <div class="slice-title-right">
+        <span class="slice-coord-inline" id="coord-axi-b" title="click to copy">—</span>
+        <div class="row-pill axi on" id="pill-axi-b" data-plane="axi" data-panel="b"></div>
+      </div>
+    </div>
     <canvas class="slice-canvas" id="cvs-axi-b"></canvas>
   </div>
 </div>
@@ -438,35 +496,45 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
 // 0.  STATE
 // ═══════════════════════════════════════════════════════════
 const state = {
-  cursorA: [0,0,0],
+  cursorA:  [0,0,0],
   cursorB: [0,0,0],
   viewA: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
   viewB: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
-  zoomA: 1.0,
-  zoomB: 1.0,
+  zoomA: 1.0,   // zoom for left panel set (all three planes share)
+  zoomB: 1.0,   // zoom for right panel set
   nii: null,
   niiLoaded: false,
   trckLoaded: false,
 };
+// Out-of-plane axis index per plane — used by syncViewOOP
 
 function syncViewOOP(views, cursor) {
+  // For each plane, update only the out-of-plane component of its viewCentre
+  // to match the cursor — in terms of the ROTATED plane normal, not fixed RAS axes.
+  //
+  // Decompose cursor into: viewCentre + normal_component * normal_dir
+  // Keep viewCentre's in-plane part fixed; replace its normal-axis projection
+  // so that the slice through viewCentre passes through cursor.
+  //
+  // normalAxis: 0=sag, 1=cor, 2=axi  →  _rot_dirs[normalAxis] is the plane normal.
   for (const [key, normalAxis] of [['sag',0],['cor',1],['axi',2]]) {
-    const n = vr._rot_dirs[normalAxis];
+    const n = vr._rot_dirs[normalAxis];        // unit normal of this plane (rotated)
     const vc = views[key];
+    // Signed distance from current viewCentre to cursor along normal
     const d = (cursor[0]-vc[0])*n[0] + (cursor[1]-vc[1])*n[1] + (cursor[2]-vc[2])*n[2];
+    // Shift viewCentre along normal so it tracks cursor's out-of-plane position
     views[key] = [vc[0]+d*n[0], vc[1]+d*n[1], vc[2]+d*n[2]];
   }
 }
-
 let radius=2, probeEndsOnly=false, slabMultiplier=3, endsPx=6;
-const readColorState = (pickerId, mode) => ({ mode, rgb: document.getElementById(pickerId).value });
+const readColorState = (pickerId, mode) => [mode, document.getElementById(pickerId).value];
 let lineStyle = readColorState('line-color-picker', 'ras');
 let srcStyle  = readColorState('src-color-picker',  'ras');
 let tgtStyle  = readColorState('tgt-color-picker',  'flat');
-let pitch=0, yaw=0, roll=0;
 
+let pitch=0, yaw=0, roll=0;
 const vr = new VolRenderer();
-window._vr = vr;
+window._vr = vr;  // debug access
 
 function setCursorA(ras) {
   state.cursorA = ras;
@@ -480,43 +548,64 @@ function setCursorB(ras) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 1.  SLICE RENDERING
+// 1.  SLICE RENDERING  (delegates to VolRenderer)
 // ═══════════════════════════════════════════════════════════
 const PLANES = {
-  sag: { key:'sag', chColorH:[0.97,0.63,0.23], chColorV:[0.63,0.23,0.97], scrollAxis:0 },
-  cor: { key:'cor', chColorH:[0.23,0.97,0.80], chColorV:[0.63,0.23,0.97], scrollAxis:1 },
-  axi: { key:'axi', chColorH:[0.97,0.63,0.23], chColorV:[0.23,0.97,0.80], scrollAxis:2 },
+  sag: { key:'sag', chColorH:[0.97,0.63,0.23], chColorV:[0.63,0.23,0.97], scrollAxis:0 }, // H=COR orange, V=AXI purple
+  cor: { key:'cor', chColorH:[0.23,0.97,0.80], chColorV:[0.63,0.23,0.97], scrollAxis:1 }, // H=SAG cyan,   V=AXI purple
+  axi: { key:'axi', chColorH:[0.97,0.63,0.23], chColorV:[0.23,0.97,0.80], scrollAxis:2 }, // H=COR orange, V=SAG cyan
 };
-const canvasA = {}, canvasB = {};
+const canvasA={}, canvasB={};
 
+// Unified slice draw for both panel sets.
+// tag='a': left panels (probe, full streamlines, probe ring)
+// tag='b': right panels (result, ends-filtered, no probe ring)
 function drawSlice(planeKey, tag) {
   const cvs    = tag === 'a' ? canvasA[planeKey] : canvasB[planeKey];
   const cursor = tag === 'a' ? state.cursorA     : state.cursorB;
   const view   = tag === 'a' ? state.viewA       : state.viewB;
   const zoom   = tag === 'a' ? state.zoomA       : state.zoomB;
+  // Left panels show the probe ring; right panels suppress it (probeRadius=-1).
   const probeRadius = tag === 'a' ? undefined : -1;
   if (!cvs || !state.nii) return;
-
+  
   const nii = state.nii;
   const mpp = vr._planeParams[planeKey + tag]?.mm_per_px;
+
+  // Each arm's width = slab half-thickness of the plane that arm represents.
+  // SAG arm (V on SAG, V on COR, V on AXI) uses SAG voxel size (pixdim[1]).
+  // COR arm uses pixdim[2], AXI arm uses pixdim[3].
+  // Which arm is H and which is V depends on the plane — matches the colour mapping.
   const slabH = (mm, mpp) => mpp ? slabMultiplier * mm / 2 / mpp : 1.0;
+
   const armWidths = {
-    sag: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[3], mpp) },
-    cor: { wH: slabH(nii.pixdim[1], mpp), wV: slabH(nii.pixdim[3], mpp) },
-    axi: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[1], mpp) },
+    sag: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[3], mpp) }, // H=COR, V=AXI
+    cor: { wH: slabH(nii.pixdim[1], mpp), wV: slabH(nii.pixdim[3], mpp) }, // H=SAG, V=AXI
+    axi: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[1], mpp) }, // H=COR, V=SAG
   };
   const { wH, wV } = armWidths[planeKey];
 
+  // Parse srcStyle setting into an [r,g,b] triple for the probe ring.
   const hex = srcStyle.rgb;
   const probeColor = [parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255];
   vr.renderSlice(cvs, planeKey, view[planeKey], cursor,
-    PLANES[planeKey].chColorH, PLANES[planeKey].chColorV,
-    wH, wV, probeColor, tag, zoom, probeRadius);
-
+               PLANES[planeKey].chColorH, PLANES[planeKey].chColorV,
+               wH, wV, probeColor, tag, zoom, probeRadius);
+               
   if (setStreamlines.length && slabRenderer) {
-    const slabOpts = { selMesh, srcMesh: srcDots, tgtMesh: tgtDots,
-      slabMultiplier, lineStyle, srcStyle, tgtStyle, endsPx };
-    slabRenderer.render(cvs, planeKey, cursor, tag, vr, state, slabOpts);
+	// Left panel: near dots (probed end). Right panel: far dots (target end).
+	// srcDots = closest endpoint to cursor; tgtDots = farthest. Both shown in all panels.
+	const slabOpts = {
+	  selMesh,
+	  srcMesh: srcDots,
+	  tgtMesh: tgtDots,
+	  slabMultiplier,
+	  lineStyle,
+	  srcStyle,
+	  tgtStyle,
+	  endsPx,
+	};
+	slabRenderer.render(cvs, planeKey, cursor, tag, vr, state, slabOpts);
   }
   updateCoordLabel(planeKey, cursor, tag);
 }
@@ -526,20 +615,20 @@ function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'b'
 
 function updateCoordLabel(planeKey, cursor, tag) {
   if (!state.nii) return;
+  const suffix = tag === 'b' ? '-b' : '';
   const vox  = mat3mulVec(state.nii.invAb, cursor).map(Math.round);
+  const ids  = { sag: `coord-sag${suffix}`, cor: `coord-cor${suffix}`, axi: `coord-axi${suffix}` };
   const axes = { sag: 'x', cor: 'y', axi: 'z' };
   const idx  = { sag: 0,   cor: 1,   axi: 2 };
-  const val  = axes[planeKey] + '=' + vox[idx[planeKey]];
-  const suffix = tag === 'b' ? '-b' : '';
-  const el = document.getElementById(`coord-${planeKey}${suffix}`);
-  if (el) el.textContent = val;
+  document.getElementById(ids[planeKey]).textContent = axes[planeKey] + '=' + vox[idx[planeKey]];
 }
 
 // ═══════════════════════════════════════════════════════════
-// 2.  GPU SLAB RENDERER
+// 2.  GPU SLAB RENDERER  — see js/slab-renderer.js
 // ═══════════════════════════════════════════════════════════
 let setStreamlines = [];
-let slabRenderer = null;
+
+let slabRenderer = null;  // initialised after renderer3 exists
 
 // ═══════════════════════════════════════════════════════════
 // 3.  SLICE INTERACTION
@@ -548,30 +637,35 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
                                getViewFn, setViewFn, getZoomFn, setZoomFn, redrawFn) {
   requestAnimationFrame(() => {
     const c = getCanvas();
-    let dragBtn = -1;
-    let dragLast = null;
+    let dragBtn = -1;          // active drag button: 0=left(place), 2=right(pan)
+    let dragLast = null;       // {x,y} last drag position for pan
 
     function canvasPx(e) {
       const r = c.getBoundingClientRect();
       return [(e.clientX - r.left) * (c.width  / r.width),
               (e.clientY - r.top)  * (c.height / r.height)];
     }
+
+    // Left-drag: place cursor
     function place(e) {
       if (!state.nii) return;
       const [ex, ey] = canvasPx(e);
       const newRas = vr.canvasToRas(planeKey, ex, ey, tag);
       if (newRas) setCursorFn(newRas);
     }
+
     c.addEventListener('mousedown', e => {
       e.preventDefault();
       dragBtn = e.button;
       dragLast = {x: e.clientX, y: e.clientY};
       if (e.button === 0) place(e);
     });
+
     c.addEventListener('mousemove', e => {
       if (dragBtn === 0) {
         place(e);
       } else if (dragBtn === 1 || dragBtn === 2) {
+        // Pan: move viewCentre in-plane opposite to drag direction
         if (!state.nii || !dragLast) return;
         const dx = e.clientX - dragLast.x;
         const dy = e.clientY - dragLast.y;
@@ -579,38 +673,55 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
         const p = vr._planeParams[planeKey + tag];
         if (!p) return;
         const mpp = p.mm_per_px;
+        const fuMm = -dx * mpp;
+        const fvMm =  dy * mpp;
         const u_dir = vr._rot_dirs[p.uAx];
         const v_dir = vr._rot_dirs[p.vAx];
+        // Only update THIS plane's viewCentre — moving another plane's viewCentre
+        // along directions that include that plane's normal would shift its slice depth.
         const vc = getViewFn(planeKey);
         setViewFn(planeKey, [
-          vc[0] - dx*mpp*u_dir[0] + dy*mpp*v_dir[0],
-          vc[1] - dx*mpp*u_dir[1] + dy*mpp*v_dir[1],
-          vc[2] - dx*mpp*u_dir[2] + dy*mpp*v_dir[2],
+          vc[0] + fuMm*u_dir[0] + fvMm*v_dir[0],
+          vc[1] + fuMm*u_dir[1] + fvMm*v_dir[1],
+          vc[2] + fuMm*u_dir[2] + fvMm*v_dir[2],
         ]);
         redrawFn();
       }
     });
+
     document.addEventListener('mouseup', () => { dragBtn = -1; dragLast = null; });
+
+    // Right-click: suppress context menu
     c.addEventListener('contextmenu', e => e.preventDefault());
+
     c.addEventListener('wheel', e => {
       e.preventDefault();
       if (!state.nii) return;
+
       if (e.ctrlKey) {
+        // Ctrl+scroll: zoom at mouse position
         const [ex, ey] = canvasPx(e);
         const factor = e.deltaY > 0 ? 1/1.1 : 1.1;
         const oldZoom = getZoomFn();
         const newZoom = Math.max(0.1, Math.min(20, oldZoom * factor));
+
+        // Keep the RAS point under the mouse fixed:
+        // rasUnder = viewCentre + offset_at_old_zoom
+        // After zoom, shift viewCentre so rasUnder stays at (ex,ey)
+        // offset in mm at old zoom:
         const p = vr._planeParams[planeKey + tag];
         if (p) {
-          const mppOld = p.mm_per_px;
+          const mppOld = p.mm_per_px;  // mm/px at old zoom (already baked in)
           const fuOld = (ex/p.W - 0.5) * mppOld * p.W;
           const fvOld = (0.5 - ey/p.H) * mppOld * p.H;
           const mppNew = mppOld * (oldZoom / newZoom);
           const fuNew = (ex/p.W - 0.5) * mppNew * p.W;
           const fvNew = (0.5 - ey/p.H) * mppNew * p.H;
-          const dfU = fuOld - fuNew, dfV = fvOld - fvNew;
+          const dfU = fuOld - fuNew;
+          const dfV = fvOld - fvNew;
           const u_dir = vr._rot_dirs[p.uAx];
           const v_dir = vr._rot_dirs[p.vAx];
+          // Only shift THIS plane's viewCentre to keep the point under the mouse fixed.
           const vc = getViewFn(planeKey);
           setViewFn(planeKey, [
             vc[0] + dfU*u_dir[0] + dfV*v_dir[0],
@@ -621,6 +732,7 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
         setZoomFn(newZoom);
         redrawFn();
       } else {
+        // Plain scroll: step through slices
         const dir = e.deltaY > 0 ? 1 : -1;
         const normalAxis = vr._getNormalAxis(planeKey);
         const n_dir  = vr._rot_dirs[normalAxis];
@@ -639,15 +751,16 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
 // ═══════════════════════════════════════════════════════════
 // 4.  THREE.JS + TRACKBALL
 // ═══════════════════════════════════════════════════════════
-const threeCanvas = document.getElementById('three-canvas');
-const renderer3 = new THREE.WebGLRenderer({canvas:threeCanvas, antialias:true});
+const threeCanvas=document.getElementById('three-canvas');
+const renderer3=new THREE.WebGLRenderer({canvas:threeCanvas,antialias:true});
 slabRenderer = new SlabRenderer(renderer3);
 renderer3.setPixelRatio(window.devicePixelRatio);
 renderer3.setClearColor(0x080b0f);
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
-camera.position.set(0, 0, 200);
-const controls = new TrackballControls(camera, threeCanvas);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,1,0.1,5000);
+camera.position.set(0,0,200);
+
+const controls=new TrackballControls(camera,threeCanvas);
 controls._renderFn = () => renderer3.render(scene, camera);
 
 // ═══════════════════════════════════════════════════════════
@@ -655,6 +768,7 @@ controls._renderFn = () => renderer3.render(scene, camera);
 // ═══════════════════════════════════════════════════════════
 let selMesh=null, srcDots=null, tgtDots=null, probeSphere=null;
 let _lastProbedEnds=null, _lastCursor=[0,0,0];
+// Slice plane meshes in 3D view
 const planeMeshes = {sag:null, cor:null, axi:null};
 const planeVisible = {sag:true, cor:true, axi:true};
 
@@ -667,20 +781,23 @@ function updatePlaneMeshes() {
       if (planeMeshes[k]) scene.add(planeMeshes[k]);
     }
   }
-  renderer3.render(scene, camera);
+  renderer3.render(scene,camera);
 }
 
 // ═══════════════════════════════════════════════════════════
-// 5b. GLASS BRAIN
+// 5b. GLASS BRAIN  — see js/scene3d.js
 // ═══════════════════════════════════════════════════════════
 let glassBrainMesh = null;
-let glassBrainAlpha = 5.0, glassBrainThresh = 0.15, glassBrainRimPow = 1.0;
+let glassBrainAlpha  = 5.0;
+let glassBrainThresh = 0.15;
+let glassBrainRimPow = 1.0;
 
 function buildGlassBrainLocal(nii) {
   if (glassBrainMesh) { scene.remove(glassBrainMesh); glassBrainMesh = null; }
   glassBrainMesh = buildGlassBrain(nii, vr.texData, scene, renderer3, camera);
   updateGlassBrainUniforms();
 }
+
 function updateGlassBrainUniforms() {
   if (!glassBrainMesh) return;
   const u = glassBrainMesh.material.uniforms;
@@ -690,92 +807,127 @@ function updateGlassBrainUniforms() {
   renderer3.render(scene, camera);
 }
 
-function updateProbe() {
-  if (!gridIdx) return;
-  const [cx,cy,cz] = state.cursorA;
-  if (probeSphere) scene.remove(probeSphere);
-  const sg = new THREE.SphereGeometry(radius, 12, 8);
-  probeSphere = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({color: new THREE.Color(srcStyle.rgb), wireframe:true}));
-  probeSphere.position.set(cx, cy, cz); scene.add(probeSphere);
-  if (selMesh) { scene.remove(selMesh); selMesh.geometry.dispose(); selMesh=null; }
-  if (srcDots) { scene.remove(srcDots); srcDots.geometry.dispose(); srcDots=null; }
-  if (tgtDots) { scene.remove(tgtDots); tgtDots.geometry.dispose(); tgtDots=null; }
-  let ids, probedEnds = null;
-  if (!probeEndsOnly) {
-    const hitPts = gridIdx.queryRadius(cx,cy,cz,radius);
-    const hitSet = new Set(); for (const pi of hitPts) hitSet.add(streamlineLookup[pi]);
-    ids = Array.from(hitSet);
+function updateProbe(){
+  if(!gridIdx) return;
+  const [cx,cy,cz]=state.cursorA;
+  if(probeSphere) scene.remove(probeSphere);
+  const sg=new THREE.SphereGeometry(radius,12,8);
+  probeSphere=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:srcStyle.rgb,wireframe:true}));
+  probeSphere.position.set(cx,cy,cz); scene.add(probeSphere);
+  if(selMesh){scene.remove(selMesh);selMesh.geometry.dispose();selMesh=null;}
+  if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
+  if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
+  let ids;
+  let probedEnds = null;  // per-tract: 0=start probed, 1=end probed, 2=both/pass-through
+  if(!probeEndsOnly){
+    const hitPts=gridIdx.queryRadius(cx,cy,cz,radius);
+    const hitSet=new Set(); for(const pi of hitPts) hitSet.add(streamlineLookup[pi]);
+    ids=Array.from(hitSet);
+    // pass-through mode: no flip needed, probedEnds stays null (=all 2)
   } else {
-    const r2 = radius*radius;
-    const startHit = new Set(), endHit = new Set();
-    for (let si=0; si<allStreamlines.length; si++) {
-      const t=allStreamlines[si], n=t.length/3; if (n<1) continue;
+    const r2=radius*radius;
+    const startHit=new Set(), endHit=new Set();
+    for(let si=0;si<allStreamlines.length;si++){
+      const t=allStreamlines[si], n=t.length/3; if(n<1) continue;
       let dx=t[0]-cx, dy=t[1]-cy, dz=t[2]-cz;
-      if (dx*dx+dy*dy+dz*dz<=r2) startHit.add(si);
+      if(dx*dx+dy*dy+dz*dz<=r2) startHit.add(si);
       dx=t[3*(n-1)]-cx; dy=t[3*(n-1)+1]-cy; dz=t[3*(n-1)+2]-cz;
-      if (dx*dx+dy*dy+dz*dz<=r2) endHit.add(si);
+      if(dx*dx+dy*dy+dz*dz<=r2) endHit.add(si);
     }
-    const hitSet = new Set([...startHit,...endHit]);
-    ids = Array.from(hitSet);
-    probedEnds = new Uint8Array(ids.length);
-    ids.forEach((si,i) => {
+    const hitSet=new Set([...startHit,...endHit]);
+    ids=Array.from(hitSet);
+    // Build per-tract probedEnds: 0=start, 1=end, 2=both
+    probedEnds=new Uint8Array(ids.length);
+    ids.forEach((si,i)=>{
       const s=startHit.has(si), e=endHit.has(si);
       probedEnds[i] = (s && e) ? 2 : s ? 0 : 1;
     });
   }
-  setStreamlines = ids.map(i => allStreamlines[i]);
-  document.getElementById('stat-sel').textContent = ids.length ? ids.length.toLocaleString()+' selected' : '';
-  const sp = document.getElementById('save-status');
-  if (sp) sp.textContent = ids.length ? ids.length.toLocaleString()+' streamlines' : 'select streamlines first';
-  const idxBtn = document.getElementById('btn-show-indices');
-  if (idxBtn) { ids.length ? idxBtn.classList.remove('disabled') : idxBtn.classList.add('disabled'); }
-  if (ids.length) {
-    selMesh = makeLineSegments(setStreamlines);
-    _lastCursor = [cx,cy,cz];
-    _lastProbedEnds = probedEnds;
+  setStreamlines=ids.map(i=>allStreamlines[i]);
+  const selText=ids.length?ids.length.toLocaleString()+' selected':'';
+  document.getElementById('stat-sel').textContent=selText;
+  // Update save zone status
+  const sp=document.getElementById('save-status');
+  if(sp) sp.textContent=ids.length?ids.length.toLocaleString()+' streamlines':'select streamlines first';
+  const idxBtn=document.getElementById('btn-show-indices');
+  if(idxBtn){
+    if(ids.length) idxBtn.classList.remove('disabled');
+    else idxBtn.classList.add('disabled');
+  }
+  if(ids.length){
+    selMesh=makeLineSegments(setStreamlines);
+    _lastCursor=[cx,cy,cz];
+    _lastProbedEnds=probedEnds;
     ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, probedEnds, [cx,cy,cz], endsPx));
   }
-  if (slabRenderer) slabRenderer.invalidate(selMesh);
+  if(slabRenderer) slabRenderer.invalidate(selMesh);
   updateScene3d();
   updateSlicesA(); updateSlicesB();
 }
 
 function rebuildDots() {
   if (!setStreamlines || !setStreamlines.length) return;
-  if (srcDots) { scene.remove(srcDots); srcDots.geometry.dispose(); srcDots=null; }
-  if (tgtDots) { scene.remove(tgtDots); tgtDots.geometry.dispose(); tgtDots=null; }
+  if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
+  if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
   ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, _lastProbedEnds, _lastCursor, endsPx));
-  if (slabRenderer) slabRenderer.invalidate(selMesh);
+  if(slabRenderer) slabRenderer.invalidate(selMesh);
   updateScene3d();
 }
 
 function updateScene3d() {
-  if (selMesh) scene.remove(selMesh);
-  if (srcDots) scene.remove(srcDots);
-  if (tgtDots) scene.remove(tgtDots);
+  if (selMesh)  scene.remove(selMesh);
+  if (srcDots)  scene.remove(srcDots);
+  if (tgtDots)  scene.remove(tgtDots);
+
+  // ── Lines ──────────────────────────────────────────────
   if (lineStyle.mode !== 'hide' && selMesh) {
     const mat = selMesh.material;
-    if (lineStyle.mode === 'ras') { mat.vertexColors=true; mat.color.set(0xffffff); }
-    else { mat.vertexColors=false; mat.color.set(lineStyle.rgb); }
+    if (lineStyle.mode === 'ras') {
+      mat.vertexColors = true;
+      mat.color.set(0xffffff);
+    } else {
+      mat.vertexColors = false;
+      mat.color.set(lineStyle.rgb);
+    }
     mat.needsUpdate = true;
     selMesh.renderOrder = 0;
     scene.add(selMesh);
   }
-  const applyDotColor = (dots, style) => {
+
+  // ── Helper: apply colour to a dots Points object ───────
+  const applyDotColor = (dots, colorVal) => {
     if (!dots) return;
     const u = dots.material.uniforms;
-    if (style.mode === 'ras') { u.u_autoColor.value = 1; }
-    else { u.u_autoColor.value = 0; const c=new THREE.Color(style.rgb); u.u_dotColor.value.set(c.r,c.g,c.b); }
+    if (colorVal.mode === 'ras') {
+      u.u_autoColor.value = 1;
+    } else {
+      u.u_autoColor.value = 0;
+      const c = new THREE.Color(colorVal.rgb);
+      u.u_dotColor.value.set(c.r, c.g, c.b);
+    }
   };
-  if (srcStyle.mode !== 'hide' && srcDots) { applyDotColor(srcDots, srcStyle); srcDots.renderOrder=1; scene.add(srcDots); }
-  if (tgtStyle.mode !== 'hide' && tgtDots) { applyDotColor(tgtDots, tgtStyle); tgtDots.renderOrder=2; scene.add(tgtDots); }
+
+  if (srcStyle.mode !== 'hide' && srcDots) {
+    applyDotColor(srcDots, srcStyle);
+    srcDots.renderOrder = 1;
+    scene.add(srcDots);
+  }
+  if (tgtStyle.mode !== 'hide' && tgtDots) {
+    applyDotColor(tgtDots, tgtStyle);
+    tgtDots.renderOrder = 2;
+    scene.add(tgtDots);
+  }
+
   renderer3.render(scene, camera);
 }
 
-function saveTck() {
-  if (!setStreamlines||setStreamlines.length===0) { alert('No streamlines selected.'); return; }
-  if (!trckHeader) { alert('No tractogram loaded.'); return; }
-  const [cx,cy,cz]=state.cursorA, n=setStreamlines.length, r=radius.toFixed(2);
+
+function saveTck(){
+  if(!setStreamlines||setStreamlines.length===0){alert('No streamlines selected.');return;}
+  if(!trckHeader){alert('No tractogram loaded.');return;}
+  const [cx,cy,cz]=state.cursorA;
+  const n=setStreamlines.length;
+  const r=radius.toFixed(2);
   const xyz=`${cx.toFixed(1)},${cy.toFixed(1)},${cz.toFixed(1)}`;
   const url=location.origin+location.pathname;
   const cmd = probeEndsOnly
@@ -783,10 +935,13 @@ function saveTck() {
     : `${url}/tract-tracer selected ${n} streamlines passing through a sphere with radius ${r} around ras-coordinate [${xyz}]`;
   let buf;
   try { buf=writeTck(setStreamlines,trckHeader,cmd); }
-  catch(e) { alert('Save error: '+e); return; }
+  catch(e){alert('Save error: '+e);return;}
   const blob=new Blob([buf],{type:'application/octet-stream'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=trckFileName+'_subset.tck'; a.click(); URL.revokeObjectURL(a.href);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=trckFileName+'_subset.tck';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function collectState() {
@@ -795,25 +950,28 @@ function collectState() {
       radius, probeEndsOnly, slabMultiplier, endsPx,
       lineStyle, srcStyle, tgtStyle,
       glassBrainAlpha, glassBrainThresh, glassBrainRimPow,
-      pitch, yaw, roll, layout: activeLayout,
+      pitch, yaw, roll,
       showSag: document.getElementById('tog-sag')?.checked ?? true,
       showCor: document.getElementById('tog-cor')?.checked ?? true,
       showAxi: document.getElementById('tog-axi')?.checked ?? true,
     },
-    cursorA: state.cursorA, cursorB: state.cursorB,
+    cursorA: state.cursorA,
+    cursorB: state.cursorB,
     files: {
       anatomy:    document.getElementById('dz-nii-status')?.textContent ?? '',
       tractogram: document.getElementById('dz-trck-status')?.textContent ?? '',
     }
   };
 }
+
 function saveState() {
-  const data=JSON.stringify(collectState(),null,2);
-  const blob=new Blob([data],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download='tract-tracer-state.json'; a.click(); URL.revokeObjectURL(a.href);
-}
-function updateCoordHud() {
+  const data = JSON.stringify(collectState(), null, 2);
+  const blob = new Blob([data], {type: 'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'tract-tracer-state.json'; a.click(); URL.revokeObjectURL(a.href);
+};
+
+function updateCoordHud(){
   const [x,y,z]=state.cursorA;
   document.getElementById('hud-x').textContent=x.toFixed(1);
   document.getElementById('hud-y').textContent=y.toFixed(1);
@@ -826,97 +984,122 @@ function updateCoordHud() {
 function setProgress(msg){const el=document.getElementById('mprogress');if(el)el.textContent=msg;}
 function tick(){return new Promise(r=>setTimeout(r,20));}
 
-async function loadNii(file) {
-  const dzNiiP=document.getElementById('dz-nii-status');
-  if (dzNiiP) { dzNiiP.textContent='loading…'; dzNiiP.className='is-loading'; }
+async function loadNii(file){
+  const dzNiiP = document.getElementById('dz-nii-status');
+  if (dzNiiP) { dzNiiP.textContent = 'loading…'; dzNiiP.className = 'is-loading'; }
   setProgress('reading '+file.name+'…'); await tick();
   let nii;
-  try { nii=await parseNifti(await file.arrayBuffer()); }
-  catch(e) { alert('NIfTI error: '+e); if(dzNiiP){dzNiiP.textContent='drop or click';dzNiiP.className='';} setProgress(''); return; }
+  try{ nii=await parseNifti(await file.arrayBuffer()); }
+  catch(e){alert('NIfTI error: '+e);if(dzNiiP){dzNiiP.textContent='drop or click';dzNiiP.className='';}setProgress('');return;}
   state.nii=nii;
-  state.cursorA=mat3mulVec(nii.Ab,[nii.nx/2,nii.ny/2,nii.nz/2]);
-  state.cursorB=[...state.cursorA];
-  for (const k of ['sag','cor','axi']) { state.viewA[k]=[...state.cursorA]; state.viewB[k]=[...state.cursorA]; }
+  state.cursorA = mat3mulVec(nii.Ab, [nii.nx/2, nii.ny/2, nii.nz/2]);
+  state.cursorB = [...state.cursorA];
+  for(const k of ['sag','cor','axi']){ state.viewA[k]=[...state.cursorA]; state.viewB[k]=[...state.cursorA]; }
   setProgress('uploading 3D texture…'); await tick();
   vr.upload(nii);
   buildGlassBrainLocal(nii);
-  const [cx,cy,cz]=state.cursorA, [ex,ey,ez]=vr._ras_extent;
-  const br=Math.sqrt(ex*ex+ey*ey+ez*ez)/2;
-  controls.target.set(cx,cy,cz);
-  camera.position.set(cx,cy,cz+br*2.5);
-  camera.near=br*0.001; camera.far=br*20; camera.updateProjectionMatrix();
+  // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
+  const [cx,cy,cz] = state.cursorA;
+  const [ex,ey,ez] = vr._ras_extent;
+  const br = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
+  controls.target.set(cx, cy, cz);
+  camera.position.set(cx, cy, cz + br*2.5);
+  camera.near = br * 0.001;
+  camera.far  = br * 20;
+  camera.updateProjectionMatrix();
   controls.update();
   state.niiLoaded=true;
   document.getElementById('btn-nii-hdr').classList.remove('disabled');
-  checkShowHud(); resizeAll();
+  checkShowHud();
+  resizeAll();
   updateSlicesA(); updateSlicesB(); updatePlaneMeshes(); updateCoordHud();
 }
 
-let gridIdx=null, streamlineLookup=null, allPts=null, allStreamlines=null, trckHeader=null, trckFileName='tractogram';
+let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeader=null,trckFileName='tractogram';
 
 function splitExt(fname) {
-  const i=fname.lastIndexOf('.'); return i===-1?[fname,'']:[fname.slice(0,i),fname.slice(i)];
+  const i = fname.lastIndexOf('.');
+  return i === -1
+    ? [fname, '']
+    : [fname.slice(0, i), fname.slice(i)];
 }
 
-async function loadTrck(f) {
-  let [baseName,ext]=splitExt(f.name); ext=ext.toLowerCase();
-  trckFileName=baseName;
-  const dTrckP=document.getElementById('dz-trck-status');
-  if (dTrckP) { dTrckP.textContent='loading…'; dTrckP.className='is-loading'; }
+async function loadTrck(f){
+  let [ baseName, ext ] = splitExt(f.name); ext = ext.toLowerCase();
+  trckFileName = baseName;
+  const dTrckP = document.getElementById('dz-trck-status');
+  if (dTrckP) { dTrckP.textContent = 'loading…'; dTrckP.className = 'is-loading'; }
   setProgress(`parsing .${ext}…`); await tick();
   let parsed;
-  try { parsed=(ext=='.tck'?await parseTck(f):await parseTrk(f)); }
-  catch(e) { alert(`${ext.toUpperCase()} error: `+e); if(dTrckP){dTrckP.textContent='drop or click';dTrckP.className='';} setProgress(''); return; }
+  try {
+	  parsed=(ext=='.tck'?await parseTck(f):await parseTrk(f))
+  } catch(e){
+	  alert(`${ext.toUpperCase()} error: `+e);if(dTrckP){dTrckP.textContent='drop or click';dTrckP.className=''}setProgress('');return;
+  }
   trckHeader=parsed.header;
   allStreamlines=parsed.streamlines; streamlineLookup=parsed.streamlineLookup;
   const np=streamlineLookup.length;
   setProgress(allStreamlines.length.toLocaleString()+' streamlines · building index…'); await tick();
   allPts=new Float32Array(np*3); let off=0;
-  for (const t of allStreamlines) { for (let i=0;i<t.length;i++) allPts[off+i]=+t[i]; off+=t.length; }
+  for(const t of allStreamlines){for(let i=0;i<t.length;i++)allPts[off+i]=+t[i];off+=t.length;}
   gridIdx=new GridIndex(allPts,radius);
   setProgress('uploading geometry…'); await tick();
   let cx=0,cy=0,cz=0;
-  for (let i=0;i<allPts.length;i+=3) { cx+=allPts[i]; cy+=allPts[i+1]; cz+=allPts[i+2]; }
-  cx/=np; cy/=np; cz/=np;
-  let md=0;
-  for (let i=0;i<allPts.length;i+=3) { const dx=allPts[i]-cx,dy=allPts[i+1]-cy,dz=allPts[i+2]-cz; md=Math.max(md,dx*dx+dy*dy+dz*dz); }
+  for(let i=0;i<allPts.length;i+=3){cx+=allPts[i];cy+=allPts[i+1];cz+=allPts[i+2];}
+  cx/=np;cy/=np;cz/=np;
+  let md=0;for(let i=0;i<allPts.length;i+=3){const dx=allPts[i]-cx,dy=allPts[i+1]-cy,dz=allPts[i+2]-cz;md=Math.max(md,dx*dx+dy*dy+dz*dz);}
   const br=Math.sqrt(md);
   controls.target.set(cx,cy,cz);
-  camera.position.set(cx+br*2.5,cy,cz);
-  camera.up.set(0,0,1);
-  controls.target.set(cx,cy,cz); controls.update();
-  const [ex,ey,ez]=vr._ras_extent||[0,0,0];
-  const safeR=Math.max(br,Math.sqrt(ex*ex+ey*ey+ez*ez)/2);
-  camera.near=safeR*0.001; camera.far=safeR*20; camera.updateProjectionMatrix();
+  camera.position.set(cx + br*2.5, cy, cz);
+  camera.up.set(0, 0, 1);  // Superior = up
+  controls.target.set(cx, cy, cz);
+  controls.update();
+  // Use whichever is larger: tract bounding radius or volume diagonal,
+  // so the glass brain never gets clipped when zooming out.
+  const [ex,ey,ez] = vr._ras_extent || [0,0,0];
+  const volR = Math.sqrt(ex*ex+ey*ey+ez*ez) / 2;
+  const safeR = Math.max(br, volR);
+  camera.near=safeR*.001; camera.far=safeR*20; camera.updateProjectionMatrix();
   document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines';
   document.getElementById('btn-trck-hdr').classList.remove('disabled');
   state.trckLoaded=true; setProgress(''); checkShowHud(); controls.update();
-  probeEndsOnly=document.getElementById('probe-ends-toggle').checked;
+  probeEndsOnly = document.getElementById('probe-ends-toggle').checked; // bit of a hack
   updateProbe(); updateCoordHud();
 }
 
-function checkShowHud() {
+function checkShowHud(){
   if (state.niiLoaded) {
-    const w=document.getElementById('welcome'); if(w) w.style.display='none';
-    document.getElementById('middle-hud').style.display='block';
-    const s=document.getElementById('dz-nii-status'); if(s){s.textContent='✓ loaded';s.className='';}
+    const w = document.getElementById('welcome');
+    if (w) w.style.display = 'none';
+    document.getElementById('middle-hud').style.display = 'block';
+    // Mark loaded files in load dropdown
+    const dzNiiS = document.getElementById('dz-nii-status');
+    if (dzNiiS) { dzNiiS.textContent = '✓ loaded'; dzNiiS.className = ''; }
   }
   if (state.trckLoaded) {
-    const s=document.getElementById('dz-trck-status'); if(s){s.textContent='✓ loaded';s.className='';}
+    const dzTrckS = document.getElementById('dz-trck-status');
+    if (dzTrckS) { dzTrckS.textContent = '✓ loaded'; dzTrckS.className = ''; }
   }
 }
 
 // ═══════════════════════════════════════════════════════════
 // 7.  RESIZE
 // ═══════════════════════════════════════════════════════════
-function resizeAll() {
-  for (const k of ['sag','cor','axi']) {
-    for (const c of [canvasA[k], canvasB[k]]) {
-      if (!c) continue;
-      if (c.width!==c.clientWidth||c.height!==c.clientHeight) {
-        c.width=c.clientWidth; c.height=c.clientHeight;
+function resizeAll(){
+  for (const panel of ['a','b']) {
+    for(const k of ['sag','cor','axi']){
+      const c = (panel=='a' ? canvasA[k] : canvasB[k])
+      if(!c)continue;
+      // only resize if dimensions actually changed (avoids clearing on no-op)
+      if(c.width!==c.clientWidth||c.height!==c.clientHeight){
+        c.width =c.clientWidth;
+        c.height=c.clientHeight;
       }
     }
+    if(state.nii) {
+		if (vr._sharedMmPerPx) vr._sharedMmPerPx[panel] = null
+		panel=='a' ? updateSlicesA() : updateSlicesB() 
+	}
   }
   const mc=document.getElementById('middle');
   renderer3.setSize(mc.clientWidth,mc.clientHeight,false);
@@ -924,107 +1107,108 @@ function resizeAll() {
   camera.updateProjectionMatrix();
   controls.handleResize();
   renderer3.render(scene,camera);
-  if (state.nii) { updateSlicesA(); updateSlicesB(); }
 }
 new ResizeObserver(resizeAll).observe(document.body);
 
 // ═══════════════════════════════════════════════════════════
 // 8.  CONTROLS WIRING
 // ═══════════════════════════════════════════════════════════
-function updateRotation() {
+function updateRotation(){
   const p=pitch*Math.PI/180, y=yaw*Math.PI/180, r=roll*Math.PI/180;
   vr.setRotation(p,y,r);
-  syncViewOOP(state.viewA,state.cursorA); syncViewOOP(state.viewB,state.cursorB);
+  // Re-sync view centres to cursor along the new normals, preserving in-plane positions
+  syncViewOOP(state.viewA, state.cursorA);
+  syncViewOOP(state.viewB, state.cursorB);
   updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
 }
 document.getElementById('pitch-slider').addEventListener('input',e=>{pitch=+e.target.value;document.getElementById('pitch-val').textContent=pitch+'°';updateRotation();});
 document.getElementById('yaw-slider').addEventListener('input',e=>{yaw=+e.target.value;document.getElementById('yaw-val').textContent=yaw+'°';updateRotation();});
 document.getElementById('roll-slider').addEventListener('input',e=>{roll=+e.target.value;document.getElementById('roll-val').textContent=roll+'°';updateRotation();});
 ['sag','cor','axi'].forEach(k=>{
-  document.getElementById('tog-'+k).addEventListener('change',e=>{planeVisible[k]=e.target.checked;updatePlaneMeshes();});
+  document.getElementById('tog-'+k).addEventListener('change',e=>{
+    planeVisible[k]=e.target.checked;
+    updatePlaneMeshes();
+  });
 });
-
-// ── Layout switching via DOM move ─────────────────────────
-const leftEl  = document.getElementById('left');
-const rightEl = document.getElementById('right');
-const bRows = {
-  sag: rightEl.querySelector('.row-sag'),
-  cor: rightEl.querySelector('.row-cor'),
-  axi: rightEl.querySelector('.row-axi'),
-};
-let activeLayout = 'all';
-
-document.querySelectorAll('input[name="layout"]').forEach(r =>
-  r.addEventListener('change', e => {
-    activeLayout = e.target.value;
-    document.body.dataset.layout = activeLayout;
-    if (activeLayout === 'all') {
-      // Move B rows back to #right
-      for (const k of ['sag','cor','axi']) rightEl.appendChild(bRows[k]);
-    } else {
-      // Move the matching B row to #left (append after A rows)
-      leftEl.appendChild(bRows[activeLayout]);
-    }
-    resizeAll();
-    if (state.nii) { updateSlicesA(); updateSlicesB(); }
-  })
-);
-
+// Button toggles
 function toggleDropdown(id, e) {
   e.stopPropagation();
-  const el=document.getElementById(id), wasOpen=el.classList.contains('open');
+  const el = document.getElementById(id);
+  const wasOpen = el.classList.contains('open');
+  // Close all dropdowns first
   document.getElementById('settings-overlay').classList.remove('open');
   document.getElementById('load-dropdown').classList.remove('open');
   if (!wasOpen) el.classList.add('open');
 }
-document.getElementById('load-btn').addEventListener('click',     e=>toggleDropdown('load-dropdown',e));
-document.getElementById('settings-btn').addEventListener('click', e=>toggleDropdown('settings-overlay',e));
-document.getElementById('dz-save').addEventListener('click',  ()=>saveTck());
-document.getElementById('dz-state').addEventListener('click', ()=>saveState());
+document.getElementById('load-btn').addEventListener('click',     e => toggleDropdown('load-dropdown', e));
+document.getElementById('settings-btn').addEventListener('click', e => toggleDropdown('settings-overlay', e));
+document.getElementById('dz-save').addEventListener('click', () => saveTck());
+document.getElementById('dz-state').addEventListener('click', () => saveState());
 
 function showHeaderPanel(title, text) {
-  document.getElementById('hdr-panel-title').textContent=title;
-  document.getElementById('hdr-panel-pre').textContent=text;
+  document.getElementById('hdr-panel-title').textContent = title;
+  document.getElementById('hdr-panel-pre').textContent = text;
   document.getElementById('hdr-panel').classList.add('open');
 }
-document.getElementById('hdr-panel-close').addEventListener('click',e=>{e.stopPropagation();document.getElementById('hdr-panel').classList.remove('open');});
-document.getElementById('hdr-panel').addEventListener('click',e=>e.stopPropagation());
-document.getElementById('btn-nii-hdr').addEventListener('click',e=>{
-  e.stopPropagation(); if(!state.nii)return;
-  const n=state.nii,A=n.Ab;
-  showHeaderPanel('NIFTI HEADER',JSON.stringify({
-    dimensions:[n.nx,n.ny,n.nz],
-    voxel_size:n.pixdim.slice(1,4).map(v=>+v.toFixed(6)),
-    data_range:{min:+n.mn.toFixed(4),max:+n.mx.toFixed(4)},
-    affine:{A:[A[0],A[1],A[2]].map(r=>r.map(v=>+v.toFixed(6))),b:A[3].map(v=>+v.toFixed(6))}
-  },null,2));
-});
-document.getElementById('btn-trck-hdr').addEventListener('click',e=>{
-  e.stopPropagation(); if(!trckHeader)return;
-  showHeaderPanel('TRACTS HEADER',JSON.stringify(trckHeader,null,2));
-});
-document.getElementById('btn-show-indices').addEventListener('click',e=>{
-  e.stopPropagation(); if(!setStreamlines||!allStreamlines)return;
-  const selSet=new Set(setStreamlines), indices=[];
-  for(let i=0;i<allStreamlines.length;i++) if(selSet.has(allStreamlines[i]))indices.push(i);
-  showHeaderPanel('SELECTED INDICES ('+indices.length+')',JSON.stringify(indices));
-});
-document.getElementById('btn-show-state').addEventListener('click',e=>{
+document.getElementById('hdr-panel-close').addEventListener('click', e => {
   e.stopPropagation();
-  showHeaderPanel('STATE',JSON.stringify(collectState(),null,2));
+  document.getElementById('hdr-panel').classList.remove('open');
 });
-document.addEventListener('click',()=>{
+document.getElementById('hdr-panel').addEventListener('click', e => e.stopPropagation());
+document.getElementById('btn-nii-hdr').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!state.nii) return;
+  const n = state.nii, A = n.Ab;
+  showHeaderPanel('NIFTI HEADER', JSON.stringify({
+    dimensions: [ n.nx, n.ny, n.nz ],
+    voxel_size: n.pixdim.slice(1,4).map(v => +v.toFixed(6)),
+    data_range: { min: +n.mn.toFixed(4), max: +n.mx.toFixed(4) },
+    affine: { 
+		A: [A[0],A[1],A[2]].map(r => r.map(v => +v.toFixed(6))),
+        b: A[3].map(v => +v.toFixed(6))
+    }
+  }, null, 2));
+});
+document.getElementById('btn-trck-hdr').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!trckHeader) return;
+  showHeaderPanel('TRACTS HEADER', JSON.stringify(trckHeader, null, 2));
+});
+document.getElementById('btn-show-indices').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!setStreamlines || !allStreamlines) return;
+  const selSet = new Set(setStreamlines);
+  const indices = [];
+  for (let i = 0; i < allStreamlines.length; i++)
+    if (selSet.has(allStreamlines[i])) indices.push(i);
+  showHeaderPanel('SELECTED INDICES (' + indices.length + ')', JSON.stringify(indices));
+});
+document.getElementById('btn-show-state').addEventListener('click', e => {
+  e.stopPropagation();
+  showHeaderPanel('STATE', JSON.stringify(collectState(), null, 2));
+});
+
+document.addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.remove('open');
   document.getElementById('load-dropdown').classList.remove('open');
 });
-document.getElementById('settings-overlay').addEventListener('click',e=>e.stopPropagation());
-document.getElementById('load-dropdown').addEventListener('click',   e=>e.stopPropagation());
+document.getElementById('settings-overlay').addEventListener('click', e => e.stopPropagation());
+document.getElementById('load-dropdown').addEventListener('click',    e => e.stopPropagation());
 
-const tipEl=document.getElementById('tip');
-document.querySelectorAll('[data-tip]').forEach(el=>{
-  el.addEventListener('mouseenter',e=>{tipEl.textContent=el.dataset.tip.replace(/\\n/g,'\n');tipEl.style.left=(e.clientX+14)+'px';tipEl.style.top=(e.clientY+14)+'px';tipEl.style.display='block';});
-  el.addEventListener('mousemove',e=>{tipEl.style.left=(e.clientX+14)+'px';tipEl.style.top=(e.clientY+14)+'px';});
-  el.addEventListener('mouseleave',()=>{tipEl.style.display='none';});
+// ── Floating tooltip ──────────────────────────────────────
+const tipEl = document.getElementById('tip');
+document.querySelectorAll('[data-tip]').forEach(el => {
+  el.addEventListener('mouseenter', e => {
+    tipEl.textContent = el.dataset.tip.replace(/\\n/g, '\n');
+    tipEl.style.left = (e.clientX + 14) + 'px';
+    tipEl.style.top  = (e.clientY + 14) + 'px';
+    tipEl.style.display = 'block';
+  });
+  el.addEventListener('mousemove', e => {
+    tipEl.style.left = (e.clientX + 14) + 'px';
+    tipEl.style.top  = (e.clientY + 14) + 'px';
+  });
+  el.addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
 });
 document.getElementById('rot-reset').addEventListener('click',()=>{
   pitch=yaw=roll=0;
@@ -1032,36 +1216,67 @@ document.getElementById('rot-reset').addEventListener('click',()=>{
   updateRotation();
 });
 document.getElementById('radius-slider').addEventListener('input',e=>{
-  radius=+e.target.value; document.getElementById('radius-val').textContent=radius.toFixed(2)+' mm';
-  if(gridIdx&&gridIdx.cs!==radius) gridIdx=new GridIndex(allPts,radius);
-  updateProbeGap(); updateProbe(); updateSlicesA();
+  radius=+e.target.value;document.getElementById('radius-val').textContent=radius.toFixed(2)+' mm';
+  if(gridIdx&&gridIdx.cs!==radius)gridIdx=new GridIndex(allPts,radius);
+  updateProbeGap();
+  updateProbe();
+  updateSlicesA();
 });
-document.getElementById('brain-alpha-slider').addEventListener('input',e=>{glassBrainAlpha=+e.target.value;document.getElementById('brain-alpha-val').textContent=glassBrainAlpha.toFixed(1);updateGlassBrainUniforms();});
-document.getElementById('brain-thresh-slider').addEventListener('input',e=>{glassBrainThresh=+e.target.value;document.getElementById('brain-thresh-val').textContent=glassBrainThresh.toFixed(2);updateGlassBrainUniforms();});
-document.getElementById('brain-rim-slider').addEventListener('input',e=>{glassBrainRimPow=+e.target.value;document.getElementById('brain-rim-val').textContent=glassBrainRimPow.toFixed(1);updateGlassBrainUniforms();});
+document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
+  glassBrainAlpha=+e.target.value;
+  document.getElementById('brain-alpha-val').textContent=glassBrainAlpha.toFixed(1);
+  updateGlassBrainUniforms();
+});
+document.getElementById('brain-thresh-slider').addEventListener('input',e=>{
+  glassBrainThresh=+e.target.value;
+  document.getElementById('brain-thresh-val').textContent=glassBrainThresh.toFixed(2);
+  updateGlassBrainUniforms();
+});
+document.getElementById('brain-rim-slider').addEventListener('input',e=>{
+  glassBrainRimPow=+e.target.value;
+  document.getElementById('brain-rim-val').textContent=glassBrainRimPow.toFixed(1);
+  updateGlassBrainUniforms();
+});
 
 function updateProbeGap() {
-  const p=vr._planeParams['axia']||vr._planeParams['cora']||vr._planeParams['saga'];
-  if(!p||!p.mm_per_px)return; vr.setProbeRadius(radius/p.mm_per_px);
+  const p = vr._planeParams['axia'] || vr._planeParams['cora'] || vr._planeParams['saga'];
+  if (!p || !p.mm_per_px) return;
+  vr.setProbeRadius(radius / p.mm_per_px);
 }
-document.getElementById('probe-ends-toggle').addEventListener('change',e=>{probeEndsOnly=e.target.checked;updateProbe();});
-document.getElementById('slab-slider').addEventListener('input',e=>{slabMultiplier=+e.target.value;document.getElementById('slab-val').textContent=slabMultiplier.toFixed(1)+'×';updateSlicesA();updateSlicesB();});
-document.getElementById('ends-size').addEventListener('input',e=>{endsPx=+e.target.value;document.getElementById('ends-size-val').textContent=endsPx.toFixed(1)+' px';rebuildDots();updateSlicesA();updateSlicesB();});
-
+document.getElementById('probe-ends-toggle').addEventListener('change',e=>{
+  probeEndsOnly=e.target.checked;
+  updateProbe();
+});
+document.getElementById('slab-slider').addEventListener('input',e=>{
+  slabMultiplier=+e.target.value;document.getElementById('slab-val').textContent=slabMultiplier.toFixed(1)+'×';
+  updateSlicesA(); updateSlicesB();
+});
+document.getElementById('ends-size').addEventListener('input',e=>{
+  endsPx=+e.target.value;document.getElementById('ends-size-val').textContent=endsPx.toFixed(1)+' px';
+  rebuildDots(); updateSlicesA(); updateSlicesB();
+});
+// Single function to wire a color radio group + picker to a JS variable.
+// setVar: function(value) that stores the result and triggers redraws.
+// On call, reads current checked radio so JS var matches HTML state immediately.
 function initColorRadio(radioName, pickerId, setVar, redraw) {
-  const readRadio=()=>{
-    const v=document.querySelector(`input[name="${radioName}"]:checked`)?.value;
-    const hex=document.getElementById(pickerId).value;
+  const readRadio = () => {
+    const v = document.querySelector(`input[name="${radioName}"]:checked`)?.value;
+    const hex = document.getElementById(pickerId).value;
     setVar({mode:v,rgb:hex});
   };
-  document.querySelectorAll(`input[name="${radioName}"]`).forEach(r=>r.addEventListener('change',()=>{readRadio();redraw();}));
-  document.getElementById(pickerId).addEventListener('input',e=>{readRadio();redraw();});
-  readRadio();
+  document.querySelectorAll(`input[name="${radioName}"]`).forEach(r =>
+    r.addEventListener('change', () => { readRadio(); redraw(); })
+  );
+  document.getElementById(pickerId).addEventListener('input', e => {
+    readRadio(); redraw();
+  });
+  readRadio(); // sync JS var to HTML default on init
 }
-const redrawAll=()=>{updateScene3d();updateSlicesA();updateSlicesB();};
-initColorRadio('lines-color','line-color-picker',v=>lineStyle=v,redrawAll);
-initColorRadio('src-color',  'src-color-picker', v=>srcStyle=v, redrawAll);
-initColorRadio('tgt-color',  'tgt-color-picker', v=>tgtStyle=v, redrawAll);
+
+const redrawAll = () => { updateScene3d(); updateSlicesA(); updateSlicesB(); };
+initColorRadio('lines-color', 'line-color-picker', v => lineStyle = v, redrawAll);
+initColorRadio('src-color',   'src-color-picker',  v => srcStyle  = v, redrawAll);
+initColorRadio('tgt-color',   'tgt-color-picker',  v => tgtStyle  = v, redrawAll);
 
 // ═══════════════════════════════════════════════════════════
 // 9.  FILE DROP / PICK
@@ -1073,54 +1288,206 @@ function setupDrop(dzId,inputId,handler){
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
   document.getElementById(inputId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
 }
-setupDrop('dz-nii','fi-nii',f=>loadNii(f));
-setupDrop('dz-trck','fi-trck',f=>loadTrck(f));
+setupDrop('dz-nii','fi-nii',f=>loadNii(f));setupDrop('dz-trck','fi-trck',f=>loadTrck(f));
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{
-  e.preventDefault(); const f=e.dataTransfer.files[0]; if(!f)return;
-  let [base,ext]=splitExt(f.name); ext=ext.toLowerCase();
-  if(ext==='.tck'||ext==='.trk') loadTrck(f); else loadNii(f);
+  e.preventDefault();const f=e.dataTransfer.files[0];if(!f){console.log('File drop failed.');return}
+  let [base,ext]=splitExt(f.name); ext = ext.toLowerCase();
+  if(ext==='.tck' || ext=='.trk') loadTrck(f);
+  else loadNii(f);
 });
 
 // ═══════════════════════════════════════════════════════════
 // 10.  INIT
 // ═══════════════════════════════════════════════════════════
-(function initSliders(){
-  const set=(id,val,label)=>{document.getElementById(id).value=val;if(label)document.getElementById(label[0]).textContent=label[1];};
-  set('ends-size',        endsPx,          ['ends-size-val',   endsPx.toFixed(1)+' px']);
-  set('pitch-slider',     0,               ['pitch-val',       '0°']);
-  set('yaw-slider',       0,               ['yaw-val',         '0°']);
-  set('roll-slider',      0,               ['roll-val',        '0°']);
-  set('radius-slider',    radius,          ['radius-val',      radius.toFixed(2)+' mm']);
-  set('slab-slider',      slabMultiplier,  ['slab-val',        slabMultiplier.toFixed(1)+'×']);
-  set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val',  glassBrainAlpha.toFixed(1)]);
-  set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val', glassBrainThresh.toFixed(2)]);
-  set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',    glassBrainRimPow.toFixed(1)]);
+// Force all sliders to their canonical script values, defeating browser autocomplete.
+(function initSliders() {
+  const set = (id, val, label) => {
+    document.getElementById(id).value = val;
+    if (label) document.getElementById(label[0]).textContent = label[1];
+  };
+  set('ends-size', endsPx, ['ends-size-val', endsPx.toFixed(1) + ' px']);
+  set('pitch-slider',        0,              ['pitch-val',       '0°']);
+  set('yaw-slider',          0,              ['yaw-val',         '0°']);
+  set('roll-slider',         0,              ['roll-val',        '0°']);
+  set('radius-slider',       radius,         ['radius-val',      radius.toFixed(2)+' mm']);
+  set('slab-slider',         slabMultiplier, ['slab-val',        slabMultiplier.toFixed(1)+'×']);
+  set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val', glassBrainAlpha.toFixed(1)]);
+  set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
+  set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',   glassBrainRimPow.toFixed(1)]);
 })();
 
-// Wire canvases — single set, B rows move between #left and #right
-for (const k of ['sag','cor','axi']) {
-  canvasA[k] = document.getElementById('cvs-'+k);
-  canvasB[k] = document.getElementById('cvs-'+k+'-b');
+// Wire canvases
+for(const k of ['sag','cor','axi']){
+  canvasA[k]=document.getElementById('cvs-'+k);
+  canvasB[k]=document.getElementById('cvs-'+k+'-b');
   initSliceInteraction(k,
-    ()=>canvasA[k], ()=>state.cursorA, setCursorA, 'a',
-    (pk)=>state.viewA[pk], (pk,v)=>{state.viewA[pk]=v;},
-    ()=>state.zoomA, (z)=>{state.zoomA=z;}, updateSlicesA);
+    ()=>canvasA[k],
+    ()=>state.cursorA,  setCursorA,  'a',
+    (pk)=>state.viewA[pk],
+    (pk,v)=>{state.viewA[pk]=v;},
+    ()=>state.zoomA,
+    (z)=>{state.zoomA=z;},
+    updateSlicesA);
   initSliceInteraction(k,
-    ()=>canvasB[k], ()=>state.cursorB, setCursorB, 'b',
-    (pk)=>state.viewB[pk], (pk,v)=>{state.viewB[pk]=v;},
-    ()=>state.zoomB, (z)=>{state.zoomB=z;}, updateSlicesB);
+    ()=>canvasB[k],
+    ()=>state.cursorB, setCursorB, 'b',
+    (pk)=>state.viewB[pk],
+    (pk,v)=>{state.viewB[pk]=v;},
+    ()=>state.zoomB,
+    (z)=>{state.zoomB=z;},
+    updateSlicesB);
 }
 resizeAll();
 
 // ═══════════════════════════════════════════════════════════
-// 11.  DEMO
+// 11.  PANEL SEPARATORS
+// ═══════════════════════════════════════════════════════════
+(function initSeps() {
+  const body   = document.body;
+  const left   = document.getElementById('left');
+  const middle = document.getElementById('middle');
+  const right  = document.getElementById('right');
+  const sepL   = document.getElementById('sep-left');
+  const sepR   = document.getElementById('sep-right');
+  const SEP    = 3; // px width of each separator (matches CSS)
+
+  function totalW() { return body.clientWidth; }
+
+  // Clamp left panel width so it never overlaps the right separator
+  function setWidths(lw, rw) {
+    const total = totalW();
+    //const minM  = 0; // minimum middle panel px
+    //lw = Math.max(0, Math.min(lw, total - rw - SEP * 2 - minM));
+    //rw = Math.max(0, Math.min(rw, total - lw - SEP * 2 - minM));
+	const lwAvail = total - rw - SEP;
+	const rwAvail = total - lw - SEP;
+    if (lw>rw) {
+      rw = Math.max(Math.min(rw,rwAvail),0);
+      lw = Math.min(lw,lwAvail);
+    } else {
+      lw = Math.max(Math.min(lw,lwAvail),0);
+      rw = Math.min(rw,rwAvail);
+	}
+    left.style.width   = lw + 'px';
+    left.style.flex    = 'none';
+    right.style.width  = rw + 'px';
+    right.style.flex   = 'none';
+    middle.style.flex  = '1 1 0';
+    // Hide panels at zero width
+    left.style.overflow  = lw < 4 ? 'hidden' : '';
+    right.style.overflow = rw < 4 ? 'hidden' : '';
+    resizeAll();
+  }
+
+  function makeDragger(sep, getOtherW, buildWidths) {
+    let startX, startW;
+    sep.addEventListener('mousedown', e => {
+      e.preventDefault();
+      startX = e.clientX;
+      startW = getOtherW();
+      sep.classList.add('dragging');
+      const onMove = e => {
+        const delta = e.clientX - startX;
+        const [lw, rw] = buildWidths(startW, delta);
+        setWidths(lw, rw);
+      };
+      const onUp = () => {
+        sep.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  // Left separator: dragging right narrows left panel (or widens it leftward)
+  makeDragger(sepL,
+    () => left.getBoundingClientRect().width,
+    (startW, delta) => [startW + delta, right.getBoundingClientRect().width]
+  );
+
+  // Right separator: dragging right widens right panel (delta is negative = narrows)
+  makeDragger(sepR,
+    () => right.getBoundingClientRect().width,
+    (startW, delta) => [left.getBoundingClientRect().width, startW - delta]
+  );
+})();
+
+// ═══════════════════════════════════════════════════════════
+// 12.  ROW TOGGLES + COORD COPY
+// ═══════════════════════════════════════════════════════════
+(function initRowToggles() {
+  const TITLEBAR_H = 28; // px — collapsed row height
+
+  // State: which rows are visible per panel
+  const vis = {
+    a: { sag: true, cor: true, axi: true },
+    b: { sag: true, cor: true, axi: true },
+  };
+
+  function countVisible(panel) {
+    return Object.values(vis[panel]).filter(Boolean).length;
+  }
+
+  function applyLayout(panel) {
+    const count = countVisible(panel);
+    for (const plane of ['sag','cor','axi']) {
+      const row  = document.getElementById(`row-${plane}-${panel}`);
+      const pill = document.getElementById(`pill-${plane}-${panel}`);
+      const on   = vis[panel][plane];
+      // Row sizing
+      if (on) {
+        row.classList.remove('collapsed');
+        row.style.flex = '1 1 0';
+      } else {
+        row.classList.add('collapsed');
+        row.style.height = TITLEBAR_H + 'px';
+        row.style.flex   = 'none';
+      }
+      // Pill state
+      pill.classList.toggle('on',  on);
+      pill.classList.toggle('off', !on);
+      // Disable pill when it's the last visible one
+      pill.classList.toggle('disabled', on && count === 1);
+    }
+    resizeAll();
+  }
+
+  // Wire pills
+  document.querySelectorAll('.row-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      if (pill.classList.contains('disabled')) return;
+      const plane = pill.dataset.plane;
+      const panel = pill.dataset.panel;
+      vis[panel][plane] = !vis[panel][plane];
+      applyLayout(panel);
+    });
+  });
+
+  // Coord copy
+  document.querySelectorAll('.slice-coord-inline').forEach(el => {
+    el.addEventListener('click', () => {
+      const txt = el.textContent.trim();
+      if (txt && txt !== '—') navigator.clipboard?.writeText(txt);
+    });
+  });
+
+  // Initial layout
+  applyLayout('a');
+  applyLayout('b');
+})();
+
+// ═══════════════════════════════════════════════════════════
+// 13.  DEMO
 // ═══════════════════════════════════════════════════════════
 if (window.location.search.includes('demo')) {
-  const demoAnat='M01_T2w.nii.gz', demoTck='sub-M01_ses-1_wholebrain_10k_1.tck';
+  const demoAnat = 'M01_T2w.nii.gz';
+  const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
-    try{const r=await fetch(demoAnat,{method:'HEAD'});if(r.ok)loadNii(new File([await(await fetch(demoAnat)).blob()],demoAnat));}catch(e){}
-    try{const r=await fetch(demoTck,{method:'HEAD'});if(r.ok)loadTrck(new File([await(await fetch(demoTck)).blob()],demoTck));}catch(e){}
+    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) loadNii(new File([await (await fetch(demoAnat)).blob()],demoAnat)); } catch(e){}
+    try { const r=await fetch(demoTck,{method:'HEAD'}); if(r.ok) loadTrck(new File([await (await fetch(demoTck)).blob()],demoTck)); } catch(e){}
   }
   tryDemoLoad();
 }

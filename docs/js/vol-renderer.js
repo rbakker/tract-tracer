@@ -90,7 +90,7 @@ export class VolRenderer {
   upload(nii) {
 	const vox_size = absVec(mat3mulVec(nii.decomp.P,[nii.nx, nii.ny, nii.nz]));
     this._ras_extent = mat3mulVec(nii.decomp.S,vox_size);
-    this._sharedMmPerPx = null;
+    this._sharedMmPerPx = {a:null,b:null};
     this._wmin=0; 
     this._wmax=1;
 
@@ -168,14 +168,14 @@ export class VolRenderer {
     // SAG axes are [1,2] = A-P × I-S — a portrait brain in a portrait panel,
     // so its letterbox fit is the tightest and most meaningful reference.
     // COR and AXI simply use the SAG-derived value stored from the last SAG render.
-    if (planeKey === 'sag') {
+    if (!this._sharedMmPerPx[tag]) {
       const u_extent = this._ras_extent[uAx];
       const v_extent = this._ras_extent[vAx];
       const physAR = u_extent / v_extent;
       const canvAR = W / H;
-      this._sharedMmPerPx = canvAR > physAR ? v_extent / H : u_extent / W;
+      this._sharedMmPerPx[tag] = canvAR > physAR ? v_extent / H : u_extent / W;
     }
-    const mm_per_px = (this._sharedMmPerPx || (this._ras_extent[vAx] / H)) / zoom;
+    const mm_per_px = (this._sharedMmPerPx[tag] || (this._ras_extent[vAx] / H)) / zoom;
     const halfU = mm_per_px * W / 2;
     const halfV = mm_per_px * H / 2;
 
@@ -207,7 +207,6 @@ export class VolRenderer {
     const origin_tex = BL_tex;
     const axisU_tex  = [BR_tex[0]-BL_tex[0], BR_tex[1]-BL_tex[1], BR_tex[2]-BL_tex[2]];
     const axisV_tex  = [TL_tex[0]-BL_tex[0], TL_tex[1]-BL_tex[1], TL_tex[2]-BL_tex[2]];
-console.log(planeKey,probeColor)
 
     // ── Step 5: draw ────────────────────────────────────
     gl.useProgram(this._prog);
