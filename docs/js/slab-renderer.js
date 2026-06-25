@@ -158,7 +158,7 @@ export class SlabRenderer {
     this._ensureDotMeshes(srcMesh || null, tgtMesh || null);
 
     const r   = this._r;
-    const nii = state.nii;
+    const anat = state.anat;
 
     const normalAxis  = vr._getNormalAxis(planeKey);
     const [uAx, vAx] = vr._getPlaneAxes(planeKey);
@@ -167,7 +167,7 @@ export class SlabRenderer {
     const vDir = vr._rot_dirs[vAx];
 
     const oopIdx = { sag: 0, cor: 1, axi: 2 };
-    const halfThickMm = opts.slabMultiplier * nii.pixdim[oopIdx[planeKey] + 1] / 2;
+    const halfThickMm = opts.slabMultiplier * anat.pixdim[oopIdx[planeKey] + 1] / 2;
     const camDist = halfThickMm * 4 + 1;
 
     const views = tag === 'a' ? state.viewA : state.viewB;

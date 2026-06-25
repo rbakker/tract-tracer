@@ -249,14 +249,14 @@ input[type=file]{display:none;}
   <!-- Load dropdown -->
   <div id="load-dropdown">
     <div class="dz-row">
-      <div class="drop-zone" id="dz-nii" onclick="document.getElementById('fi-nii').click()">
+      <div class="drop-zone" id="dz-anat" onclick="document.getElementById('fi-anat').click()">
         <div class="tag">ANATOMY</div>
-        <div class="name">.nii / .nii.gz</div>
-        <input type="file" id="fi-nii" accept=".nii,.gz">
+        <div class="name">.nii / .nii.gz / .mif </div>
+        <input type="file" id="fi-anat" accept=".nii,.gz,.mif">
       </div>
       <div class="dz-right">
-        <p id="dz-nii-status">drop or click</p>
-        <button class="accent-link disabled" id="btn-nii-hdr">show header</button>
+        <p id="dz-anat-status">drop or click</p>
+        <button class="accent-link disabled" id="btn-anat-hdr">show header</button>
       </div>
     </div>
     <div class="dz-row">
@@ -482,7 +482,7 @@ input[type=file]{display:none;}
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { parseNifti }   from './js/nifti.js';
+import { parseNifti, parseMif } from './js/volume-io.js';
 import { parseTck, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
@@ -490,11 +490,36 @@ import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
          makeLineSegments, makeEndpointDots } from './js/scene3d.js';
+import { StateManager } from './js/state-manager.js';
 
 'use strict';
 // ═══════════════════════════════════════════════════════════
 // 0.  STATE
 // ═══════════════════════════════════════════════════════════
+// 1. Define your data/functions
+let stateManager;
+
+const schema = {
+  'file.anat':     { default: null, tags: ['anat'] },
+  'file.tracking': { default: null, tags: ['tracking'] },
+};
+
+const pipeline = [
+  { tag: 'anat', fn: () => {
+	  const file = stateManager.get('file.anat');
+	  loadAnat(file)
+  } },
+  { tag: 'tracking', fn: () => {
+	  const file = stateManager.get('file.tracking');
+	  loadTrck(file)
+  } }
+];
+
+// 2. Instantiate
+stateManager = new StateManager(schema, pipeline);
+console.log('stateManager',stateManager)
+
+
 const state = {
   cursorA:  [0,0,0],
   cursorB: [0,0,0],
@@ -502,8 +527,8 @@ const state = {
   viewB: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
   zoomA: 1.0,   // zoom for left panel set (all three planes share)
   zoomB: 1.0,   // zoom for right panel set
-  nii: null,
-  niiLoaded: false,
+  anat: null,
+  anatLoaded: false,
   trckLoaded: false,
 };
 // Out-of-plane axis index per plane — used by syncViewOOP
@@ -567,9 +592,9 @@ function drawSlice(planeKey, tag) {
   const zoom   = tag === 'a' ? state.zoomA       : state.zoomB;
   // Left panels show the probe ring; right panels suppress it (probeRadius=-1).
   const probeRadius = tag === 'a' ? undefined : -1;
-  if (!cvs || !state.nii) return;
+  if (!cvs || !state.anat) return;
   
-  const nii = state.nii;
+  const anat = state.anat;
   const mpp = vr._planeParams[planeKey + tag]?.mm_per_px;
 
   // Each arm's width = slab half-thickness of the plane that arm represents.
@@ -579,9 +604,9 @@ function drawSlice(planeKey, tag) {
   const slabH = (mm, mpp) => mpp ? slabMultiplier * mm / 2 / mpp : 1.0;
 
   const armWidths = {
-    sag: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[3], mpp) }, // H=COR, V=AXI
-    cor: { wH: slabH(nii.pixdim[1], mpp), wV: slabH(nii.pixdim[3], mpp) }, // H=SAG, V=AXI
-    axi: { wH: slabH(nii.pixdim[2], mpp), wV: slabH(nii.pixdim[1], mpp) }, // H=COR, V=SAG
+    sag: { wH: slabH(anat.pixdim[2], mpp), wV: slabH(anat.pixdim[3], mpp) }, // H=COR, V=AXI
+    cor: { wH: slabH(anat.pixdim[1], mpp), wV: slabH(anat.pixdim[3], mpp) }, // H=SAG, V=AXI
+    axi: { wH: slabH(anat.pixdim[2], mpp), wV: slabH(anat.pixdim[1], mpp) }, // H=COR, V=SAG
   };
   const { wH, wV } = armWidths[planeKey];
 
@@ -614,9 +639,9 @@ function updateSlicesA() { for (const k of ['sag','cor','axi']) drawSlice(k, 'a'
 function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'b'); }
 
 function updateCoordLabel(planeKey, cursor, tag) {
-  if (!state.nii) return;
+  if (!state.anat) return;
   const suffix = tag === 'b' ? '-b' : '';
-  const vox  = mat3mulVec(state.nii.invAb, cursor).map(Math.round);
+  const vox  = mat3mulVec(state.anat.invAb, cursor).map(Math.round);
   const ids  = { sag: `coord-sag${suffix}`, cor: `coord-cor${suffix}`, axi: `coord-axi${suffix}` };
   const axes = { sag: 'x', cor: 'y', axi: 'z' };
   const idx  = { sag: 0,   cor: 1,   axi: 2 };
@@ -648,7 +673,7 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
 
     // Left-drag: place cursor
     function place(e) {
-      if (!state.nii) return;
+      if (!state.anat) return;
       const [ex, ey] = canvasPx(e);
       const newRas = vr.canvasToRas(planeKey, ex, ey, tag);
       if (newRas) setCursorFn(newRas);
@@ -666,7 +691,7 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
         place(e);
       } else if (dragBtn === 1 || dragBtn === 2) {
         // Pan: move viewCentre in-plane opposite to drag direction
-        if (!state.nii || !dragLast) return;
+        if (!state.anat || !dragLast) return;
         const dx = e.clientX - dragLast.x;
         const dy = e.clientY - dragLast.y;
         dragLast = {x: e.clientX, y: e.clientY};
@@ -696,7 +721,7 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
 
     c.addEventListener('wheel', e => {
       e.preventDefault();
-      if (!state.nii) return;
+      if (!state.anat) return;
 
       if (e.ctrlKey) {
         // Ctrl+scroll: zoom at mouse position
@@ -736,7 +761,7 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
         const dir = e.deltaY > 0 ? 1 : -1;
         const normalAxis = vr._getNormalAxis(planeKey);
         const n_dir  = vr._rot_dirs[normalAxis];
-        const voxSize = state.nii.decomp.S[normalAxis][normalAxis];
+        const voxSize = state.anat.decomp.S[normalAxis][normalAxis];
         const cur = getCursorFn();
         setCursorFn([
           cur[0] + dir * voxSize * n_dir[0],
@@ -775,7 +800,7 @@ const planeVisible = {sag:true, cor:true, axi:true};
 function updatePlaneMeshes() {
   for (const k of ['sag','cor','axi']) {
     if (planeMeshes[k]) { scene.remove(planeMeshes[k]); planeMeshes[k]=null; }
-    if (planeVisible[k] && state.nii) {
+    if (planeVisible[k] && state.anat) {
       const vc = state.viewB[k] || state.cursorB;
       planeMeshes[k] = makePlaneMesh(k, vr, vc);
       if (planeMeshes[k]) scene.add(planeMeshes[k]);
@@ -792,9 +817,9 @@ let glassBrainAlpha  = 5.0;
 let glassBrainThresh = 0.15;
 let glassBrainRimPow = 1.0;
 
-function buildGlassBrainLocal(nii) {
+function buildGlassBrainLocal(anat) {
   if (glassBrainMesh) { scene.remove(glassBrainMesh); glassBrainMesh = null; }
-  glassBrainMesh = buildGlassBrain(nii, vr.texData, scene, renderer3, camera);
+  glassBrainMesh = buildGlassBrain(anat, vr.texData, scene, renderer3, camera);
   updateGlassBrainUniforms();
 }
 
@@ -958,7 +983,7 @@ function collectState() {
     cursorA: state.cursorA,
     cursorB: state.cursorB,
     files: {
-      anatomy:    document.getElementById('dz-nii-status')?.textContent ?? '',
+      anatomy:    document.getElementById('dz-anat-status')?.textContent ?? '',
       tractogram: document.getElementById('dz-trck-status')?.textContent ?? '',
     }
   };
@@ -984,32 +1009,45 @@ function updateCoordHud(){
 function setProgress(msg){const el=document.getElementById('mprogress');if(el)el.textContent=msg;}
 function tick(){return new Promise(r=>setTimeout(r,20));}
 
-async function loadNii(file){
-  const dzNiiP = document.getElementById('dz-nii-status');
-  if (dzNiiP) { dzNiiP.textContent = 'loading…'; dzNiiP.className = 'is-loading'; }
-  setProgress('reading '+file.name+'…'); await tick();
-  let nii;
-  try{ nii=await parseNifti(await file.arrayBuffer()); }
-  catch(e){alert('NIfTI error: '+e);if(dzNiiP){dzNiiP.textContent='drop or click';dzNiiP.className='';}setProgress('');return;}
-  state.nii=nii;
-  state.cursorA = mat3mulVec(nii.Ab, [nii.nx/2, nii.ny/2, nii.nz/2]);
+function initCamera(cx, cy, cz, volRadius=0, boxRadius=0) {
+  const radius = Math.max(volRadius,boxRadius);
+	
+  controls.target.set(cx, cy, cz);
+  camera.position.set(cx + radius*2.5, cy, cz);
+  camera.up.set(0, 0, 1);  // Superior = up
+  camera.near = radius * 0.001;
+  camera.far  = radius * 20;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+async function loadAnat(f){
+  const dzAnatP = document.getElementById('dz-anat-status');
+  if (dzAnatP) { dzAnatP.textContent = 'loading…'; dzAnatP.className = 'is-loading'; }
+  setProgress('reading '+f.name+'…'); await tick();
+  let [ baseName, ext ] = splitExt(f.name); ext = ext.toLowerCase();
+  let anat;
+//  try { 
+	if (ext == '.nii' || ext == '.nii.gz')  anat=await parseNifti(f);
+    else if (ext == '.mif') anat=await parseMif(f);
+    else throw(`Unsupported format ${ext}`)
+//  } catch(e) {
+//	alert('Anat loading error: '+e);if(dzAnatP){dzAnatP.textContent='drop or click';dzAnatP.className='';}setProgress('');return;
+//  }
+  state.anat=anat;
+  state.cursorA = mat3mulVec(anat.Ab, [anat.nx/2, anat.ny/2, anat.nz/2]);
   state.cursorB = [...state.cursorA];
   for(const k of ['sag','cor','axi']){ state.viewA[k]=[...state.cursorA]; state.viewB[k]=[...state.cursorA]; }
   setProgress('uploading 3D texture…'); await tick();
-  vr.upload(nii);
-  buildGlassBrainLocal(nii);
+  vr.upload(anat);
+  buildGlassBrainLocal(anat);
   // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
   const [cx,cy,cz] = state.cursorA;
   const [ex,ey,ez] = vr._ras_extent;
-  const br = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
-  controls.target.set(cx, cy, cz);
-  camera.position.set(cx, cy, cz + br*2.5);
-  camera.near = br * 0.001;
-  camera.far  = br * 20;
-  camera.updateProjectionMatrix();
-  controls.update();
-  state.niiLoaded=true;
-  document.getElementById('btn-nii-hdr').classList.remove('disabled');
+  const volRadius = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
+  initCamera(cx,cy,cz,volRadius);
+  state.anatLoaded=true;
+  document.getElementById('btn-anat-hdr').classList.remove('disabled');
   checkShowHud();
   resizeAll();
   updateSlicesA(); updateSlicesB(); updatePlaneMeshes(); updateCoordHud();
@@ -1018,15 +1056,19 @@ async function loadNii(file){
 let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeader=null,trckFileName='tractogram';
 
 function splitExt(fname) {
-  const i = fname.lastIndexOf('.');
-  return i === -1
-    ? [fname, '']
-    : [fname.slice(0, i), fname.slice(i)];
+  let base=fname,ext='';
+  let i = base.lastIndexOf('.');
+  if (i>-1) [base,ext] = [fname.slice(0,i),fname.slice(i)];
+  if (ext=='.gz') {
+    i = base.lastIndexOf('.');
+    if (i>-1) [base,ext] = [fname.slice(0,i),fname.slice(i)];
+  }
+  return [base,ext]
 }
 
 async function loadTrck(f){
   let [ baseName, ext ] = splitExt(f.name); ext = ext.toLowerCase();
-  trckFileName = baseName;
+  trckFileName = baseName;  
   const dTrckP = document.getElementById('dz-trck-status');
   if (dTrckP) { dTrckP.textContent = 'loading…'; dTrckP.className = 'is-loading'; }
   setProgress(`parsing .${ext}…`); await tick();
@@ -1048,18 +1090,10 @@ async function loadTrck(f){
   for(let i=0;i<allPts.length;i+=3){cx+=allPts[i];cy+=allPts[i+1];cz+=allPts[i+2];}
   cx/=np;cy/=np;cz/=np;
   let md=0;for(let i=0;i<allPts.length;i+=3){const dx=allPts[i]-cx,dy=allPts[i+1]-cy,dz=allPts[i+2]-cz;md=Math.max(md,dx*dx+dy*dy+dz*dz);}
-  const br=Math.sqrt(md);
-  controls.target.set(cx,cy,cz);
-  camera.position.set(cx + br*2.5, cy, cz);
-  camera.up.set(0, 0, 1);  // Superior = up
-  controls.target.set(cx, cy, cz);
-  controls.update();
-  // Use whichever is larger: tract bounding radius or volume diagonal,
-  // so the glass brain never gets clipped when zooming out.
+  const boxRadius=Math.sqrt(md);
   const [ex,ey,ez] = vr._ras_extent || [0,0,0];
-  const volR = Math.sqrt(ex*ex+ey*ey+ez*ez) / 2;
-  const safeR = Math.max(br, volR);
-  camera.near=safeR*.001; camera.far=safeR*20; camera.updateProjectionMatrix();
+  const volRadius = Math.sqrt(ex*ex+ey*ey+ez*ez) / 2;
+  initCamera(cx,cy,cz,volRadius,boxRadius);
   document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines';
   document.getElementById('btn-trck-hdr').classList.remove('disabled');
   state.trckLoaded=true; setProgress(''); checkShowHud(); controls.update();
@@ -1068,13 +1102,13 @@ async function loadTrck(f){
 }
 
 function checkShowHud(){
-  if (state.niiLoaded) {
+  if (state.anatLoaded) {
     const w = document.getElementById('welcome');
     if (w) w.style.display = 'none';
     document.getElementById('middle-hud').style.display = 'block';
     // Mark loaded files in load dropdown
-    const dzNiiS = document.getElementById('dz-nii-status');
-    if (dzNiiS) { dzNiiS.textContent = '✓ loaded'; dzNiiS.className = ''; }
+    const dzAnatS = document.getElementById('dz-anat-status');
+    if (dzAnatS) { dzAnatS.textContent = '✓ loaded'; dzAnatS.className = ''; }
   }
   if (state.trckLoaded) {
     const dzTrckS = document.getElementById('dz-trck-status');
@@ -1096,7 +1130,7 @@ function resizeAll(){
         c.height=c.clientHeight;
       }
     }
-    if(state.nii) {
+    if(state.anat) {
 		if (vr._sharedMmPerPx) vr._sharedMmPerPx[panel] = null
 		panel=='a' ? updateSlicesA() : updateSlicesB() 
 	}
@@ -1155,10 +1189,10 @@ document.getElementById('hdr-panel-close').addEventListener('click', e => {
   document.getElementById('hdr-panel').classList.remove('open');
 });
 document.getElementById('hdr-panel').addEventListener('click', e => e.stopPropagation());
-document.getElementById('btn-nii-hdr').addEventListener('click', e => {
+document.getElementById('btn-anat-hdr').addEventListener('click', e => {
   e.stopPropagation();
-  if (!state.nii) return;
-  const n = state.nii, A = n.Ab;
+  if (!state.anat) return;
+  const n = state.anat, A = n.Ab;
   showHeaderPanel('NIFTI HEADER', JSON.stringify({
     dimensions: [ n.nx, n.ny, n.nz ],
     voxel_size: n.pixdim.slice(1,4).map(v => +v.toFixed(6)),
@@ -1288,13 +1322,15 @@ function setupDrop(dzId,inputId,handler){
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
   document.getElementById(inputId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
 }
-setupDrop('dz-nii','fi-nii',f=>loadNii(f));setupDrop('dz-trck','fi-trck',f=>loadTrck(f));
+setupDrop('dz-anat',  'fi-anat',  f => stateManager.set('file.anat',     f));
+setupDrop('dz-trck', 'fi-trck', f => stateManager.set('file.tracking', f));
+
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{
   e.preventDefault();const f=e.dataTransfer.files[0];if(!f){console.log('File drop failed.');return}
   let [base,ext]=splitExt(f.name); ext = ext.toLowerCase();
   if(ext==='.tck' || ext=='.trk') loadTrck(f);
-  else loadNii(f);
+  else loadAnat(f);
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1486,7 +1522,7 @@ if (window.location.search.includes('demo')) {
   const demoAnat = 'M01_T2w.nii.gz';
   const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
-    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) loadNii(new File([await (await fetch(demoAnat)).blob()],demoAnat)); } catch(e){}
+    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) loadAnat(new File([await (await fetch(demoAnat)).blob()],demoAnat)); } catch(e){}
     try { const r=await fetch(demoTck,{method:'HEAD'}); if(r.ok) loadTrck(new File([await (await fetch(demoTck)).blob()],demoTck)); } catch(e){}
   }
   tryDemoLoad();

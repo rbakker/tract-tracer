@@ -80,7 +80,6 @@ export function eulerToMat3(pitch, yaw, roll) {
 export function decomposeAffineKSP(Ab,nifti_voxel_size) {
   const A = [Ab[0], Ab[1], Ab[2]];
   const b = Ab[3];
-    
   // 1. Sort RAS rows by confidence so the strongest spatial axis gets first pick
   const order = [0, 1, 2].sort((a, bx) =>
     Math.max(...[0, 1, 2].map(c => Math.abs(A[bx][c]))) -

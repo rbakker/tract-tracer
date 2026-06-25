@@ -382,12 +382,6 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6) {
     }
   }
 
-  /*const makePoints = (pos, col, count) => {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, count*3), 3));
-    geo.setAttribute('color',    new THREE.BufferAttribute(col.slice(0, count*3), 3));
-    return new THREE.Points(geo, makeDotsMaterial3d(endsPx));
-  };*/
   const makePoints = (pos, col, count) => {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, count*3), 3));
