@@ -68,7 +68,7 @@ export class VolRenderer {
     if (!gl) throw 'WebGL2 not available';
     this.gl = gl;
     this._texture = null;
-    this._nii = null;
+    this._anat = null;
     this._prog = this._buildProgram(VS, FS_SLICE);
     this._quad = this._buildQuad();
     this._rot = [[1,0,0],[0,1,0],[0,0,1]];
@@ -87,20 +87,21 @@ export class VolRenderer {
     this._planeParams = {};
   }
 
-  upload(nii) {
-	const vox_size = absVec(mat3mulVec(nii.decomp.P,[nii.nx, nii.ny, nii.nz]));
-    this._ras_extent = mat3mulVec(nii.decomp.S,vox_size);
+  upload(anat) {
+	const shape = [anat.shape[0],anat.shape[1],anat.shape[2]]
+	const shape_ras = absVec(mat3mulVec(anat.decomp.P,shape));
+    this._ras_extent = mat3mulVec(anat.decomp.S,shape_ras);
     this._sharedMmPerPx = {a:null,b:null};
     this._wmin=0; 
     this._wmax=1;
 
     const gl = this.gl;
-    this._nii = nii;
-    const n = nii.nx*nii.ny*nii.nz;
-    const mn=nii.mn, range=(nii.mx-nii.mn)||1;
+    this._anat = anat;
+    const n = shape[0]*shape[1]*shape[2];
+    const mn=anat.mn, range=(anat.mx-anat.mn)||1;
 
     const maxSz = gl.getParameter(gl.MAX_3D_TEXTURE_SIZE);
-    if (nii.nx>maxSz||nii.ny>maxSz||nii.nz>maxSz)
+    if (shape[0]>maxSz||shape[1]>maxSz||shape[2]>maxSz)
       throw `Volume exceeds MAX_3D_TEXTURE_SIZE=${maxSz}`;
 
     if (this._texture) gl.deleteTexture(this._texture);
@@ -114,7 +115,7 @@ export class VolRenderer {
 
     const texData = new Float32Array(n);
     for (let i=0;i<n;i++){
-      const v=(nii.data[i]-mn)/range;
+      const v=(anat.data[i]-mn)/range;
       texData[i]=isFinite(v)?v:0;  // NaN/Inf → 0 (no contribution to glass brain)
     }
     this.texData = texData;
@@ -122,10 +123,10 @@ export class VolRenderer {
     const ext = gl.getExtension('OES_texture_float_linear');
     const fmt = ext ? gl.R32F : gl.R16F;
     gl.texImage3D(gl.TEXTURE_3D, 0, fmt,
-      nii.nx, nii.ny, nii.nz, 0, gl.RED, gl.FLOAT, texData);
+      shape[0],shape[1],shape[2], 0, gl.RED, gl.FLOAT, texData);
     gl.bindTexture(gl.TEXTURE_3D, null);
     console.log('3D texture', ext?'R32F':'R16F',
-      nii.nx+'×'+nii.ny+'×'+nii.nz,
+      shape[0]+'×'+shape[1]+'×'+shape[2],
       '~'+((n*(ext?4:2))/1024/1024).toFixed(0)+' MB'); 
   }
 
@@ -147,9 +148,9 @@ export class VolRenderer {
   // Renders an oblique slice centred on cursor (RAS mm).
   // All geometry is computed in RAS mm space, then converted to
   // texture coords only for the shader uniform.
-  renderSlice(canvas2d, planeKey, viewCentre, cursor, chColorH, chColorV, wH, wV, probeColor, tag='a', zoom=1.0, probeRadius=null) {
-    if (!this._texture||!this._nii) return null;
-    const nii=this._nii, gl=this.gl;
+  renderSlice(canvas2d, planeKey, viewCentre, cursor, chColorH, chColorV, wH, wV, probeColor, tag='src', zoom=1.0, probeRadius=null) {
+    if (!this._texture||!this._anat) return null;
+    const anat=this._anat, gl=this.gl;
     const W=canvas2d.width, H=canvas2d.height;
     if (W<=0||H<=0) return null;
 
@@ -186,8 +187,8 @@ export class VolRenderer {
     const cx=viewCentre[0], cy=viewCentre[1], cz=viewCentre[2];
 
     const rasToTex = (r) => {
-      const [vx,vy,vz] = mat3mulVec(nii.invAb, r);
-      return [(vx+0.5)/nii.nx, (vy+0.5)/nii.ny, (vz+0.5)/nii.nz];
+      const [vx,vy,vz] = mat3mulVec(anat.invAb, r);
+      return [(vx+0.5)/anat.shape[0], (vy+0.5)/anat.shape[1], (vz+0.5)/anat.shape[2]];
     };
     // BL = bottom-left = cursor - effU*U + effV*-V (left, inferior)
     // BR = bottom-right = cursor + effU*U - effV*V
@@ -252,7 +253,7 @@ export class VolRenderer {
   }
 
   // Convert canvas pixel (ex,ey) to RAS mm using cached plane params.
-  canvasToRas(planeKey, ex, ey, tag='a') {
+  canvasToRas(planeKey, ex, ey, tag='src') {
     const p = this._planeParams[planeKey+tag];
     if (!p) return null;
     // fu, fv: signed mm from the view centre along U and V
@@ -287,7 +288,7 @@ export class VolRenderer {
   // viewCentre: RAS mm centre of the plane.
   // Returns { [[x,y,z],..4] }
   getPlaneCorners(planeKey, viewCentre) {
-    if (!this._nii) return null;
+    if (!this._anat) return null;
     const [uAx,vAx] = this._getPlaneAxes(planeKey);
     const u_dir = this._rot_dirs[uAx];
     const v_dir = this._rot_dirs[vAx];    
@@ -308,7 +309,7 @@ export class VolRenderer {
     ];
   }
 
-  rasToCanvas(planeKey, rx, ry, rz, tag='a') {
+  rasToCanvas(planeKey, rx, ry, rz, tag='src') {
     const p = this._planeParams[planeKey+tag];
     if (!p) return null;
     const dx=rx-p.viewCentre_ras[0], dy=ry-p.viewCentre_ras[1], dz=rz-p.viewCentre_ras[2];

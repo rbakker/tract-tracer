@@ -25,13 +25,14 @@ export async function parseNifti(file) {
   const sizeof_hdr = dv.getInt32(0,true);
   const le = (sizeof_hdr===348);
   const dims = Array.from({length:8},(_,i)=>dv.getInt16(40+i*2,le));
-  const nx=dims[1], ny=dims[2], nz=dims[3];
+  const shape = [ dims[1],dims[2],dims[3] ];
   if (dims[4] > 1) {
     console.log(`NIfTI contains ${dims[4]} volumes, only the first one is read.`);
   }
   const datatype = dv.getInt16(70,le);
   const vox_offset=dv.getFloat32(108,le);
   const pixdim   = Array.from({length:8},(_,i)=>dv.getFloat32(76+i*4,le));
+  const vox_mm = [ pixdim[1], pixdim[2], pixdim[3] ];
   const qform_code=dv.getInt16(252,le);
   const sform_code=dv.getInt16(254,le);
 
@@ -48,7 +49,7 @@ export async function parseNifti(file) {
     const a=Math.sqrt(Math.max(0,1-b*b-c*c-d*d));
     const qx=dv.getFloat32(268,le), qy=dv.getFloat32(272,le), qz=dv.getFloat32(276,le);
     const qfac=pixdim[0]<0?-1:1;
-    const dx=pixdim[1], dy=pixdim[2], dz=pixdim[3];
+    const dx=vox_mm[0], dy=vox_mm[1], dz=vox_mm[2];
 
     // Distribute dx to Column 0, dy to Column 1, and (qfac * dz) to Column 2
     Ab = [
@@ -58,11 +59,11 @@ export async function parseNifti(file) {
       [ qx, qy, qz ]
     ];
   } else {
-    Ab = [[pixdim[1],0,0],[0,pixdim[2],0],[0,0,pixdim[3]],[0,0,0]];
+    Ab = [[vox_mm[0],0,0],[0,vox_mm[1],0],[0,0,vox_mm[2]],[0,0,0]];
   }
 
   const start = Math.round(vox_offset);
-  const n = nx * ny * nz; // Size of exactly one 3D spatial volume
+  const n = shape[0] * shape[1] * shape[2]; // Size of exactly one 3D spatial volume
 
   // Determine the byte size per element based on NIfTI datatype 
   // to prevent reading out-of-bounds on the underlying ArrayBuffer
@@ -101,12 +102,12 @@ export async function parseNifti(file) {
   }
 
   // Decompose affine into K*S*P, where K is the residual affine, S contains voxel sizes on its diagonal, and P permutes voxels to RAS.
-  const decomp = decomposeAffineKSP(Ab,[pixdim[1],pixdim[2],pixdim[3]]);
   const invAb = invertAffine(Ab);
+  const decomp = decomposeAffineKSP(Ab,[pixdim[1],pixdim[2],pixdim[3]]);
 
-  console.log('NIfTI sform='+sform_code+' qform='+qform_code, nx+'×'+ny+'×'+nz,'Ab', Ab);
+  console.log('NIfTI sform='+sform_code+' qform='+qform_code, shape[0]+'×'+shape[1]+'×'+shape[2],'Ab', Ab);
   
-  return { nx, ny, nz, pixdim, data, mn, mx, Ab, decomp, invAb };
+  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx };
 }
 
 
@@ -201,22 +202,22 @@ export async function parseMif(file, volIndex = 0) {
   const buf = await file.arrayBuffer();
   const header = parseMifHeader(buf);
 
-  const dims    = header['dim'].split(',').map(Number);
-  const pixdim  = header['vox'].split(',').map(Number);
-  const layout  = header['layout'].split(',').map(Number);
-  const [nx, ny, nz] = dims;
-  const nv      = dims[3] ?? 1;
+  const shape    = header['dim'].split(',').map(Number);
+  const vox_mm = header['vox'].split(',').map(Number);
+  const layout   = header['layout'].split(',').map(Number);
+  const nv      = shape[3] ?? 1;
   const start   = Number(header['file'].trim().split(/\s+/)[1]);
 
   const { TypedArr, bytes, dvMethod, le } = getMifDtype(header['datatype']);
 
   // Strides in element counts for each logical axis
-  const strides = computeStrides(layout, dims);
+  const strides = computeStrides(layout, shape);
   const [sx, sy, sz, sv] = strides;
 
   // Single DataView over the whole buffer — no copies
   const view = new DataView(buf);
-  const n    = nx * ny * nz;
+  const [nx,ny,nz] = shape.slice(0,3)
+  const n    = nx*ny*nz;
   const data = new Float32Array(n); // always output Float32 for rendering
 
   let outIdx = 0;
@@ -233,10 +234,10 @@ export async function parseMif(file, volIndex = 0) {
   }
 
   let K = [[1,0,0],[0,1,0],[0,0,1]]
-  let S = [[pixdim[0],0,0],[0,pixdim[1],0],[0,0,pixdim[2]]]
+  let S = [[vox_mm[0],0,0],[0,vox_mm[1],0],[0,0,vox_mm[2]]]
   let P = [[1,0,0],[0,1,0],[0,0,1]];
   let b = [0,0,0]
-console.log(header)  
+
   if (header.transform && header.transform.length >= 3) {
     const rows = header.transform.map(r =>
       r.split(/,\s*/).map(Number)
@@ -254,5 +255,5 @@ console.log(header)
   Ab[3] = b;
   const invAb = invertAffine(Ab);
 
-  return { nx, ny, nz, nv, pixdim, data, mn, mx, Ab, decomp, invAb };
+  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx };
 }

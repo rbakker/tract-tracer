@@ -147,7 +147,7 @@ export class SlabRenderer {
   }
 
   // opts: { selMesh, srcMesh, tgtMesh, slabMultiplier, lineColor, srcColor, tgtColor, endsPx }
-  render(canvas2d, planeKey, cursor, tag, vr, state, opts) {
+  render(canvas2d, planeKey, cursor, tag, vr, vox_mm, viewCentre, opts) {
     const { selMesh, srcMesh, tgtMesh } = opts;
     if (!selMesh) return;
     const W = canvas2d.width, H = canvas2d.height;
@@ -158,7 +158,6 @@ export class SlabRenderer {
     this._ensureDotMeshes(srcMesh || null, tgtMesh || null);
 
     const r   = this._r;
-    const anat = state.anat;
 
     const normalAxis  = vr._getNormalAxis(planeKey);
     const [uAx, vAx] = vr._getPlaneAxes(planeKey);
@@ -167,11 +166,9 @@ export class SlabRenderer {
     const vDir = vr._rot_dirs[vAx];
 
     const oopIdx = { sag: 0, cor: 1, axi: 2 };
-    const halfThickMm = opts.slabMultiplier * anat.pixdim[oopIdx[planeKey] + 1] / 2;
+    const halfThickMm = opts.slabMultiplier * vox_mm[oopIdx[planeKey]] / 2;
     const camDist = halfThickMm * 4 + 1;
 
-    const views = tag === 'a' ? state.viewA : state.viewB;
-    const vc    = views[planeKey];
     const pp    = vr._planeParams[planeKey + tag];
     if (!pp) return;
     const halfU = pp.mm_per_px * W / 2;
@@ -180,9 +177,9 @@ export class SlabRenderer {
     const cam = new THREE.OrthographicCamera(-halfU, halfU, halfV, -halfV, 0.01, camDist * 2 + 1);
     cam.matrixAutoUpdate = false;
     cam.matrixWorld.set(
-      uDir[0], vDir[0], nDir[0], vc[0] + nDir[0]*camDist,
-      uDir[1], vDir[1], nDir[1], vc[1] + nDir[1]*camDist,
-      uDir[2], vDir[2], nDir[2], vc[2] + nDir[2]*camDist,
+      uDir[0], vDir[0], nDir[0], viewCentre[0] + nDir[0]*camDist,
+      uDir[1], vDir[1], nDir[1], viewCentre[1] + nDir[1]*camDist,
+      uDir[2], vDir[2], nDir[2], viewCentre[2] + nDir[2]*camDist,
              0,       0,       0, 1
     );
     cam.matrixWorldInverse.copy(cam.matrixWorld).invert();

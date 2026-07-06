@@ -139,8 +139,8 @@ void main() {
   gl_FragColor = vec4(accColor, accAlpha);
 }`;
 
-export function buildGlassBrain(nii, texData, scene, renderer3, camera) {
-  const tex = new THREE.Data3DTexture(texData, nii.nx, nii.ny, nii.nz);
+export function buildGlassBrain(anat, texData, scene, renderer3, camera) {
+  const tex = new THREE.Data3DTexture(texData, ...anat.shape);
   tex.format         = THREE.RedFormat;
   tex.type           = THREE.FloatType;
   tex.internalFormat = 'R32F';
@@ -150,30 +150,29 @@ export function buildGlassBrain(nii, texData, scene, renderer3, camera) {
   tex.unpackAlignment = 1;
   tex.needsUpdate    = true;
 
-  const A  = nii.Ab;
-  const hx = nii.nx / 2, hy = nii.ny / 2, hz = nii.nz / 2;
-  const tx = A[0][0]*hx + A[0][1]*hy + A[0][2]*hz + A[3][0];
-  const ty = A[1][0]*hx + A[1][1]*hy + A[1][2]*hz + A[3][1];
-  const tz = A[2][0]*hx + A[2][1]*hy + A[2][2]*hz + A[3][2];
+  const Ab  = anat.Ab;
+  const hx = anat.shape[0] / 2, hy = anat.shape[1] / 2, hz = anat.shape[2] / 2;
+  const tx = Ab[0][0]*hx + Ab[0][1]*hy + Ab[0][2]*hz + Ab[3][0];
+  const ty = Ab[1][0]*hx + Ab[1][1]*hy + Ab[1][2]*hz + Ab[3][1];
+  const tz = Ab[2][0]*hx + Ab[2][1]*hy + Ab[2][2]*hz + Ab[3][2];
   const modelMatrix = new THREE.Matrix4().set(
-    A[0][0], A[0][1], A[0][2], tx,
-    A[1][0], A[1][1], A[1][2], ty,
-    A[2][0], A[2][1], A[2][2], tz,
+    Ab[0][0], Ab[0][1], Ab[0][2], tx,
+    Ab[1][0], Ab[1][1], Ab[1][2], ty,
+    Ab[2][0], Ab[2][1], Ab[2][2], tz,
           0,       0,       0,  1
   );
   const invModel = modelMatrix.clone().invert();
-
   const mat = new THREE.ShaderMaterial({
     vertexShader:   GLASS_VS,
     fragmentShader: GLASS_FS,
     uniforms: {
       u_vol:       { value: tex },
-      u_size:      { value: new THREE.Vector3(nii.nx, nii.ny, nii.nz) },
-      u_voxMm:     { value: new THREE.Vector3(nii.pixdim[1], nii.pixdim[2], nii.pixdim[3]) },
+      u_size:      { value: new THREE.Vector3(...anat.shape) },
+      u_voxMm:     { value: new THREE.Vector3(...anat.vox_mm) },
       u_volDiagMm: { value: Math.sqrt(
-                       (nii.nx * nii.pixdim[1])**2 +
-                       (nii.ny * nii.pixdim[2])**2 +
-                       (nii.nz * nii.pixdim[3])**2) },
+                       (anat.shape[0] * anat.vox_mm[0])**2 +
+                       (anat.shape[1] * anat.vox_mm[1])**2 +
+                       (anat.shape[2] * anat.vox_mm[2])**2) },
       u_alpha:     { value: 5.0 },
       u_thresh:    { value: 0.15 },
       u_rimPow:    { value: 1.0 },

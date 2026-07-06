@@ -199,41 +199,41 @@ input[type=file]{display:none;}
 
 <!-- LEFT: slice viewers A -->
 <div id="left">
-  <div class="slice-row" id="row-sag-a">
+  <div class="slice-row" id="row-sag-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
 	    <span class="slice-label sag"><span class="plane-id">SAG</span>probe</span>
       </div>
       <div class="slice-title-right">
-        <span class="slice-coord-inline" id="coord-sag" title="click to copy">—</span>
-        <div class="row-pill sag on" id="pill-sag-a" data-plane="sag" data-panel="a"></div>
+        <span class="slice-coord-inline" id="coord-sag-src" title="click to copy">—</span>
+        <div class="row-pill sag on" id="pill-sag-src" data-plane="sag" data-panel="src"></div>
       </div>
     </div>
-    <canvas class="slice-canvas" id="cvs-sag"></canvas>
+    <canvas class="slice-canvas" id="cvs-sag-src"></canvas>
   </div>
-  <div class="slice-row" id="row-cor-a">
+  <div class="slice-row" id="row-cor-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
         <span class="slice-label cor"><span class="plane-id">COR</span>probe</span>
       </div>
       <div class="slice-title-right">
-        <span class="slice-coord-inline" id="coord-cor" title="click to copy">—</span>
-        <div class="row-pill cor on" id="pill-cor-a" data-plane="cor" data-panel="a"></div>
+        <span class="slice-coord-inline" id="coord-cor-src" title="click to copy">—</span>
+        <div class="row-pill cor on" id="pill-cor-src" data-plane="cor" data-panel="src"></div>
       </div>
     </div>
-    <canvas class="slice-canvas" id="cvs-cor"></canvas>
+    <canvas class="slice-canvas" id="cvs-cor-src"></canvas>
   </div>
-  <div class="slice-row" id="row-axi-a">
+  <div class="slice-row" id="row-axi-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
         <span class="slice-label axi"><span class="plane-id">AXI</span>probe</span>
       </div>
       <div class="slice-title-right">
-        <span class="slice-coord-inline" id="coord-axi" title="click to copy">—</span>
-        <div class="row-pill axi on" id="pill-axi-a" data-plane="axi" data-panel="a"></div>
+        <span class="slice-coord-inline" id="coord-axi-src" title="click to copy">—</span>
+        <div class="row-pill axi on" id="pill-axi-src" data-plane="axi" data-panel="src"></div>
       </div>
     </div>
-    <canvas class="slice-canvas" id="cvs-axi"></canvas>
+    <canvas class="slice-canvas" id="cvs-axi-src"></canvas>
   </div>
 </div><div class="sep" id="sep-left"></div>
 
@@ -304,7 +304,7 @@ input[type=file]{display:none;}
   <div id="settings-overlay">
 
     <div class="cfg-section" data-tip="Left-click or drag to move the probe.\nScroll to step through slices.\nCtrl+Scroll to zoom.\nRight-drag to pan.">STREAMLINE PROBE</div>
-    <div class="ctl-row" data-tip="Sphere radius in mm.\nStreamlines passing through this sphere are selected.">
+    <div class="ctl-row" data-tip="Probe radius in mm.\nStreamlines passing through the sphere (or 'ends-only') are selected.">
       <label>RADIUS</label>
       <input type="range" id="radius-slider" min="0.25" max="10" value="5" step="0.25">
       <span class="ctl-val" id="radius-val">5.0 mm</span>
@@ -435,41 +435,41 @@ input[type=file]{display:none;}
 
 <!-- RIGHT: slice viewers B -->
 <div id="right">
-  <div class="slice-row" id="row-sag-b">
+  <div class="slice-row" id="row-sag-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label sag"><span class="plane-id">SAG</span>result</span>
+        <span class="slice-label sag"><span class="plane-id">SAG</span>output</span>
       </div>
       <div class="slice-title-right">
-        <span class="slice-coord-inline" id="coord-sag-b" title="click to copy">—</span>
-        <div class="row-pill sag on" id="pill-sag-b" data-plane="sag" data-panel="b"></div>
+        <span class="slice-coord-inline" id="coord-sag-tgt" title="click to copy">—</span>
+        <div class="row-pill sag on" id="pill-sag-tgt" data-plane="sag" data-panel="tgt"></div>
       </div>
     </div>
-    <canvas class="slice-canvas" id="cvs-sag-b"></canvas>
+    <canvas class="slice-canvas" id="cvs-sag-tgt"></canvas>
   </div>
-  <div class="slice-row" id="row-cor-b">
+  <div class="slice-row" id="row-cor-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label cor"><span class="plane-id">COR</span>result</span>
+        <span class="slice-label cor"><span class="plane-id">COR</span>output</span>
       </div>
       <div class="slice-title-right">
-        <span class="slice-coord-inline" id="coord-cor-b" title="click to copy">—</span>
-        <div class="row-pill cor on" id="pill-cor-b" data-plane="cor" data-panel="b"></div>
+        <span class="slice-coord-inline" id="coord-cor-tgt" title="click to copy">—</span>
+        <div class="row-pill cor on" id="pill-cor-tgt" data-plane="cor" data-panel="tgt"></div>
       </div>
     </div>
-    <canvas class="slice-canvas" id="cvs-cor-b"></canvas>
+    <canvas class="slice-canvas" id="cvs-cor-tgt"></canvas>
   </div>
-  <div class="slice-row" id="row-axi-b">
+  <div class="slice-row" id="row-axi-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label axi"><span class="plane-id">AXI</span>result</span>
+        <span class="slice-label axi"><span class="plane-id">AXI</span>output</span>
       </div>
       <div class="slice-title-right">
-        <span class="slice-coord-inline" id="coord-axi-b" title="click to copy">—</span>
-        <div class="row-pill axi on" id="pill-axi-b" data-plane="axi" data-panel="b"></div>
+        <span class="slice-coord-inline" id="coord-axi-tgt" title="click to copy">—</span>
+        <div class="row-pill axi on" id="pill-axi-tgt" data-plane="axi" data-panel="tgt"></div>
       </div>
     </div>
-    <canvas class="slice-canvas" id="cvs-axi-b"></canvas>
+    <canvas class="slice-canvas" id="cvs-axi-tgt"></canvas>
   </div>
 </div>
 
@@ -490,48 +490,63 @@ import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
          makeLineSegments, makeEndpointDots } from './js/scene3d.js';
-import { StateManager } from './js/state-manager.js';
+import { ReactiveState } from './js/reactive-state.js';
 
 'use strict';
 // ═══════════════════════════════════════════════════════════
 // 0.  STATE
 // ═══════════════════════════════════════════════════════════
 // 1. Define your data/functions
-let stateManager;
+let state;
 
 const schema = {
-  'file.anat':     { default: null, tags: ['anat'] },
-  'file.tracking': { default: null, tags: ['tracking'] },
+  'anat.file':  { default: null, tags: ['anat'] },
+  'anat.pitch': { default: 0.0, tags: ['tilt'] },
+  'anat.yaw': { default: 0.0, tags: ['tilt'] },
+  'anat.roll': { default: 0.0, tags: ['tilt'] },
+  'trck.file': { default: null, tags: ['trck'] },
+  'src.cursor':  { default: [0,0,0], tags: ['probe'] },
+  'tgt.cursor': { default: [0,0,0], tags: ['output'] },
+  'src.zoom':  { default: 1.0, tags: ['probe'] },
+  'tgt.zoom': { default: 1.0, tags: ['output'] },
 };
 
 const pipeline = [
   { tag: 'anat', fn: () => {
-	  const file = stateManager.get('file.anat');
-	  loadAnat(file)
+	  const file = state.get('anat.file');
+	  try {
+		loadAnat(file);
+    	state.set('anat.file',file.name)
+	  } catch(e) {
+		alert('Error loading anatomy from "'+file+'"');
+		console.error(e.stack || e)
+		state.set('anat.file',undefined)
+	  }
   } },
-  { tag: 'tracking', fn: () => {
-	  const file = stateManager.get('file.tracking');
-	  loadTrck(file)
-  } }
+  { tag: 'trck', fn: () => {
+	  const file = state.get('trck.file');
+	  try {
+    	loadTrck(file)
+    	state.set('trck.file',file.name)
+	  } catch(e) {
+		alert('Error loading tractogram from "'+file+'"');
+		console.error(e.stack || e)
+		state.set('trck.file',undefined)
+	  }
+  } },
+  { tag: 'probe', fn: () => {
+	  const pos = state.get('src.cursor');
+	  setCursorA(pos);
+  } },
+  { tag: 'output', fn: () => {
+	  const pos = state.get('tgt.cursor');
+	  setCursorB(pos);
+  } }  
 ];
 
 // 2. Instantiate
-stateManager = new StateManager(schema, pipeline);
-console.log('stateManager',stateManager)
+state = new ReactiveState(schema, pipeline);
 
-
-const state = {
-  cursorA:  [0,0,0],
-  cursorB: [0,0,0],
-  viewA: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
-  viewB: {sag:[0,0,0], cor:[0,0,0], axi:[0,0,0]},
-  zoomA: 1.0,   // zoom for left panel set (all three planes share)
-  zoomB: 1.0,   // zoom for right panel set
-  anat: null,
-  anatLoaded: false,
-  trckLoaded: false,
-};
-// Out-of-plane axis index per plane — used by syncViewOOP
 
 function syncViewOOP(views, cursor) {
   // For each plane, update only the out-of-plane component of its viewCentre
@@ -562,13 +577,11 @@ const vr = new VolRenderer();
 window._vr = vr;  // debug access
 
 function setCursorA(ras) {
-  state.cursorA = ras;
-  syncViewOOP(state.viewA, ras);
+  syncViewOOP(state.get('src.view'), ras);
   updateSlicesA(); updateProbe(); updateCoordHud(); updatePlaneMeshes();
 }
 function setCursorB(ras) {
-  state.cursorB = ras;
-  syncViewOOP(state.viewB, ras);
+  syncViewOOP(state.get('tgt.view'), ras);
   updateSlicesB(); updatePlaneMeshes();
 }
 
@@ -583,30 +596,30 @@ const PLANES = {
 const canvasA={}, canvasB={};
 
 // Unified slice draw for both panel sets.
-// tag='a': left panels (probe, full streamlines, probe ring)
-// tag='b': right panels (result, ends-filtered, no probe ring)
+// tag='src': left panels (probe, full streamlines, probe ring)
+// tag='tgt': right panels (output, ends-filtered, no probe ring)
 function drawSlice(planeKey, tag) {
-  const cvs    = tag === 'a' ? canvasA[planeKey] : canvasB[planeKey];
-  const cursor = tag === 'a' ? state.cursorA     : state.cursorB;
-  const view   = tag === 'a' ? state.viewA       : state.viewB;
-  const zoom   = tag === 'a' ? state.zoomA       : state.zoomB;
+  const cvs    = tag === 'src' ? canvasA[planeKey] : canvasB[planeKey];
+  const cursor = state.get(tag+'.cursor');
+  const view   = state.get(tag+'.view');
+  const zoom   = state.get(tag+'.zoom');
   // Left panels show the probe ring; right panels suppress it (probeRadius=-1).
-  const probeRadius = tag === 'a' ? undefined : -1;
-  if (!cvs || !state.anat) return;
-  
-  const anat = state.anat;
+  const probeRadius = tag === 'src' ? undefined : -1;
+  const anat = state.get('anat.file');
+  if (!cvs || !anat) return;  
   const mpp = vr._planeParams[planeKey + tag]?.mm_per_px;
 
   // Each arm's width = slab half-thickness of the plane that arm represents.
-  // SAG arm (V on SAG, V on COR, V on AXI) uses SAG voxel size (pixdim[1]).
+  // SAG arm (V on SAG, V on COR, V on AXI) uses SAG voxel size (vox_mm[1]).
   // COR arm uses pixdim[2], AXI arm uses pixdim[3].
   // Which arm is H and which is V depends on the plane — matches the colour mapping.
   const slabH = (mm, mpp) => mpp ? slabMultiplier * mm / 2 / mpp : 1.0;
 
+  const vox_mm = state.get('anat.vox_mm');
   const armWidths = {
-    sag: { wH: slabH(anat.pixdim[2], mpp), wV: slabH(anat.pixdim[3], mpp) }, // H=COR, V=AXI
-    cor: { wH: slabH(anat.pixdim[1], mpp), wV: slabH(anat.pixdim[3], mpp) }, // H=SAG, V=AXI
-    axi: { wH: slabH(anat.pixdim[2], mpp), wV: slabH(anat.pixdim[1], mpp) }, // H=COR, V=SAG
+    sag: { wH: slabH(vox_mm[1], mpp), wV: slabH(vox_mm[2], mpp) }, // H=COR, V=AXI
+    cor: { wH: slabH(vox_mm[0], mpp), wV: slabH(vox_mm[2], mpp) }, // H=SAG, V=AXI
+    axi: { wH: slabH(vox_mm[1], mpp), wV: slabH(vox_mm[0], mpp) }, // H=COR, V=SAG
   };
   const { wH, wV } = armWidths[planeKey];
 
@@ -630,19 +643,20 @@ function drawSlice(planeKey, tag) {
 	  tgtStyle,
 	  endsPx,
 	};
-	slabRenderer.render(cvs, planeKey, cursor, tag, vr, state, slabOpts);
+	const viewCentre = state.get(tag+'.view.'+planeKey);
+	slabRenderer.render(cvs, planeKey, cursor, tag, vr, state.get('anat.vox_mm'), viewCentre, slabOpts);
   }
   updateCoordLabel(planeKey, cursor, tag);
 }
 
-function updateSlicesA() { for (const k of ['sag','cor','axi']) drawSlice(k, 'a'); updateProbeGap(); }
-function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'b'); }
+function updateSlicesA() { for (const k of ['sag','cor','axi']) drawSlice(k, 'src'); updateProbeGap(); }
+function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'tgt'); }
 
 function updateCoordLabel(planeKey, cursor, tag) {
-  if (!state.anat) return;
-  const suffix = tag === 'b' ? '-b' : '';
-  const vox  = mat3mulVec(state.anat.invAb, cursor).map(Math.round);
-  const ids  = { sag: `coord-sag${suffix}`, cor: `coord-cor${suffix}`, axi: `coord-axi${suffix}` };
+  if (!state.get('anat.file')) return;
+  const invAb = state.get('anat.invAb')
+  const vox  = mat3mulVec(invAb, cursor).map(Math.round);
+  const ids  = { sag: `coord-sag-${tag}`, cor: `coord-cor-${tag}`, axi: `coord-axi-${tag}` };
   const axes = { sag: 'x', cor: 'y', axi: 'z' };
   const idx  = { sag: 0,   cor: 1,   axi: 2 };
   document.getElementById(ids[planeKey]).textContent = axes[planeKey] + '=' + vox[idx[planeKey]];
@@ -658,8 +672,7 @@ let slabRenderer = null;  // initialised after renderer3 exists
 // ═══════════════════════════════════════════════════════════
 // 3.  SLICE INTERACTION
 // ═══════════════════════════════════════════════════════════
-function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag,
-                               getViewFn, setViewFn, getZoomFn, setZoomFn, redrawFn) {
+function initSliceInteraction(planeKey, getCanvas, tag, redrawFn) {
   requestAnimationFrame(() => {
     const c = getCanvas();
     let dragBtn = -1;          // active drag button: 0=left(place), 2=right(pan)
@@ -673,10 +686,10 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
 
     // Left-drag: place cursor
     function place(e) {
-      if (!state.anat) return;
+      if (!state.get('anat.file')) return;
       const [ex, ey] = canvasPx(e);
       const newRas = vr.canvasToRas(planeKey, ex, ey, tag);
-      if (newRas) setCursorFn(newRas);
+      state.update({ [tag+'.cursor']:newRas });
     }
 
     c.addEventListener('mousedown', e => {
@@ -691,7 +704,7 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
         place(e);
       } else if (dragBtn === 1 || dragBtn === 2) {
         // Pan: move viewCentre in-plane opposite to drag direction
-        if (!state.anat || !dragLast) return;
+        if (!state.get('anat.file') || !dragLast) return;
         const dx = e.clientX - dragLast.x;
         const dy = e.clientY - dragLast.y;
         dragLast = {x: e.clientX, y: e.clientY};
@@ -704,8 +717,8 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
         const v_dir = vr._rot_dirs[p.vAx];
         // Only update THIS plane's viewCentre — moving another plane's viewCentre
         // along directions that include that plane's normal would shift its slice depth.
-        const vc = getViewFn(planeKey);
-        setViewFn(planeKey, [
+        const vc = state.get(tag+'.view.'+planeKey);
+        state.set(tag+'.view.'+planeKey, [
           vc[0] + fuMm*u_dir[0] + fvMm*v_dir[0],
           vc[1] + fuMm*u_dir[1] + fvMm*v_dir[1],
           vc[2] + fuMm*u_dir[2] + fvMm*v_dir[2],
@@ -721,13 +734,13 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
 
     c.addEventListener('wheel', e => {
       e.preventDefault();
-      if (!state.anat) return;
+      if (!state.get('anat.file')) return;
 
       if (e.ctrlKey) {
         // Ctrl+scroll: zoom at mouse position
         const [ex, ey] = canvasPx(e);
         const factor = e.deltaY > 0 ? 1/1.1 : 1.1;
-        const oldZoom = getZoomFn();
+        const oldZoom = state.get(tag+'.zoom');
         const newZoom = Math.max(0.1, Math.min(20, oldZoom * factor));
 
         // Keep the RAS point under the mouse fixed:
@@ -747,27 +760,28 @@ function initSliceInteraction(planeKey, getCanvas, getCursorFn, setCursorFn, tag
           const u_dir = vr._rot_dirs[p.uAx];
           const v_dir = vr._rot_dirs[p.vAx];
           // Only shift THIS plane's viewCentre to keep the point under the mouse fixed.
-          const vc = getViewFn(planeKey);
-          setViewFn(planeKey, [
+          const vc = state.get(tag+'.view.'+planeKey);
+          state.set(tag+'.view.'+planeKey, [
             vc[0] + dfU*u_dir[0] + dfV*v_dir[0],
             vc[1] + dfU*u_dir[1] + dfV*v_dir[1],
             vc[2] + dfU*u_dir[2] + dfV*v_dir[2],
           ]);
         }
-        setZoomFn(newZoom);
+        state.set(tag+'.zoom',newZoom);
         redrawFn();
       } else {
         // Plain scroll: step through slices
         const dir = e.deltaY > 0 ? 1 : -1;
         const normalAxis = vr._getNormalAxis(planeKey);
         const n_dir  = vr._rot_dirs[normalAxis];
-        const voxSize = state.anat.decomp.S[normalAxis][normalAxis];
-        const cur = getCursorFn();
-        setCursorFn([
+        const decomp = state.get('anat.decomp');
+        const voxSize = decomp.S[normalAxis][normalAxis];
+        const cur = state.get(tag+'.cursor');
+        state.update({ [tag+'.cursor']:[
           cur[0] + dir * voxSize * n_dir[0],
           cur[1] + dir * voxSize * n_dir[1],
           cur[2] + dir * voxSize * n_dir[2],
-        ]);
+        ] });
       }
     }, {passive: false});
   });
@@ -800,8 +814,9 @@ const planeVisible = {sag:true, cor:true, axi:true};
 function updatePlaneMeshes() {
   for (const k of ['sag','cor','axi']) {
     if (planeMeshes[k]) { scene.remove(planeMeshes[k]); planeMeshes[k]=null; }
-    if (planeVisible[k] && state.anat) {
-      const vc = state.viewB[k] || state.cursorB;
+    if (planeVisible[k] && state.get('anat.file')) {
+      const vc = state.get('tgt.view.'+k) || state.get('tgt.cursor');
+console.log(state.get('tgt.view.'+k)) 
       planeMeshes[k] = makePlaneMesh(k, vr, vc);
       if (planeMeshes[k]) scene.add(planeMeshes[k]);
     }
@@ -834,7 +849,7 @@ function updateGlassBrainUniforms() {
 
 function updateProbe(){
   if(!gridIdx) return;
-  const [cx,cy,cz]=state.cursorA;
+  const [cx,cy,cz]=state.get('src.cursor');
   if(probeSphere) scene.remove(probeSphere);
   const sg=new THREE.SphereGeometry(radius,12,8);
   probeSphere=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:srcStyle.rgb,wireframe:true}));
@@ -950,7 +965,7 @@ function updateScene3d() {
 function saveTck(){
   if(!setStreamlines||setStreamlines.length===0){alert('No streamlines selected.');return;}
   if(!trckHeader){alert('No tractogram loaded.');return;}
-  const [cx,cy,cz]=state.cursorA;
+  const [cx,cy,cz]=state.get('src.cursor');
   const n=setStreamlines.length;
   const r=radius.toFixed(2);
   const xyz=`${cx.toFixed(1)},${cy.toFixed(1)},${cz.toFixed(1)}`;
@@ -980,8 +995,12 @@ function collectState() {
       showCor: document.getElementById('tog-cor')?.checked ?? true,
       showAxi: document.getElementById('tog-axi')?.checked ?? true,
     },
-    cursorA: state.cursorA,
-    cursorB: state.cursorB,
+    probe: {
+      cursor: state.get('src.cursor')
+    },
+    output: {
+	  cursor: state.get('tgt.cursor')
+	},
     files: {
       anatomy:    document.getElementById('dz-anat-status')?.textContent ?? '',
       tractogram: document.getElementById('dz-trck-status')?.textContent ?? '',
@@ -993,11 +1012,11 @@ function saveState() {
   const data = JSON.stringify(collectState(), null, 2);
   const blob = new Blob([data], {type: 'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'tract-tracer-state.json'; a.click(); URL.revokeObjectURL(a.href);
+  a.download = 'tract-tracer-global.json'; a.click(); URL.revokeObjectURL(a.href);
 };
 
 function updateCoordHud(){
-  const [x,y,z]=state.cursorA;
+  const [x,y,z]=state.get('src.cursor');
   document.getElementById('hud-x').textContent=x.toFixed(1);
   document.getElementById('hud-y').textContent=y.toFixed(1);
   document.getElementById('hud-z').textContent=z.toFixed(1);
@@ -1027,30 +1046,32 @@ async function loadAnat(f){
   setProgress('reading '+f.name+'…'); await tick();
   let [ baseName, ext ] = splitExt(f.name); ext = ext.toLowerCase();
   let anat;
-//  try { 
-	if (ext == '.nii' || ext == '.nii.gz')  anat=await parseNifti(f);
-    else if (ext == '.mif') anat=await parseMif(f);
-    else throw(`Unsupported format ${ext}`)
-//  } catch(e) {
-//	alert('Anat loading error: '+e);if(dzAnatP){dzAnatP.textContent='drop or click';dzAnatP.className='';}setProgress('');return;
-//  }
-  state.anat=anat;
-  state.cursorA = mat3mulVec(anat.Ab, [anat.nx/2, anat.ny/2, anat.nz/2]);
-  state.cursorB = [...state.cursorA];
-  for(const k of ['sag','cor','axi']){ state.viewA[k]=[...state.cursorA]; state.viewB[k]=[...state.cursorA]; }
+  if (ext == '.nii' || ext == '.nii.gz')  anat=await parseNifti(f);
+  else if (ext == '.mif') anat=await parseMif(f);
+  else {
+      setProgress('Error.'); await tick();
+	  throw(`Unsupported format ${ext}`);
+  }
+  const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx } = anat;
+  
+  state.set( 'anat', { shape, vox_mm, Ab, invAb, decomp, mn, mx } );
+  const probeCenter = mat3mulVec(Ab, [shape[0]/2, shape[1]/2, shape[2]/2]);
+  for (const k of ['sag','cor','axi']) {
+	state.set('src.view.'+k,probeCenter), 
+	state.set('tgt.view.'+k,probeCenter)
+  }
   setProgress('uploading 3D texture…'); await tick();
   vr.upload(anat);
   buildGlassBrainLocal(anat);
   // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
-  const [cx,cy,cz] = state.cursorA;
   const [ex,ey,ez] = vr._ras_extent;
   const volRadius = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
-  initCamera(cx,cy,cz,volRadius);
-  state.anatLoaded=true;
+  initCamera(...probeCenter,volRadius);
   document.getElementById('btn-anat-hdr').classList.remove('disabled');
   checkShowHud();
   resizeAll();
-  updateSlicesA(); updateSlicesB(); updatePlaneMeshes(); updateCoordHud();
+  state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter });
+  //updateSlicesA(); updateSlicesB(); updatePlaneMeshes(); updateCoordHud();
 }
 
 let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeader=null,trckFileName='tractogram';
@@ -1096,13 +1117,14 @@ async function loadTrck(f){
   initCamera(cx,cy,cz,volRadius,boxRadius);
   document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines';
   document.getElementById('btn-trck-hdr').classList.remove('disabled');
-  state.trckLoaded=true; setProgress(''); checkShowHud(); controls.update();
+  setProgress(''); checkShowHud(); controls.update();
   probeEndsOnly = document.getElementById('probe-ends-toggle').checked; // bit of a hack
   updateProbe(); updateCoordHud();
 }
 
 function checkShowHud(){
-  if (state.anatLoaded) {
+console.log('checkShowHud',state.get('anat.file'))
+  if (state.get('anat.file')) {
     const w = document.getElementById('welcome');
     if (w) w.style.display = 'none';
     document.getElementById('middle-hud').style.display = 'block';
@@ -1110,7 +1132,7 @@ function checkShowHud(){
     const dzAnatS = document.getElementById('dz-anat-status');
     if (dzAnatS) { dzAnatS.textContent = '✓ loaded'; dzAnatS.className = ''; }
   }
-  if (state.trckLoaded) {
+  if (state.get('trck.file')) {
     const dzTrckS = document.getElementById('dz-trck-status');
     if (dzTrckS) { dzTrckS.textContent = '✓ loaded'; dzTrckS.className = ''; }
   }
@@ -1119,20 +1141,20 @@ function checkShowHud(){
 // ═══════════════════════════════════════════════════════════
 // 7.  RESIZE
 // ═══════════════════════════════════════════════════════════
-function resizeAll(){
-  for (const panel of ['a','b']) {
+function resizeAll() {
+  for (const panel of ['src','tgt']) {
     for(const k of ['sag','cor','axi']){
-      const c = (panel=='a' ? canvasA[k] : canvasB[k])
-      if(!c)continue;
+      const c = (panel=='src' ? canvasA[k] : canvasB[k])
+      if (!c) continue;
       // only resize if dimensions actually changed (avoids clearing on no-op)
-      if(c.width!==c.clientWidth||c.height!==c.clientHeight){
+      if (c.width!==c.clientWidth||c.height!==c.clientHeight) {
         c.width =c.clientWidth;
         c.height=c.clientHeight;
       }
     }
-    if(state.anat) {
+    if(state.get('anat.file')) {
 		if (vr._sharedMmPerPx) vr._sharedMmPerPx[panel] = null
-		panel=='a' ? updateSlicesA() : updateSlicesB() 
+		panel=='src' ? updateSlicesA() : updateSlicesB() 
 	}
   }
   const mc=document.getElementById('middle');
@@ -1151,8 +1173,8 @@ function updateRotation(){
   const p=pitch*Math.PI/180, y=yaw*Math.PI/180, r=roll*Math.PI/180;
   vr.setRotation(p,y,r);
   // Re-sync view centres to cursor along the new normals, preserving in-plane positions
-  syncViewOOP(state.viewA, state.cursorA);
-  syncViewOOP(state.viewB, state.cursorB);
+  syncViewOOP(state.get('src.view'), state.get('src.cursor'));
+  syncViewOOP(state.get('tgt.view'), state.get('tgt.cursor'));
   updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
 }
 document.getElementById('pitch-slider').addEventListener('input',e=>{pitch=+e.target.value;document.getElementById('pitch-val').textContent=pitch+'°';updateRotation();});
@@ -1191,15 +1213,19 @@ document.getElementById('hdr-panel-close').addEventListener('click', e => {
 document.getElementById('hdr-panel').addEventListener('click', e => e.stopPropagation());
 document.getElementById('btn-anat-hdr').addEventListener('click', e => {
   e.stopPropagation();
-  if (!state.anat) return;
-  const n = state.anat, A = n.Ab;
+  if (!state.get('anat.file')) return;
+  const shape = state.get('anat.shape')
+  const vox_mm = state.get('anat.vox_mm')
+  const mn = state.get('anat.mn');
+  const mx = state.get('anat.mx');
+  const Ab = state.get('anat.Ab');
   showHeaderPanel('NIFTI HEADER', JSON.stringify({
-    dimensions: [ n.nx, n.ny, n.nz ],
-    voxel_size: n.pixdim.slice(1,4).map(v => +v.toFixed(6)),
-    data_range: { min: +n.mn.toFixed(4), max: +n.mx.toFixed(4) },
+    dimensions: [ shape[0], shape[1], shape[2] ],
+    voxel_size: vox_mm.slice(0,3).map(v => +v.toFixed(6)),
+    data_range: { min: +mn?.toFixed(4), max: +mx?.toFixed(4) },
     affine: { 
-		A: [A[0],A[1],A[2]].map(r => r.map(v => +v.toFixed(6))),
-        b: A[3].map(v => +v.toFixed(6))
+		A: [Ab[0],Ab[1],Ab[2]].map(r => r.map(v => +v.toFixed(6))),
+        b: Ab[3].map(v => +v.toFixed(6))
     }
   }, null, 2));
 });
@@ -1273,7 +1299,7 @@ document.getElementById('brain-rim-slider').addEventListener('input',e=>{
 });
 
 function updateProbeGap() {
-  const p = vr._planeParams['axia'] || vr._planeParams['cora'] || vr._planeParams['saga'];
+  const p = vr._planeParams['axisrc'] || vr._planeParams['corsrc'] || vr._planeParams['sagsrc'];
   if (!p || !p.mm_per_px) return;
   vr.setProbeRadius(radius / p.mm_per_px);
 }
@@ -1290,7 +1316,7 @@ document.getElementById('ends-size').addEventListener('input',e=>{
   rebuildDots(); updateSlicesA(); updateSlicesB();
 });
 // Single function to wire a color radio group + picker to a JS variable.
-// setVar: function(value) that stores the result and triggers redraws.
+// setVar: function(value) that stores the output and triggers redraws.
 // On call, reads current checked radio so JS var matches HTML state immediately.
 function initColorRadio(radioName, pickerId, setVar, redraw) {
   const readRadio = () => {
@@ -1322,8 +1348,8 @@ function setupDrop(dzId,inputId,handler){
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
   document.getElementById(inputId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
 }
-setupDrop('dz-anat',  'fi-anat',  f => stateManager.set('file.anat',     f));
-setupDrop('dz-trck', 'fi-trck', f => stateManager.set('file.tracking', f));
+setupDrop('dz-anat',  'fi-anat',  f => state.update({ 'anat.file': f }));
+setupDrop('dz-trck', 'fi-trck', f => state.update({ 'trck.file': f }));
 
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{
@@ -1342,12 +1368,12 @@ document.body.addEventListener('drop',e=>{
     document.getElementById(id).value = val;
     if (label) document.getElementById(label[0]).textContent = label[1];
   };
-  set('ends-size', endsPx, ['ends-size-val', endsPx.toFixed(1) + ' px']);
-  set('pitch-slider',        0,              ['pitch-val',       '0°']);
-  set('yaw-slider',          0,              ['yaw-val',         '0°']);
-  set('roll-slider',         0,              ['roll-val',        '0°']);
-  set('radius-slider',       radius,         ['radius-val',      radius.toFixed(2)+' mm']);
-  set('slab-slider',         slabMultiplier, ['slab-val',        slabMultiplier.toFixed(1)+'×']);
+  set('ends-size',           endsPx,           ['ends-size-val',   endsPx.toFixed(1) + ' px']);
+  set('pitch-slider',        0,                ['pitch-val',       '0°']);
+  set('yaw-slider',          0,                ['yaw-val',         '0°']);
+  set('roll-slider',         0,                ['roll-val',        '0°']);
+  set('radius-slider',       radius,           ['radius-val',      radius.toFixed(2)+' mm']);
+  set('slab-slider',         slabMultiplier,   ['slab-val',        slabMultiplier.toFixed(1)+'×']);
   set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val', glassBrainAlpha.toFixed(1)]);
   set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
   set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',   glassBrainRimPow.toFixed(1)]);
@@ -1355,23 +1381,15 @@ document.body.addEventListener('drop',e=>{
 
 // Wire canvases
 for(const k of ['sag','cor','axi']){
-  canvasA[k]=document.getElementById('cvs-'+k);
-  canvasB[k]=document.getElementById('cvs-'+k+'-b');
+  canvasA[k]=document.getElementById('cvs-'+k+'-src');
+  canvasB[k]=document.getElementById('cvs-'+k+'-tgt');
   initSliceInteraction(k,
     ()=>canvasA[k],
-    ()=>state.cursorA,  setCursorA,  'a',
-    (pk)=>state.viewA[pk],
-    (pk,v)=>{state.viewA[pk]=v;},
-    ()=>state.zoomA,
-    (z)=>{state.zoomA=z;},
+    'src',
     updateSlicesA);
   initSliceInteraction(k,
     ()=>canvasB[k],
-    ()=>state.cursorB, setCursorB, 'b',
-    (pk)=>state.viewB[pk],
-    (pk,v)=>{state.viewB[pk]=v;},
-    ()=>state.zoomB,
-    (z)=>{state.zoomB=z;},
+    'tgt',
     updateSlicesB);
 }
 resizeAll();
@@ -1459,8 +1477,8 @@ resizeAll();
 
   // State: which rows are visible per panel
   const vis = {
-    a: { sag: true, cor: true, axi: true },
-    b: { sag: true, cor: true, axi: true },
+    src: { sag: true, cor: true, axi: true },
+    tgt: { sag: true, cor: true, axi: true },
   };
 
   function countVisible(panel) {
@@ -1511,8 +1529,8 @@ resizeAll();
   });
 
   // Initial layout
-  applyLayout('a');
-  applyLayout('b');
+  applyLayout('src');
+  applyLayout('tgt');
 })();
 
 // ═══════════════════════════════════════════════════════════
@@ -1522,8 +1540,8 @@ if (window.location.search.includes('demo')) {
   const demoAnat = 'M01_T2w.nii.gz';
   const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
-    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) loadAnat(new File([await (await fetch(demoAnat)).blob()],demoAnat)); } catch(e){}
-    try { const r=await fetch(demoTck,{method:'HEAD'}); if(r.ok) loadTrck(new File([await (await fetch(demoTck)).blob()],demoTck)); } catch(e){}
+    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) state.update({ 'anat.file':new File([await (await fetch(demoAnat)).blob()],demoAnat) }); } catch(e){}
+    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) state.update({ 'trck.file':new File([await (await fetch(demoTck )).blob()],demoTck)  }); } catch(e){}
   }
   tryDemoLoad();
 }
