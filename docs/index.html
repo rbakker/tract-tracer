@@ -416,7 +416,7 @@ input[type=file]{display:none;}
   <div id="welcome">
     <h2>TRACT TRACER</h2>
     <p>Use the FILE menu to get started</p>
-    <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">DEMO</a></p>
+    <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">10k MacBNA M01 demo</a><br/>or <a id="demo-btn" class="accent-link" href="?MacBNA_M03">1M MacBNA M03 demo</a></p>
     <div id="mprogress"></div>
   </div>
 
@@ -1545,6 +1545,16 @@ if (window.location.search.includes('demo')) {
   }
   tryDemoLoad();
 }
+if (window.location.search.includes('MacBNA_M03')) {
+  const demoAnat = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/anat_dwireg.nii.gz';
+  const demoTck = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/sub-M03_tractogram.tck';
+  async function tryDemoLoad() {
+    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) state.update({ 'anat.file':new File([await (await fetch(demoAnat)).blob()],demoAnat) }); } catch(e){}
+    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) state.update({ 'trck.file':new File([await (await fetch(demoTck )).blob()],demoTck)  }); } catch(e){}
+  }
+  tryDemoLoad();
+}
+
 </script>
 </body>
 </html>
