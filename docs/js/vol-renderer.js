@@ -27,6 +27,7 @@ uniform vec2  u_crosshair;
 uniform vec2  u_res;
 uniform float u_probeRadius;
 uniform vec3 u_probeColor;
+uniform float u_isColor;
 in  vec2 v_uv;
 out vec4 fragColor;
 void main(){
@@ -48,9 +49,17 @@ void main(){
   // Volume sample
   vec3 tc = u_origin + v_uv.x*u_axisU + v_uv.y*u_axisV;
   bool inVol = !any(lessThan(tc,vec3(0.0))) && !any(greaterThan(tc,vec3(1.0)));
-  float raw = inVol ? texture(u_vol, tc).r : 0.0;
-  float v   = clamp((raw - u_window.x)/u_window.y, 0.0, 1.0);
-  vec3 col  = inVol ? vec3(v) : vec3(0.0);
+  vec3 col;
+  if (!inVol) {
+    col = vec3(0.0);
+  } else if (u_isColor > 0.5) {
+    // Colour / DEC volume: sample RGB directly, no intensity windowing.
+    col = clamp(texture(u_vol, tc).rgb, 0.0, 1.0);
+  } else {
+    float raw = texture(u_vol, tc).r;
+    float v   = clamp((raw - u_window.x)/u_window.y, 0.0, 1.0);
+    col = vec3(v);
+  }
 
   col = mix(col, u_chColorH, clamp(chH + capH, 0.0, 1.0) * 0.9);
   col = mix(col, u_chColorV, clamp(chV + capV, 0.0, 1.0) * 0.9);
@@ -80,6 +89,7 @@ export class VolRenderer {
     this._ras_extent = null
     this._wmin = 0;
     this._wmax = 1;
+    this._channels = 1;
     // Cached plane params per planeKey for click→RAS mapping
     // { cursor_ras, stepU_ras, stepV_ras, W, H }
     // stepU_ras = RAS mm displacement per pixel in U direction
@@ -98,7 +108,8 @@ export class VolRenderer {
     const gl = this.gl;
     this._anat = anat;
     const n = shape[0]*shape[1]*shape[2];
-    const mn=anat.mn, range=(anat.mx-anat.mn)||1;
+    const channels = anat.channels || 1;
+    this._channels = channels;
 
     const maxSz = gl.getParameter(gl.MAX_3D_TEXTURE_SIZE);
     if (shape[0]>maxSz||shape[1]>maxSz||shape[2]>maxSz)
@@ -113,21 +124,47 @@ export class VolRenderer {
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    const texData = new Float32Array(n);
-    for (let i=0;i<n;i++){
-      const v=(anat.data[i]-mn)/range;
-      texData[i]=isFinite(v)?v:0;  // NaN/Inf → 0 (no contribution to glass brain)
+    const ext = gl.getExtension('OES_texture_float_linear');
+    let texData, fmt, srcFmt, srcType;
+
+    if (channels === 3) {
+      // Colour / DEC volume: values are already ~[0,1] (FA-weighted
+      // eigenvector components, or normalised RGB24) — no mn/mx windowing.
+      // Stored as normalized RGBA8 (256 levels/channel is visually plenty
+      // for a colour map, and it's 1/4 the memory of RGBA32F). RGBA8 is a
+      // required WebGL2 format — always filterable, no extension needed.
+      // Padded with alpha=255 for broad WebGL2/driver texture support
+      // (3-component formats aren't reliably native on all GPUs).
+      texData = new Uint8Array(n*4);
+      for (let i=0;i<n;i++){
+        const r=anat.data[i*3+0], g=anat.data[i*3+1], b=anat.data[i*3+2];
+        texData[i*4+0] = Math.round(Math.min(Math.max(isFinite(r)?r:0,0),1)*255);
+        texData[i*4+1] = Math.round(Math.min(Math.max(isFinite(g)?g:0,0),1)*255);
+        texData[i*4+2] = Math.round(Math.min(Math.max(isFinite(b)?b:0,0),1)*255);
+        texData[i*4+3] = 255;
+      }
+      fmt = gl.RGBA8;
+      srcFmt = gl.RGBA;
+      srcType = gl.UNSIGNED_BYTE;
+    } else {
+      const mn=anat.mn, range=(anat.mx-anat.mn)||1;
+      texData = new Float32Array(n);
+      for (let i=0;i<n;i++){
+        const v=(anat.data[i]-mn)/range;
+        texData[i]=isFinite(v)?v:0;  // NaN/Inf → 0 (no contribution to glass brain)
+      }
+      fmt = ext ? gl.R32F : gl.R16F;
+      srcFmt = gl.RED;
+      srcType = gl.FLOAT;
     }
     this.texData = texData;
 
-    const ext = gl.getExtension('OES_texture_float_linear');
-    const fmt = ext ? gl.R32F : gl.R16F;
     gl.texImage3D(gl.TEXTURE_3D, 0, fmt,
-      shape[0],shape[1],shape[2], 0, gl.RED, gl.FLOAT, texData);
+      shape[0],shape[1],shape[2], 0, srcFmt, srcType, texData);
     gl.bindTexture(gl.TEXTURE_3D, null);
-    console.log('3D texture', ext?'R32F':'R16F',
+    console.log('3D texture', channels===3?'RGBA8':(ext?'R32F':'R16F'),
       shape[0]+'×'+shape[1]+'×'+shape[2],
-      '~'+((n*(ext?4:2))/1024/1024).toFixed(0)+' MB'); 
+      '~'+((texData.byteLength)/1024/1024).toFixed(0)+' MB'); 
   }
 
   setRotation(pitch, yaw, roll) {
@@ -229,6 +266,7 @@ export class VolRenderer {
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_probeRadius'),
       probeRadius !== null ? probeRadius : (this._probeRadiusPx||0));
     gl.uniform3fv(gl.getUniformLocation(this._prog, 'u_probeColor'), probeColor);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_isColor'), this._channels===3 ? 1 : 0);
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorH'),chColorH);
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorV'),chColorV);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_wH'), wH);

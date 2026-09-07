@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tract Tracer</title>
+<title>Tractogram Observer</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -185,8 +185,13 @@ input[type=file]{display:none;}
 #coord-hud span{color:var(--text);}
 #middle-info{position:absolute;bottom:10px;left:16px;line-height:2;color:var(--dim);}
 #middle-info span{color:var(--text);}
-#mprogress{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  color:var(--dim);letter-spacing:0.2em;text-align:center;line-height:2;}
+#mprogress{position:absolute;bottom:44px;left:50%;transform:translateX(-50%);
+  color:var(--bright);letter-spacing:0.1em;text-align:center;line-height:1.6;
+  pointer-events:none;white-space:nowrap;background:var(--panel);
+  border:1px solid var(--border);padding:5px 12px;border-radius:2px;
+  z-index:50;box-shadow:0 2px 10px rgba(0,0,0,0.6);
+  max-width:min(420px,calc(100% - 32px));overflow:hidden;text-overflow:ellipsis;}
+#mprogress:empty{display:none;}
 
 /* ── RESIZE SEPARATORS ── */
 .sep{width:3px;flex-shrink:0;background:var(--border);cursor:col-resize;
@@ -414,11 +419,16 @@ input[type=file]{display:none;}
 
   <!-- Welcome screen (shown when no data loaded) -->
   <div id="welcome">
-    <h2>TRACT TRACER</h2>
+    <h2>TRACTOGRAM OBSERVER</h2>
     <p>Use the FILE menu to get started</p>
     <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">10k MacBNA M01 demo</a><br/>or <a id="demo-btn" class="accent-link" href="?MacBNA_M03">1M MacBNA M03 demo</a></p>
-    <div id="mprogress"></div>
   </div>
+
+  <!-- Loading progress — deliberately NOT inside #welcome: the anatomy
+       volume typically loads in a second or two and checkShowHud() then
+       hides #welcome, but the tractogram download/parse that follows can
+       take much longer, and needs somewhere visible to report progress. -->
+  <div id="mprogress"></div>
 
   <div id="middle-hud" style="display:none;">
     <div id="stats">
@@ -847,6 +857,30 @@ function updateGlassBrainUniforms() {
   renderer3.render(scene, camera);
 }
 
+// FA is an absolute, physically meaningful 0-1 scale (unlike windowed T1/T2
+// intensity, which is normalised per-scan), so a DEC/colour volume needs
+// different glass-brain defaults than a scalar anatomical scan — ~0.2 is
+// the classic white-matter FA cutoff, well above typical gray matter, and
+// a higher opacity compensates for DEC's inherently dimmer colours. Called
+// on every anatomy load so switching between scan types "just works"
+// without the person having to manually retune the sliders each time.
+function applyGlassBrainDefaults(isColor) {
+  const cfg = isColor
+    ? { alpha: 10.0, thresh: 0.20, rim: 1.0 }
+    : { alpha: 5.0,  thresh: 0.15, rim: 1.0 };
+  glassBrainAlpha  = cfg.alpha;
+  glassBrainThresh = cfg.thresh;
+  glassBrainRimPow = cfg.rim;
+  const set = (id, val, label) => {
+    document.getElementById(id).value = val;
+    if (label) document.getElementById(label[0]).textContent = label[1];
+  };
+  set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val',  glassBrainAlpha.toFixed(1)]);
+  set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val', glassBrainThresh.toFixed(2)]);
+  set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',    glassBrainRimPow.toFixed(1)]);
+  updateGlassBrainUniforms();
+}
+
 function updateProbe(){
   if(!gridIdx) return;
   const [cx,cy,cz]=state.get('src.cursor');
@@ -971,8 +1005,8 @@ function saveTck(){
   const xyz=`${cx.toFixed(1)},${cy.toFixed(1)},${cz.toFixed(1)}`;
   const url=location.origin+location.pathname;
   const cmd = probeEndsOnly
-    ? `${url}/tract-tracer selected ${n} streamlines with a start- or end point in a sphere with radius ${r} around ras-coordinate [${xyz}]`
-    : `${url}/tract-tracer selected ${n} streamlines passing through a sphere with radius ${r} around ras-coordinate [${xyz}]`;
+    ? `${url}/tractogram-observer selected ${n} streamlines with a start- or end point in a sphere with radius ${r} around ras-coordinate [${xyz}]`
+    : `${url}/tractogram-observer selected ${n} streamlines passing through a sphere with radius ${r} around ras-coordinate [${xyz}]`;
   let buf;
   try { buf=writeTck(setStreamlines,trckHeader,cmd); }
   catch(e){alert('Save error: '+e);return;}
@@ -1012,7 +1046,7 @@ function saveState() {
   const data = JSON.stringify(collectState(), null, 2);
   const blob = new Blob([data], {type: 'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'tract-tracer-global.json'; a.click(); URL.revokeObjectURL(a.href);
+  a.download = 'tractogram-observer-global.json'; a.click(); URL.revokeObjectURL(a.href);
 };
 
 function updateCoordHud(){
@@ -1052,9 +1086,9 @@ async function loadAnat(f){
       setProgress('Error.'); await tick();
 	  throw(`Unsupported format ${ext}`);
   }
-  const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx } = anat;
+  const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels } = anat;
   
-  state.set( 'anat', { shape, vox_mm, Ab, invAb, decomp, mn, mx } );
+  state.set( 'anat', { shape, vox_mm, Ab, invAb, decomp, mn, mx, channels } );
   const probeCenter = mat3mulVec(Ab, [shape[0]/2, shape[1]/2, shape[2]/2]);
   for (const k of ['sag','cor','axi']) {
 	state.set('src.view.'+k,probeCenter), 
@@ -1063,6 +1097,7 @@ async function loadAnat(f){
   setProgress('uploading 3D texture…'); await tick();
   vr.upload(anat);
   buildGlassBrainLocal(anat);
+  applyGlassBrainDefaults(channels === 3);
   // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
   const [ex,ey,ez] = vr._ras_extent;
   const volRadius = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
@@ -1355,8 +1390,8 @@ document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{
   e.preventDefault();const f=e.dataTransfer.files[0];if(!f){console.log('File drop failed.');return}
   let [base,ext]=splitExt(f.name); ext = ext.toLowerCase();
-  if(ext==='.tck' || ext=='.trk') loadTrck(f);
-  else loadAnat(f);
+  if(ext==='.tck' || ext=='.trk') state.update({ 'trck.file': f });
+  else state.update({ 'anat.file': f });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1536,12 +1571,52 @@ resizeAll();
 // ═══════════════════════════════════════════════════════════
 // 13.  DEMO
 // ═══════════════════════════════════════════════════════════
+// Streams the response body instead of a plain `.blob()` fetch so the user
+// sees live progress (percentage if Content-Length is available, a running
+// MB count otherwise) instead of the welcome screen sitting frozen for the
+// ~30s a large demo file can take to download.
+async function fetchWithProgress(url, label) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(label + ': HTTP ' + res.status);
+  const total = +res.headers.get('Content-Length') || 0;
+  if (!res.body || !res.body.getReader) {
+    // Streaming not supported (older browser) — fall back silently.
+    setProgress(label + '…');
+    return await res.blob();
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let received = 0;
+  setProgress(label + '…');
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    const mb = (received/1024/1024).toFixed(1);
+    setProgress(total
+      ? `${label} ${Math.min(100, Math.round(received/total*100))}% (${mb} / ${(total/1024/1024).toFixed(1)} MB)`
+      : `${label} ${mb} MB…`);
+  }
+  return new Blob(chunks);
+}
+
+async function loadDemoFile(url, kind) {
+  const name = url.split('/').pop();
+  const label = kind === 'anat' ? 'downloading anatomy' : 'downloading tractogram';
+  const blob = await fetchWithProgress(url, label);
+  state.update({ [kind+'.file']: new File([blob], name) });
+}
+
 if (window.location.search.includes('demo')) {
   const demoAnat = 'M01_T2w.nii.gz';
   const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
-    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) state.update({ 'anat.file':new File([await (await fetch(demoAnat)).blob()],demoAnat) }); } catch(e){}
-    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) state.update({ 'trck.file':new File([await (await fetch(demoTck )).blob()],demoTck)  }); } catch(e){}
+    setProgress('checking demo files…');
+    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoAnat,'anat'); }
+    catch(e){ console.error(e); setProgress('anatomy download failed — see console'); }
+    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoTck,'trck'); }
+    catch(e){ console.error(e); setProgress('tractogram download failed — see console'); }
   }
   tryDemoLoad();
 }
@@ -1549,11 +1624,15 @@ if (window.location.search.includes('MacBNA_M03')) {
   const demoAnat = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/anat_dwireg.nii.gz';
   const demoTck = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/sub-M03_tractogram.tck';
   async function tryDemoLoad() {
-    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) state.update({ 'anat.file':new File([await (await fetch(demoAnat)).blob()],demoAnat) }); } catch(e){}
-    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) state.update({ 'trck.file':new File([await (await fetch(demoTck )).blob()],demoTck)  }); } catch(e){}
+    setProgress('checking demo files…');
+    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoAnat,'anat'); }
+    catch(e){ console.error(e); setProgress('anatomy download failed — see console'); }
+    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoTck,'trck'); }
+    catch(e){ console.error(e); setProgress('tractogram download failed — see console'); }
   }
   tryDemoLoad();
 }
+
 
 </script>
 </body>

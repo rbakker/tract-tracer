@@ -1,8 +1,53 @@
 // ── nifti.js ──────────────────────────────────────────────
 // Self-contained NIfTI-1 parser. Handles sform + qform quaternion.
-// Returns a nii object with affine, inv, dims, pixdim, data, mn, mx.
+// Returns a nii object with affine, inv, dims, pixdim, data, mn, mx, channels.
+//
+// `channels` is 1 for a normal scalar (e.g. T1/T2/FA) volume, or 3 for a
+// colour / directionally-encoded-colour (DEC) volume — either a 4D NIfTI
+// with exactly 3 volumes along dim4 (MRtrix's own convention, e.g. the
+// output of `tensor2metric -vector -modulate FA`), or a single-volume
+// NIfTI using the packed DT_RGB24 / DT_RGBA32 datatype. When channels===3,
+// `data` is an interleaved Float32Array of length shape[0]*shape[1]*shape[2]*3
+// (R,G,B per voxel, already ~[0,1] — no mn/mx windowing is applied).
 
 import { invertAffine, decomposeAffineKSP, matMul } from './affine.js';
+
+function bytesPerElementFor(datatype) {
+  if ([4, 512].includes(datatype)) return 2;
+  if ([8, 16].includes(datatype)) return 4;
+  if (datatype === 64) return 8;
+  return 1;
+}
+
+// Reads exactly `n` elements of the given NIfTI datatype starting at byte
+// offset `start` in `buf`, always returning a Float32Array of length n.
+function readVolumeFloat32(buf, start, n, datatype, bytesPerElement) {
+  if (datatype === 2) {
+    const src = new Uint8Array(buf, start, n);
+    const out = new Float32Array(n); out.set(src); return out;
+  } else if (datatype === 4) {
+    const src = new Int16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    const out = new Float32Array(n); out.set(src); return out;
+  } else if (datatype === 8) {
+    const src = new Int32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    const out = new Float32Array(n); out.set(src); return out;
+  } else if (datatype === 16) {
+    return new Float32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+  } else if (datatype === 64) {
+    const f = new Float64Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) out[i] = f[i];
+    return out;
+  } else if (datatype === 256) {
+    const src = new Int8Array(buf, start, n);
+    const out = new Float32Array(n); out.set(src); return out;
+  } else if (datatype === 512) {
+    const src = new Uint16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    const out = new Float32Array(n); out.set(src); return out;
+  } else {
+    throw 'Unsupported NIfTI datatype ' + datatype;
+  }
+}
 
 export async function parseNifti(file) {
   let buf = await file.arrayBuffer();
@@ -26,9 +71,7 @@ export async function parseNifti(file) {
   const le = (sizeof_hdr===348);
   const dims = Array.from({length:8},(_,i)=>dv.getInt16(40+i*2,le));
   const shape = [ dims[1],dims[2],dims[3] ];
-  if (dims[4] > 1) {
-    console.log(`NIfTI contains ${dims[4]} volumes, only the first one is read.`);
-  }
+  const nvol = dims[4] || 1;
   const datatype = dv.getInt16(70,le);
   const vox_offset=dv.getFloat32(108,le);
   const pixdim   = Array.from({length:8},(_,i)=>dv.getFloat32(76+i*4,le));
@@ -64,50 +107,62 @@ export async function parseNifti(file) {
 
   const start = Math.round(vox_offset);
   const n = shape[0] * shape[1] * shape[2]; // Size of exactly one 3D spatial volume
-
-  // Determine the byte size per element based on NIfTI datatype 
+  // Determine the byte size per element based on NIfTI datatype
   // to prevent reading out-of-bounds on the underlying ArrayBuffer
-  let bytesPerElement = 1;
-  if ([4, 512].includes(datatype)) bytesPerElement = 2;
-  else if ([8, 16].includes(datatype)) bytesPerElement = 4;
-  else if (datatype === 64) bytesPerElement = 8;
+  const bytesPerElement = bytesPerElementFor(datatype);
 
-  // Ensure our slice or view length strictly caps at `n` elements (the first 3D volume)
-  let data;
-  if (datatype === 2) {
-    data = new Uint8Array(buf, start, n);
-  } else if (datatype === 4) {
-    data = new Int16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-  } else if (datatype === 8) {
-    data = new Int32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-  } else if (datatype === 16) {
-    data = new Float32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-  } else if (datatype === 64) {
-    // Cast 64-bit float down to 32-bit float for WebGL/memory optimization
-    const f = new Float64Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-    data = new Float32Array(n);
-    for (let i = 0; i < n; i++) data[i] = f[i];
-  } else if (datatype === 256) {
-    data = new Int8Array(buf, start, n);
-  } else if (datatype === 512) {
-    data = new Uint16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+  // DT_RGB24 (128) / DT_RGBA32 (2304): packed colour datatype, one "volume"
+  // with 3 (or 4) interleaved byte components per voxel.
+  const isPackedRGB = (datatype === 128 || datatype === 2304);
+  // MRtrix / mrview convention for a colour (e.g. DEC FA) map: a plain 4D
+  // image with exactly 3 volumes along dim4 — e.g. the output of
+  // `tensor2metric -vector -modulate FA`. mrview treats this as RGB
+  // automatically, so we do too.
+  const isVectorRGB = !isPackedRGB && nvol === 3;
+
+  let data, channels, mn=Infinity, mx=-Infinity;
+
+  if (isPackedRGB) {
+    channels = 3;
+    const comps = datatype === 2304 ? 4 : 3; // discard alpha for RGBA32
+    const raw = new Uint8Array(buf, start, n*comps);
+    data = new Float32Array(n*3);
+    for (let i=0;i<n;i++) {
+      data[i*3+0] = raw[i*comps+0]/255;
+      data[i*3+1] = raw[i*comps+1]/255;
+      data[i*3+2] = raw[i*comps+2]/255;
+    }
+    mn=0; mx=1;
+  } else if (isVectorRGB) {
+    channels = 3;
+    data = new Float32Array(n*3);
+    for (let v=0; v<3; v++) {
+      const vol = readVolumeFloat32(buf, start + v*n*bytesPerElement, n, datatype, bytesPerElement);
+      for (let i=0;i<n;i++) {
+        const val = vol[i];
+        data[i*3+v] = val;
+        if (val<mn) mn=val;
+        if (val>mx) mx=val;
+      }
+    }
   } else {
-    throw 'Unsupported NIfTI datatype ' + datatype;
-  }
-
-  let mn=Infinity, mx=-Infinity;
-  for (let i=0;i<data.length;i++) { 
-	if (data[i]<mn) mn=data[i];
-	if (data[i]>mx) mx=data[i];
+    channels = 1;
+    if (nvol > 1) console.log(`NIfTI contains ${nvol} volumes, only the first one is read.`);
+    data = readVolumeFloat32(buf, start, n, datatype, bytesPerElement);
+    for (let i=0;i<data.length;i++) {
+      if (data[i]<mn) mn=data[i];
+      if (data[i]>mx) mx=data[i];
+    }
   }
 
   // Decompose affine into K*S*P, where K is the residual affine, S contains voxel sizes on its diagonal, and P permutes voxels to RAS.
   const invAb = invertAffine(Ab);
   const decomp = decomposeAffineKSP(Ab,[pixdim[1],pixdim[2],pixdim[3]]);
 
-  console.log('NIfTI sform='+sform_code+' qform='+qform_code, shape[0]+'×'+shape[1]+'×'+shape[2],'Ab', Ab);
-  
-  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx };
+  console.log('NIfTI sform='+sform_code+' qform='+qform_code, shape[0]+'×'+shape[1]+'×'+shape[2],
+    channels===3?'colour (RGB)':'scalar', 'Ab', Ab);
+
+  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels };
 }
 
 
@@ -218,19 +273,39 @@ export async function parseMif(file, volIndex = 0) {
   const view = new DataView(buf);
   const [nx,ny,nz] = shape.slice(0,3)
   const n    = nx*ny*nz;
-  const data = new Float32Array(n); // always output Float32 for rendering
 
-  let outIdx = 0;
-  const base = start + volIndex * sv * bytes;
-  for (let z = 0; z < nz; z++)
-    for (let y = 0; y < ny; y++)
-      for (let x = 0; x < nx; x++)
-        data[outIdx++] = view[dvMethod](base + (x*sx + y*sy + z*sz) * bytes, le);
+  // A plain 3-volume image is treated as a colour / DEC (directionally-
+  // encoded-colour) map, matching how mrview displays such files (e.g. the
+  // output of `tensor2metric -vector -modulate FA`).
+  const isColor = nv === 3;
+  const channels = isColor ? 3 : 1;
+  const data = new Float32Array(n * channels); // always output Float32 for rendering
 
   let mn = Infinity, mx = -Infinity;
-  for (let i = 0; i < n; i++) {
-    if (data[i] < mn) mn = data[i];
-    if (data[i] > mx) mx = data[i];
+  if (isColor) {
+    let outIdx = 0;
+    for (let z = 0; z < nz; z++)
+      for (let y = 0; y < ny; y++)
+        for (let x = 0; x < nx; x++) {
+          for (let v = 0; v < 3; v++) {
+            const val = view[dvMethod](start + (x*sx + y*sy + z*sz + v*sv) * bytes, le);
+            data[outIdx*3 + v] = val;
+            if (val < mn) mn = val;
+            if (val > mx) mx = val;
+          }
+          outIdx++;
+        }
+  } else {
+    let outIdx = 0;
+    const base = start + volIndex * sv * bytes;
+    for (let z = 0; z < nz; z++)
+      for (let y = 0; y < ny; y++)
+        for (let x = 0; x < nx; x++) {
+          const val = view[dvMethod](base + (x*sx + y*sy + z*sz) * bytes, le);
+          data[outIdx++] = val;
+          if (val < mn) mn = val;
+          if (val > mx) mx = val;
+        }
   }
 
   let K = [[1,0,0],[0,1,0],[0,0,1]]
@@ -255,5 +330,5 @@ export async function parseMif(file, volIndex = 0) {
   Ab[3] = b;
   const invAb = invertAffine(Ab);
 
-  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx };
+  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels };
 }

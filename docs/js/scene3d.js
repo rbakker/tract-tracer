@@ -83,6 +83,7 @@ uniform int   u_steps;
 uniform mat4  u_invPV;
 uniform mat4  u_invModel;
 uniform vec3  u_camPos;
+uniform float u_isColor;
 varying vec2 vNDC;
 
 vec2 boxHit(vec3 ro, vec3 rd) {
@@ -93,7 +94,17 @@ vec2 boxHit(vec3 ro, vec3 rd) {
   return vec2(max(max(t1.x, t1.y), t1.z),
               min(min(t2.x, t2.y), t2.z));
 }
-float sampleVol(vec3 p) { return texture(u_vol, p / u_size).r; }
+vec3 sampleRaw(vec3 p) { return texture(u_vol, p / u_size).rgb; }
+// Scalar "intensity" used for thresholding/gradient/rim shading: the raw
+// value itself for a normal scan. For a DEC/colour map, each channel is
+// FA * |eigenvector_component| and the eigenvector is unit length, so the
+// Euclidean length of the RGB triple recovers FA exactly — unlike a luma
+// weighting (0.3R+0.6G+0.1B), which is biased against blue (S-I-oriented)
+// tracts and would wrongly threshold them away.
+float sampleVol(vec3 p) {
+  vec3 c = sampleRaw(p);
+  return u_isColor > 0.5 ? length(c) : c.r;
+}
 vec3 gradient(vec3 p) {
   vec3 e = vec3(1.0, 0.0, 0.0);
   return vec3(
@@ -129,8 +140,24 @@ void main() {
     float rim = 1.0 - abs(dot(grad / gLen, rd));
     rim = pow(rim, u_rimPow);
     float normStep = mmPerStep / u_volDiagMm;
-    vec3  col = mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), intensity);
-    float a   = clamp(rim * u_alpha * normStep, 0.0, 1.0);
+    // For DEC/colour volumes, suppress the low-FA "gray matter halo": a
+    // single threshold can't distinguish faint-but-real white matter from
+    // faint gray-matter noise, since both clear the same cutoff, and gray
+    // matter forms a thick shell — many weak per-voxel contributions along
+    // that whole path still add up to visible haze even when each is small.
+    // Ramp alpha over a narrow, steep band above threshold so only voxels
+    // well past it (white matter tracts) contribute meaningfully.
+    float faWeight = 1.0;
+    if (u_isColor > 0.5) {
+      faWeight = pow(smoothstep(u_thresh, u_thresh + 0.12, intensity), 2.5);
+    }
+    vec3  col = (u_isColor > 0.5)
+      // DEC colours are inherently dim (each channel is FA*|eigenvector|,
+      // rarely above ~0.7) — boost and gamma-lift rather than applying the
+      // grayscale intensity-based darkening below, which would compound.
+      ? pow(clamp(sampleRaw(p) * 1.6, 0.0, 1.0), vec3(0.8))
+      : mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), intensity);
+    float a   = clamp(rim * u_alpha * normStep * faWeight, 0.0, 1.0);
     accColor += (1.0 - accAlpha) * a * col;
     accAlpha += (1.0 - accAlpha) * a;
     if (accAlpha > 0.95) break;
@@ -140,10 +167,14 @@ void main() {
 }`;
 
 export function buildGlassBrain(anat, texData, scene, renderer3, camera) {
+  const isColor = (anat.channels || 1) === 3;
   const tex = new THREE.Data3DTexture(texData, ...anat.shape);
-  tex.format         = THREE.RedFormat;
-  tex.type           = THREE.FloatType;
-  tex.internalFormat = 'R32F';
+  // Colour/DEC volumes are uploaded as normalized RGBA8 (see VolRenderer.upload)
+  // — 256 levels/channel is visually plenty and it's 1/4 the memory of float.
+  // Scalar volumes stay single-channel float RED for intensity windowing.
+  tex.format         = isColor ? THREE.RGBAFormat : THREE.RedFormat;
+  tex.type           = isColor ? THREE.UnsignedByteType : THREE.FloatType;
+  tex.internalFormat = isColor ? 'RGBA8' : 'R32F';
   tex.minFilter      = THREE.LinearFilter;
   tex.magFilter      = THREE.LinearFilter;
   tex.generateMipmaps = false;
@@ -180,6 +211,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera) {
       u_invPV:     { value: new THREE.Matrix4() },
       u_invModel:  { value: invModel },
       u_camPos:    { value: new THREE.Vector3() },
+      u_isColor:   { value: isColor ? 1 : 0 },
     },
     transparent: true,
     depthWrite:  false,
