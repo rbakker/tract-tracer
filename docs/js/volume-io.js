@@ -19,6 +19,22 @@ function bytesPerElementFor(datatype) {
   return 1;
 }
 
+// Full-scale value for integer NIfTI datatypes, used to normalize a plain
+// integer-typed colour volume (e.g. a hand-made uint8 test image) into the
+// [0,1] range the renderer expects. Returns null for float datatypes,
+// which are assumed already meaningfully scaled (e.g. MRtrix's own
+// tensor2metric output is float32, already ~[0,1]).
+function integerRangeMax(datatype) {
+  switch (datatype) {
+    case 2:   return 255;         // DT_UINT8
+    case 256: return 127;         // DT_INT8 (signed)
+    case 4:   return 32767;       // DT_INT16 (signed)
+    case 512: return 65535;       // DT_UINT16
+    case 8:   return 2147483647;  // DT_INT32 (signed)
+    default:  return null;        // DT_FLOAT32/64 and anything else
+  }
+}
+
 // Reads exactly `n` elements of the given NIfTI datatype starting at byte
 // offset `start` in `buf`, always returning a Float32Array of length n.
 function readVolumeFloat32(buf, start, n, datatype, bytesPerElement) {
@@ -136,10 +152,14 @@ export async function parseNifti(file) {
   } else if (isVectorRGB) {
     channels = 3;
     data = new Float32Array(n*3);
+    // A colour volume stored as an integer datatype (e.g. a hand-made
+    // uint8 test image) needs normalizing to [0,1] just like DT_RGB24
+    // does above — float datatypes (MRtrix's native output) are left as-is.
+    const intMax = integerRangeMax(datatype);
     for (let v=0; v<3; v++) {
       const vol = readVolumeFloat32(buf, start + v*n*bytesPerElement, n, datatype, bytesPerElement);
       for (let i=0;i<n;i++) {
-        const val = vol[i];
+        const val = intMax ? vol[i]/intMax : vol[i];
         data[i*3+v] = val;
         if (val<mn) mn=val;
         if (val>mx) mx=val;
@@ -232,6 +252,20 @@ const DTYPES = [
   ['UInt32BE',  Uint32Array,  4, 'getUint32' ],
 ];
 
+// Full-scale value for integer .mif datatypes — same purpose as
+// integerRangeMax() above but keyed by MRtrix's dtype name string.
+function mifIntegerRangeMax(dtypeName) {
+  switch (dtypeName) {
+    case 'Int8':                       return 127;
+    case 'UInt8':                      return 255;
+    case 'Int16LE': case 'Int16BE':    return 32767;
+    case 'UInt16LE': case 'UInt16BE':  return 65535;
+    case 'Int32LE': case 'Int32BE':    return 2147483647;
+    case 'UInt32LE': case 'UInt32BE':  return 4294967295;
+    default: return null; // Float32LE/BE, Float64LE/BE: already normalized
+  }
+}
+
 function getMifDtype(dtype) {
   const entry = DTYPES.find(([name]) => name === dtype);
   if (!entry) throw new Error('Unsupported datatype: ' + dtype);
@@ -283,12 +317,16 @@ export async function parseMif(file, volIndex = 0) {
 
   let mn = Infinity, mx = -Infinity;
   if (isColor) {
+    // A colour volume stored as an integer datatype needs normalizing to
+    // [0,1] — float datatypes (MRtrix's native output) are left as-is.
+    const intMax = mifIntegerRangeMax(header['datatype']);
     let outIdx = 0;
     for (let z = 0; z < nz; z++)
       for (let y = 0; y < ny; y++)
         for (let x = 0; x < nx; x++) {
           for (let v = 0; v < 3; v++) {
-            const val = view[dvMethod](start + (x*sx + y*sy + z*sz + v*sv) * bytes, le);
+            let val = view[dvMethod](start + (x*sx + y*sy + z*sz + v*sv) * bytes, le);
+            if (intMax) val = val / intMax;
             data[outIdx*3 + v] = val;
             if (val < mn) mn = val;
             if (val > mx) mx = val;
