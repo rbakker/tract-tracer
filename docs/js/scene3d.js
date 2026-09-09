@@ -3,6 +3,7 @@
 // tractogram LineSegments helpers.
 
 import * as THREE from 'three';
+import { buildLutRGBA } from './lut-io.js';
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)
@@ -33,7 +34,7 @@ export class TrackballControls extends EventDispatcher {
     const gms = (px, py) => { const v = new Vector2(); v.set((px - sc.screen.left) / sc.screen.width, (py - sc.screen.top) / sc.screen.height); return v; };
     this.rotateCamera = (() => { const ax = new Vector3(), q = new Quaternion(), ed = new Vector3(), ou = new Vector3(), os = new Vector3(), md = new Vector3(); return () => { md.set(mc.x - mp.x, mc.y - mp.y, 0); let a = md.length(); if (a) { eye.copy(sc.object.position).sub(sc.target); ed.copy(eye).normalize(); ou.copy(sc.object.up).normalize(); os.crossVectors(ou, ed).normalize(); ou.setLength(mc.y - mp.y); os.setLength(mc.x - mp.x); md.copy(ou.add(os)); ax.crossVectors(md, eye).normalize(); a *= sc.rotateSpeed; q.setFromAxisAngle(ax, a); eye.applyQuaternion(q); sc.object.up.applyQuaternion(q); } mp.copy(mc); }; })();
     this.zoomCamera = () => { if (st !== S.ZOOM && st !== S.NONE) return; const f = 1 + (ze.y - zs.y) * sc.zoomSpeed; if (f !== 1 && f > 0) eye.multiplyScalar(f); if (sc.staticMoving) zs.copy(ze); };
-    this.panCamera = (() => { const ch = new Vector2(), ou = new Vector3(), p = new Vector3(); return () => { ch.copy(pe).sub(ps); if (ch.lengthSq()) { ch.multiplyScalar(eye.length() * sc.panSpeed); p.copy(eye).cross(sc.object.up).setLength(ch.x); p.add(ou.copy(sc.object.up).setLength(-ch.y)); sc.object.position.add(p); sc.target.add(p); if (sc.staticMoving) ps.copy(pe); } }; })();
+    this.panCamera = (() => { const ch = new Vector2(), ou = new Vector3(), p = new Vector3(); return () => { ch.copy(pe).sub(ps); if (ch.lengthSq()) { ch.multiplyScalar(eye.length() * sc.panSpeed); p.copy(eye).cross(sc.object.up).setLength(ch.x); p.add(ou.copy(sc.object.up).setLength(ch.y)); sc.object.position.add(p); sc.target.add(p); if (sc.staticMoving) ps.copy(pe); } }; })();
 
     // renderFn is injected by the caller so this module doesn't hold a reference to scene/camera
     this._renderFn = null;
@@ -84,6 +85,12 @@ uniform mat4  u_invPV;
 uniform mat4  u_invModel;
 uniform vec3  u_camPos;
 uniform float u_isColor;
+uniform float u_contrast;
+uniform float u_applyLUT;
+uniform sampler2D u_lut;
+uniform float u_lutSize;
+uniform float u_dataMin;
+uniform float u_dataRange;
 varying vec2 vNDC;
 
 vec2 boxHit(vec3 ro, vec3 rd) {
@@ -94,7 +101,14 @@ vec2 boxHit(vec3 ro, vec3 rd) {
   return vec2(max(max(t1.x, t1.y), t1.z),
               min(min(t2.x, t2.y), t2.z));
 }
-vec3 sampleRaw(vec3 p) { return texture(u_vol, p / u_size).rgb; }
+vec3 sampleRaw(vec3 p) {
+  // Texture stores sqrt-encoded colour (see VolRenderer.upload) to spend
+  // the 8 bits/channel where DEC data actually lives — square to undo it.
+  // Scalar (grayscale/label) textures store the linear normalized value
+  // directly and were never sqrt-encoded, so leave those untouched.
+  vec3 enc = texture(u_vol, p / u_size).rgb;
+  return u_isColor > 0.5 ? enc * enc : enc;
+}
 // Scalar "intensity" used for thresholding/gradient/rim shading: the raw
 // value itself for a normal scan. For a DEC/colour map, each channel is
 // FA * |eigenvector_component| and the eigenvector is unit length, so the
@@ -104,6 +118,73 @@ vec3 sampleRaw(vec3 p) { return texture(u_vol, p / u_size).rgb; }
 float sampleVol(vec3 p) {
   vec3 c = sampleRaw(p);
   return u_isColor > 0.5 ? length(c) : c.r;
+}
+// Reconstructs the original integer label index from the normalized
+// scalar texture value (texture stores (raw-min)/range — see
+// VolRenderer.upload), rounded to the nearest integer.
+float sampleLabelIndex(vec3 p) {
+  float norm = texture(u_vol, p / u_size).r;
+  return floor(norm * u_dataRange + u_dataMin + 0.5);
+}
+// Label indices are arbitrary categorical numbers — going from region 47
+// to 48 isn't "half as different" as 47 to 49, so a continuous gradient
+// of the raw index is meaningless. Instead, border(p) is a clean binary
+// signal: 1.0 if ANY face-neighbour has a different (rounded) label than
+// p, else 0.0 — independent of how large that jump happens to be.
+float labelBorder(vec3 p) {
+  float c = sampleLabelIndex(p);
+  vec3 e = vec3(1.0, 0.0, 0.0);
+  float d = 0.0;
+  d = max(d, abs(sampleLabelIndex(p+e.xyz) - c) > 0.5 ? 1.0 : 0.0);
+  d = max(d, abs(sampleLabelIndex(p-e.xyz) - c) > 0.5 ? 1.0 : 0.0);
+  d = max(d, abs(sampleLabelIndex(p+e.zxy) - c) > 0.5 ? 1.0 : 0.0);
+  d = max(d, abs(sampleLabelIndex(p-e.zxy) - c) > 0.5 ? 1.0 : 0.0);
+  d = max(d, abs(sampleLabelIndex(p+e.yzx) - c) > 0.5 ? 1.0 : 0.0);
+  d = max(d, abs(sampleLabelIndex(p-e.yzx) - c) > 0.5 ? 1.0 : 0.0);
+  return d;
+}
+// A directional analogue of gradient() for the binary border field, used
+// only for Fresnel-style rim lighting direction. A naive 6-face-neighbour
+// version can only ever point along one of 27 fixed directions (axis-
+// aligned or diagonal), which looks faceted/blocky at high opacity since
+// label borders are hard 1-voxel shells with no natural smooth gradient.
+// This uses a full 3D Sobel kernel over the 26-voxel neighbourhood
+// instead — each neighbour that differs from the centre label casts a
+// weighted vote (weight 4 face-adjacent, 2 edge-adjacent, 1 corner,
+// standard Sobel weighting), giving a continuous-valued direction rather
+// than a coarse discrete one. Costs 26 extra samples, but only for
+// voxels that already passed the border test above (a minority of steps
+// along any ray), so the performance impact stays contained.
+vec3 labelNormal(vec3 p) {
+  float c = sampleLabelIndex(p);
+  vec3 g = vec3(0.0);
+  for (int dz = -1; dz <= 1; dz++) {
+    for (int dy = -1; dy <= 1; dy++) {
+      for (int dx = -1; dx <= 1; dx++) {
+        if (dx == 0 && dy == 0 && dz == 0) continue;
+        float fx = float(dx), fy = float(dy), fz = float(dz);
+        float differs = (abs(sampleLabelIndex(p + vec3(fx,fy,fz)) - c) > 0.5) ? 1.0 : 0.0;
+        g.x += fx * (2.0 - abs(fy)) * (2.0 - abs(fz)) * differs;
+        g.y += fy * (2.0 - abs(fx)) * (2.0 - abs(fz)) * differs;
+        g.z += fz * (2.0 - abs(fx)) * (2.0 - abs(fy)) * differs;
+      }
+    }
+  }
+  return g;
+}
+// LUT colour for a label index, with the same out-of-range fallback as
+// the 2D slice shader: mid-gray rather than silently repeating whatever
+// colour CLAMP_TO_EDGE lands on at the texture boundary.
+vec3 lutColor(float idx) {
+  if (idx < 0.0 || idx >= u_lutSize) return vec3(0.5);
+  return texture(u_lut, vec2((idx + 0.5) / u_lutSize, 0.5)).rgb;
+}
+// Gamma curve (matches vol-renderer.js's slice shader): always maps 0->0
+// and 1->1 exactly, and is monotonic for any exponent — the earlier
+// two-sided S-curve attempt mirrored the same darkening on both sides of
+// centre instead of flattening toward gray when reduced.
+float gammaContrast(float v, float gamma) {
+  return pow(clamp(v, 0.0, 1.0), gamma);
 }
 vec3 gradient(vec3 p) {
   vec3 e = vec3(1.0, 0.0, 0.0);
@@ -128,13 +209,24 @@ void main() {
   float mmPerStep = length(rd * u_voxMm) * stepSize;
   float accAlpha = 0.0;
   vec3  accColor = vec3(0.0);
+  bool labelMode = (u_applyLUT > 0.5) && (u_isColor < 0.5);
   for (int i = 0; i < 256; i++) {
     if (i >= u_steps) break;
     float t = tStart + (float(i) + 0.5) * stepSize;
     vec3 p = ro + t * rd;
-    float intensity = sampleVol(p);
-    if (intensity < u_thresh) continue;
-    vec3 grad = gradient(p);
+    float intensity;
+    vec3 grad;
+    vec3 col;
+    if (labelMode) {
+      intensity = labelBorder(p);
+      if (intensity < 0.5) continue; // interior voxel, not a region boundary
+      grad = labelNormal(p);
+      col = lutColor(sampleLabelIndex(p));
+    } else {
+      intensity = sampleVol(p);
+      if (intensity < u_thresh) continue;
+      grad = gradient(p);
+    }
     float gLen = length(grad);
     if (gLen < 0.0001) continue;
     float rim = 1.0 - abs(dot(grad / gLen, rd));
@@ -151,12 +243,20 @@ void main() {
     if (u_isColor > 0.5) {
       faWeight = pow(smoothstep(u_thresh, u_thresh + 0.12, intensity), 2.5);
     }
-    vec3  col = (u_isColor > 0.5)
-      // DEC colours are inherently dim (each channel is FA*|eigenvector|,
-      // rarely above ~0.7) — boost and gamma-lift rather than applying the
-      // grayscale intensity-based darkening below, which would compound.
-      ? pow(clamp(sampleRaw(p) * 1.6, 0.0, 1.0), vec3(0.8))
-      : mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), intensity);
+    if (!labelMode) {
+      // Contrast slider (shared with the 2D slice panels): a straight gain
+      // on top of DEC's baseline boost for colour volumes (their values sit
+      // near 0, not a midtone), or a stretch around mid-gray for scalar
+      // shading. Only affects the displayed colour — NOT intensity, which
+      // stays untouched for the threshold/gradient/alpha logic above.
+      float scalarDisp = gammaContrast(intensity, 1.0 / u_contrast);
+      col = (u_isColor > 0.5)
+        // DEC colours are inherently dim (each channel is FA*|eigenvector|,
+        // rarely above ~0.7) — boost and gamma-lift rather than applying the
+        // grayscale intensity-based darkening below, which would compound.
+        ? pow(clamp(sampleRaw(p) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8))
+        : mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), scalarDisp);
+    }
     float a   = clamp(rim * u_alpha * normStep * faWeight, 0.0, 1.0);
     accColor += (1.0 - accAlpha) * a * col;
     accAlpha += (1.0 - accAlpha) * a;
@@ -166,8 +266,9 @@ void main() {
   gl_FragColor = vec4(accColor, accAlpha);
 }`;
 
-export function buildGlassBrain(anat, texData, scene, renderer3, camera) {
+export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo) {
   const isColor = (anat.channels || 1) === 3;
+  const isLabelMode = !isColor && !!(lutInfo && lutInfo.apply && lutInfo.map);
   const tex = new THREE.Data3DTexture(texData, ...anat.shape);
   // Colour/DEC volumes are uploaded as normalized RGBA8 (see VolRenderer.upload)
   // — 256 levels/channel is visually plenty and it's 1/4 the memory of float.
@@ -175,8 +276,11 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera) {
   tex.format         = isColor ? THREE.RGBAFormat : THREE.RedFormat;
   tex.type           = isColor ? THREE.UnsignedByteType : THREE.FloatType;
   tex.internalFormat = isColor ? 'RGBA8' : 'R32F';
-  tex.minFilter      = THREE.LinearFilter;
-  tex.magFilter      = THREE.LinearFilter;
+  // Label volumes need exact (NEAREST) lookups — interpolating between two
+  // different label indices produces spurious in-between values with no
+  // real meaning (same reasoning as the 2D slice renderer's LUT mode).
+  tex.minFilter      = isLabelMode ? THREE.NearestFilter : THREE.LinearFilter;
+  tex.magFilter      = isLabelMode ? THREE.NearestFilter : THREE.LinearFilter;
   tex.generateMipmaps = false;
   tex.unpackAlignment = 1;
   tex.needsUpdate    = true;
@@ -193,6 +297,27 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera) {
           0,       0,       0,  1
   );
   const invModel = modelMatrix.clone().invert();
+
+  // Three.js manages its own WebGL context, separate from VolRenderer's
+  // raw one — the LUT texture there can't be reused here, so build an
+  // identically-encoded copy from the same lutMap. A tiny dummy texture
+  // stands in when no LUT is loaded, so u_lut is always a valid, distinct
+  // texture (leaving a sampler uniform unassigned defaults it to unit 0,
+  // colliding with u_vol's sampler3D there — see the earlier 2D-slice fix
+  // for the same issue).
+  let lutTex, lutSize = 1;
+  if (isLabelMode) {
+    const { data, size } = buildLutRGBA(lutInfo.map, lutInfo.maxIndex);
+    lutTex = new THREE.DataTexture(data, size, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    lutTex.minFilter = THREE.NearestFilter;
+    lutTex.magFilter = THREE.NearestFilter;
+    lutTex.needsUpdate = true;
+    lutSize = size;
+  } else {
+    lutTex = new THREE.DataTexture(new Uint8Array([0,0,0,0]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    lutTex.needsUpdate = true;
+  }
+
   const mat = new THREE.ShaderMaterial({
     vertexShader:   GLASS_VS,
     fragmentShader: GLASS_FS,
@@ -207,11 +332,17 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera) {
       u_alpha:     { value: 5.0 },
       u_thresh:    { value: 0.15 },
       u_rimPow:    { value: 1.0 },
+      u_contrast:  { value: 1.0 },
       u_steps:     { value: 150 },
       u_invPV:     { value: new THREE.Matrix4() },
       u_invModel:  { value: invModel },
       u_camPos:    { value: new THREE.Vector3() },
       u_isColor:   { value: isColor ? 1 : 0 },
+      u_applyLUT:  { value: isLabelMode ? 1 : 0 },
+      u_lut:       { value: lutTex },
+      u_lutSize:   { value: lutSize },
+      u_dataMin:   { value: anat.mn || 0 },
+      u_dataRange: { value: (anat.mx - anat.mn) || 1 },
     },
     transparent: true,
     depthWrite:  false,

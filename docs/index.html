@@ -181,10 +181,20 @@ input[type=file]{display:none;}
 /* ── MIDDLE HUD ── */
 #middle-hud{position:absolute;inset:0;pointer-events:none;}
 #stats{position:absolute;top:16px;right:16px;text-align:right;line-height:2;color:var(--dim);}
-#coord-hud{position:absolute;bottom:10px;right:16px;text-align:right;line-height:1.8;color:var(--dim);}
-#coord-hud span{color:var(--text);}
-#middle-info{position:absolute;bottom:10px;left:16px;line-height:2;color:var(--dim);}
-#middle-info span{color:var(--text);}
+.label-badge{position:fixed;z-index:60;pointer-events:none;
+  background:var(--panel);border:1px solid var(--border);
+  font-family:'JetBrains Mono',monospace;
+  letter-spacing:0.08em;padding:4px 22px 4px 10px;border-radius:2px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.5);white-space:nowrap;max-width:280px;
+  transform:translate(-50%,-100%);display:none;text-align:center;}
+.label-badge-coord{color:var(--dim);font-size:9px;}
+.label-badge-name{color:var(--bright);font-size:10px;
+  overflow:hidden;text-overflow:ellipsis;}
+.label-badge-name:empty{display:none;}
+.label-badge-copy{position:absolute;top:0;bottom:0;right:0;width:20px;
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:auto;cursor:copy;color:var(--dim);font-size:11px;}
+.label-badge-copy:hover{color:var(--accent);}
 #mprogress{position:absolute;bottom:44px;left:50%;transform:translateX(-50%);
   color:var(--bright);letter-spacing:0.1em;text-align:center;line-height:1.6;
   pointer-events:none;white-space:nowrap;background:var(--panel);
@@ -201,13 +211,15 @@ input[type=file]{display:none;}
 </head>
 <body>
 <div id="tip"></div>
+<div class="label-badge" id="label-badge-src"><div class="label-badge-coord"></div><div class="label-badge-name"></div><span class="label-badge-copy" title="copy">⧉</span></div>
+<div class="label-badge" id="label-badge-tgt"><div class="label-badge-coord"></div><div class="label-badge-name"></div><span class="label-badge-copy" title="copy">⧉</span></div>
 
 <!-- LEFT: slice viewers A -->
 <div id="left">
   <div class="slice-row" id="row-sag-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-	    <span class="slice-label sag"><span class="plane-id">SAG</span>probe</span>
+	    <span class="slice-label sag"><span class="plane-id">SAG</span>source</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-sag-src" title="click to copy">—</span>
@@ -219,7 +231,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-cor-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label cor"><span class="plane-id">COR</span>probe</span>
+        <span class="slice-label cor"><span class="plane-id">COR</span>source</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-cor-src" title="click to copy">—</span>
@@ -231,7 +243,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-axi-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label axi"><span class="plane-id">AXI</span>probe</span>
+        <span class="slice-label axi"><span class="plane-id">AXI</span>source</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-axi-src" title="click to copy">—</span>
@@ -276,6 +288,16 @@ input[type=file]{display:none;}
       </div>
     </div>
     <div class="dz-row">
+      <div class="drop-zone" id="dz-lut" onclick="document.getElementById('fi-lut').click()">
+        <div class="tag">COLORMAP (LUT)</div>
+        <div class="name">FreeSurfer / ITK-SNAP .txt</div>
+        <input type="file" id="fi-lut" accept=".txt,.lut">
+      </div>
+      <div class="dz-right">
+        <p id="dz-lut-status">drop or click</p>
+      </div>
+    </div>
+    <div class="dz-row">
       <div class="drop-zone" id="dz-save">
         <div class="tag">SAVE SELECTION</div>
         <div class="name">.tck</div>
@@ -308,6 +330,20 @@ input[type=file]{display:none;}
   <!-- Settings overlay -->
   <div id="settings-overlay">
 
+    <div class="cfg-section" data-tip="Adjusts how the anatomy volume displays in the SAG/COR/AXI slice panels AND the glass brain in the 3D view.\nFor a scan: stretches contrast around mid-gray.\nFor a colour (DEC/FA) volume: brightens colours, which are dim by nature.">ANATOMY DISPLAY</div>
+    <div class="ctl-row" data-tip="Logarithmic gain, neutral (1.0x) in the middle.\nFor a scan: a gamma curve — raise to brighten, lower to darken — that always keeps true black and true white fixed, so background stays dark at any setting.\nFor a colour (DEC/FA) volume: brightens colours, which are dim by nature.\nApplies to both the 2D slices and the 3D glass brain.">
+      <label>INTENSITY</label>
+      <input type="range" id="contrast-slider" min="0" max="100" value="50" step="1">
+      <span class="ctl-val" id="contrast-val">1.00×</span>
+    </div>
+    <div class="ctl-row" data-tip="Colour a scalar (label) volume via the loaded LUT: each voxel's rounded integer value is looked up as a label index. Disabled until a colormap file is loaded — dropping one turns this on automatically.">
+      <label>COLORMAP</label>
+      <label class="ctl-toggle">
+        <input type="checkbox" id="apply-lut-toggle" disabled>
+        <div class="pill"></div>
+      </label>
+    </div>
+
     <div class="cfg-section" data-tip="Left-click or drag to move the probe.\nScroll to step through slices.\nCtrl+Scroll to zoom.\nRight-drag to pan.">STREAMLINE PROBE</div>
     <div class="ctl-row" data-tip="Probe radius in mm.\nStreamlines passing through the sphere (or 'ends-only') are selected.">
       <label>RADIUS</label>
@@ -332,23 +368,23 @@ input[type=file]{display:none;}
   </label>
   <label class="radio-opt"><input type="radio" name="lines-color" value="flat"><input type="color" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="SRC dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
-  <label>SRC·COLOR</label>
+<div class="ctl-row" data-tip="SOURCE dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
+  <label>SOURCE·COLOR</label>
   <label class="radio-opt"><input type="radio" name="src-color" value="hide"> None</label>
   <label class="radio-opt"><input type="radio" name="src-color" value="ras" checked>
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
   <label class="radio-opt"><input type="radio" name="src-color" value="flat"><input type="color" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="TGT dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
-  <label>TGT·COLOR</label>
+<div class="ctl-row" data-tip="TARGET dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
+  <label>TARGET·COLOR</label>
   <label class="radio-opt"><input type="radio" name="tgt-color" value="hide"> None</label>
   <label class="radio-opt"><input type="radio" name="tgt-color" value="ras">
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
   <label class="radio-opt"><input type="radio" name="tgt-color" value="flat" checked><input type="color" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="SRC and TGT dot size in screen pixels.">
+<div class="ctl-row" data-tip="SOURCE and TARGET dot size in screen pixels.">
   <label>ENDS·SIZE</label>
   <input type="range" id="ends-size" min="1" max="16" step="0.5" value="6">
   <span class="slider-val" id="ends-size-val">6</span>
@@ -361,21 +397,21 @@ input[type=file]{display:none;}
     </div>
 
 
-    <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.">VOLUME RENDERING</div>
-    <div class="ctl-row" data-tip="Opacity multiplier for the glass brain silhouette.\nNot a percentage — higher values accumulate more\nopacity along each ray. ~5 = subtle, ~15 = opaque.">
+    <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.\nAll three sliders default to their centre (raw=50) position — the mathematically 'neutral' reference value for each.">VOLUME RENDERING</div>
+    <div class="ctl-row" data-tip="Density-like multiplier for the glass brain silhouette (shown at right), 0 to ∞.\nMöbius-mapped: centre = 10 (where the glass brain becomes clearly visible), right end approaches infinity (fully opaque at first hit).">
       <label>OPACITY</label>
-      <input type="range" id="brain-alpha-slider" min="0" max="20" value="5" step="0.5">
-      <span class="ctl-val" id="brain-alpha-val">5.0</span>
+      <input type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
+      <span class="ctl-val" id="brain-alpha-val">10.00</span>
     </div>
-    <div class="ctl-row" data-tip="Minimum normalised intensity to contribute.\nRaise to suppress skull or CSF in full-head scans.">
+    <div class="ctl-row" data-tip="Minimum intensity (or FA, for a colour volume) to contribute — shown at right, 0 to 1.\nRaise to suppress skull/CSF/gray matter. Rational curve: centre = 0.1, the typical white-matter FA cutoff.">
       <label>THRESHOLD</label>
-      <input type="range" id="brain-thresh-slider" min="0" max="0.8" value="0.15" step="0.01">
-      <span class="ctl-val" id="brain-thresh-val">0.15</span>
+      <input type="range" id="brain-thresh-slider" min="0" max="100" value="50" step="1">
+      <span class="ctl-val" id="brain-thresh-val">0.10</span>
     </div>
-    <div class="ctl-row" data-tip="Rim sharpness. Higher = thinner silhouette edges,\nlower = broader, more filled glass brain.">
+    <div class="ctl-row" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
       <label>RIM</label>
-      <input type="range" id="brain-rim-slider" min="0.2" max="2" value="1" step="0.05">
-      <span class="ctl-val" id="brain-rim-val">1.0</span>
+      <input type="range" id="brain-rim-slider" min="0" max="100" value="50" step="1">
+      <span class="ctl-val" id="brain-rim-val">1.00</span>
     </div>
     <div class="ctl-row" data-tip="Toggle section plane rectangles in the 3D view.">
       <label>PLANES</label>
@@ -435,11 +471,6 @@ input[type=file]{display:none;}
       <div id="stat-total"></div>
       <div id="stat-sel"></div>
     </div>
-    <div id="coord-hud">
-      X <span id="hud-x">—</span> &nbsp;
-      Y <span id="hud-y">—</span> &nbsp;
-      Z <span id="hud-z">—</span> mm
-    </div>
   </div>
 </div><div class="sep" id="sep-right"></div>
 
@@ -448,7 +479,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-sag-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label sag"><span class="plane-id">SAG</span>output</span>
+        <span class="slice-label sag"><span class="plane-id">SAG</span>target</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-sag-tgt" title="click to copy">—</span>
@@ -460,7 +491,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-cor-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label cor"><span class="plane-id">COR</span>output</span>
+        <span class="slice-label cor"><span class="plane-id">COR</span>target</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-cor-tgt" title="click to copy">—</span>
@@ -472,7 +503,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-axi-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label axi"><span class="plane-id">AXI</span>output</span>
+        <span class="slice-label axi"><span class="plane-id">AXI</span>target</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-axi-tgt" title="click to copy">—</span>
@@ -493,6 +524,7 @@ input[type=file]{display:none;}
 <script type="module">
 import * as THREE from 'three';
 import { parseNifti, parseMif } from './js/volume-io.js';
+import { parseLUT } from './js/lut-io.js';
 import { parseTck, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
@@ -586,13 +618,21 @@ let pitch=0, yaw=0, roll=0;
 const vr = new VolRenderer();
 window._vr = vr;  // debug access
 
+// Logarithmic gain, neutral (1.0x) at the slider's middle position — ranges
+// 0.25x..4x. Used for the 2D slice CONTRAST control (see settings panel):
+// a straight gain for colour/DEC volumes (their values sit near 0, not a
+// midtone), or a contrast stretch around mid-gray for scalar scans.
+function contrastGainFromSlider(raw) { return Math.pow(4, (raw-50)/50); }
+let contrastGain = contrastGainFromSlider(50);
+vr.setContrast(contrastGain);
+
 function setCursorA(ras) {
   syncViewOOP(state.get('src.view'), ras);
-  updateSlicesA(); updateProbe(); updateCoordHud(); updatePlaneMeshes();
+  updateSlicesA(); updateProbe(); updatePlaneMeshes(); updateLabelHud('src');
 }
 function setCursorB(ras) {
   syncViewOOP(state.get('tgt.view'), ras);
-  updateSlicesB(); updatePlaneMeshes();
+  updateSlicesB(); updatePlaneMeshes(); updateLabelHud('tgt');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -706,6 +746,8 @@ function initSliceInteraction(planeKey, getCanvas, tag, redrawFn) {
       e.preventDefault();
       dragBtn = e.button;
       dragLast = {x: e.clientX, y: e.clientY};
+      lastActivePanel[tag] = planeKey;
+      positionLabelBadge(tag);
       if (e.button === 0) place(e);
     });
 
@@ -826,7 +868,6 @@ function updatePlaneMeshes() {
     if (planeMeshes[k]) { scene.remove(planeMeshes[k]); planeMeshes[k]=null; }
     if (planeVisible[k] && state.get('anat.file')) {
       const vc = state.get('tgt.view.'+k) || state.get('tgt.cursor');
-console.log(state.get('tgt.view.'+k)) 
       planeMeshes[k] = makePlaneMesh(k, vr, vc);
       if (planeMeshes[k]) scene.add(planeMeshes[k]);
     }
@@ -837,14 +878,55 @@ console.log(state.get('tgt.view.'+k))
 // ═══════════════════════════════════════════════════════════
 // 5b. GLASS BRAIN  — see js/scene3d.js
 // ═══════════════════════════════════════════════════════════
+// OPACITY/THRESHOLD/RIM sliders carry a raw 0-100 position; these curves
+// map that to the actual value sent to the shader. All three default to
+// raw=50 at their mathematically "neutral"/reference value.
+//
+// OPACITY (u_alpha) is a density-like quantity with no natural ceiling —
+// the shader's per-step alpha is clamped to 1, so past some point a
+// higher u_alpha just saturates sooner along the ray rather than doing
+// anything new. A Möbius transform maps the bounded slider directly onto
+// the true [0,∞) range with no ceiling to pick. Scaled by 10 so the
+// centre lands on 10 — empirically where the glass brain starts looking
+// properly solid — rather than the mathematically "neutral" 1.
+function opacityFromSlider(raw) {
+  const t = Math.min(raw/100, 0.995); // keep finite as raw->100
+  return 10 * t / (1 - t);
+}
+
+// THRESHOLD (u_thresh) is a genuinely bounded [0,1] quantity (FA/intensity
+// can't exceed 1), so instead of mapping to infinity it uses a rational
+// curve pulled hard toward the low/useful end: t=0.5 -> 0.1, the typical
+// white-matter FA cutoff, with fine control through the range that
+// actually matters for real tissue.
+function threshFromSlider(raw) {
+  const t = raw/100;
+  return t / (9 - 8*t);
+}
+
+// RIM (u_rimPow) is a Fresnel *exponent* — a ratio-like quantity (going
+// from 1 to 2 is "twice as selective" the same way 2 to 4 is), so it uses
+// the same Möbius transform as OPACITY. That happens to put the
+// mathematically standard linear Fresnel term (rimPow=1) exactly at the
+// slider's centre, and gives clean reciprocal symmetry: positions
+// equidistant from centre give reciprocal exponents (e.g. 0.5 and 2).
+function rimFromSlider(raw) {
+  const t = Math.min(raw/100, 0.995);
+  return Math.max(t / (1 - t), 0.02); // floor avoids the degenerate pow(x,0) case
+}
+
 let glassBrainMesh = null;
-let glassBrainAlpha  = 5.0;
-let glassBrainThresh = 0.15;
-let glassBrainRimPow = 1.0;
+let currentAnat = null;
+let glassBrainAlpha  = opacityFromSlider(50);
+let glassBrainThresh = threshFromSlider(50);
+let glassBrainRimPow = rimFromSlider(50);
 
 function buildGlassBrainLocal(anat) {
+  currentAnat = anat;
   if (glassBrainMesh) { scene.remove(glassBrainMesh); glassBrainMesh = null; }
-  glassBrainMesh = buildGlassBrain(anat, vr.texData, scene, renderer3, camera);
+  const toggle = document.getElementById('apply-lut-toggle');
+  const lutInfo = { map: lutMap, maxIndex: lutMaxIndex, apply: toggle?.checked ?? false };
+  glassBrainMesh = buildGlassBrain(anat, vr.texData, scene, renderer3, camera, lutInfo);
   updateGlassBrainUniforms();
 }
 
@@ -854,31 +936,8 @@ function updateGlassBrainUniforms() {
   u.u_alpha.value  = glassBrainAlpha;
   u.u_thresh.value = glassBrainThresh;
   u.u_rimPow.value = glassBrainRimPow;
+  u.u_contrast.value = contrastGain;
   renderer3.render(scene, camera);
-}
-
-// FA is an absolute, physically meaningful 0-1 scale (unlike windowed T1/T2
-// intensity, which is normalised per-scan), so a DEC/colour volume needs
-// different glass-brain defaults than a scalar anatomical scan — ~0.2 is
-// the classic white-matter FA cutoff, well above typical gray matter, and
-// a higher opacity compensates for DEC's inherently dimmer colours. Called
-// on every anatomy load so switching between scan types "just works"
-// without the person having to manually retune the sliders each time.
-function applyGlassBrainDefaults(isColor) {
-  const cfg = isColor
-    ? { alpha: 10.0, thresh: 0.20, rim: 1.0 }
-    : { alpha: 5.0,  thresh: 0.15, rim: 1.0 };
-  glassBrainAlpha  = cfg.alpha;
-  glassBrainThresh = cfg.thresh;
-  glassBrainRimPow = cfg.rim;
-  const set = (id, val, label) => {
-    document.getElementById(id).value = val;
-    if (label) document.getElementById(label[0]).textContent = label[1];
-  };
-  set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val',  glassBrainAlpha.toFixed(1)]);
-  set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val', glassBrainThresh.toFixed(2)]);
-  set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',    glassBrainRimPow.toFixed(1)]);
-  updateGlassBrainUniforms();
 }
 
 function updateProbe(){
@@ -1024,6 +1083,7 @@ function collectState() {
       radius, probeEndsOnly, slabMultiplier, endsPx,
       lineStyle, srcStyle, tgtStyle,
       glassBrainAlpha, glassBrainThresh, glassBrainRimPow,
+      contrastGain,
       pitch, yaw, roll,
       showSag: document.getElementById('tog-sag')?.checked ?? true,
       showCor: document.getElementById('tog-cor')?.checked ?? true,
@@ -1038,6 +1098,8 @@ function collectState() {
     files: {
       anatomy:    document.getElementById('dz-anat-status')?.textContent ?? '',
       tractogram: document.getElementById('dz-trck-status')?.textContent ?? '',
+      colormap:   document.getElementById('dz-lut-status')?.textContent ?? '',
+      applyColormap: document.getElementById('apply-lut-toggle')?.checked ?? false,
     }
   };
 }
@@ -1048,13 +1110,6 @@ function saveState() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'tractogram-observer-global.json'; a.click(); URL.revokeObjectURL(a.href);
 };
-
-function updateCoordHud(){
-  const [x,y,z]=state.get('src.cursor');
-  document.getElementById('hud-x').textContent=x.toFixed(1);
-  document.getElementById('hud-y').textContent=y.toFixed(1);
-  document.getElementById('hud-z').textContent=z.toFixed(1);
-}
 
 // ═══════════════════════════════════════════════════════════
 // 6.  LOAD HANDLERS
@@ -1087,7 +1142,17 @@ async function loadAnat(f){
 	  throw(`Unsupported format ${ext}`);
   }
   const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels } = anat;
-  
+  loadedAnatRaw = data;
+  loadedAnatShape = shape;
+
+  // A LUT chosen for a previous (likely label) volume shouldn't silently
+  // keep applying to whatever gets loaded next — reset it, but leave the
+  // LUT itself loaded so re-checking the box re-applies it instantly.
+  const lutToggle = document.getElementById('apply-lut-toggle');
+  if (lutToggle) lutToggle.checked = false;
+  vr.setApplyLUT(false);
+  updateLabelHud('src'); updateLabelHud('tgt');
+
   state.set( 'anat', { shape, vox_mm, Ab, invAb, decomp, mn, mx, channels } );
   const probeCenter = mat3mulVec(Ab, [shape[0]/2, shape[1]/2, shape[2]/2]);
   for (const k of ['sag','cor','axi']) {
@@ -1097,7 +1162,6 @@ async function loadAnat(f){
   setProgress('uploading 3D texture…'); await tick();
   vr.upload(anat);
   buildGlassBrainLocal(anat);
-  applyGlassBrainDefaults(channels === 3);
   // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
   const [ex,ey,ez] = vr._ras_extent;
   const volRadius = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
@@ -1106,10 +1170,84 @@ async function loadAnat(f){
   checkShowHud();
   resizeAll();
   state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter });
-  //updateSlicesA(); updateSlicesB(); updatePlaneMeshes(); updateCoordHud();
+  setProgress('');
+  //updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
 }
 
 let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeader=null,trckFileName='tractogram';
+let loadedAnatRaw=null, loadedAnatShape=null, lutMap=null, lutMaxIndex=0;
+
+async function loadLUT(f) {
+  const dzLutP = document.getElementById('dz-lut-status');
+  if (dzLutP) { dzLutP.textContent = 'loading…'; dzLutP.className = 'is-loading'; }
+  try {
+    const { map, maxIndex } = await parseLUT(f);
+    lutMap = map; lutMaxIndex = maxIndex;
+    vr.uploadLUT(map, maxIndex);
+    const toggle = document.getElementById('apply-lut-toggle');
+    toggle.disabled = false;
+    toggle.checked = true; // dropping a colormap auto-activates it
+    vr.setApplyLUT(true);
+    if (dzLutP) { dzLutP.textContent = '✓ '+map.size.toLocaleString()+' labels'; dzLutP.className = ''; }
+    updateSlicesA(); updateSlicesB(); updateLabelHud('src'); updateLabelHud('tgt');
+    if (currentAnat) buildGlassBrainLocal(currentAnat);
+  } catch(e) {
+    alert('LUT error: '+e);
+    console.error(e.stack || e);
+    if (dzLutP) { dzLutP.textContent = 'drop or click'; dzLutP.className = ''; }
+  }
+}
+
+// Shows the region name under the src cursor when a LUT colormap is
+// active on a scalar (label) volume. Reads the raw anatomy array
+// directly in JS rather than the GPU texture, since it just needs one
+// voxel's value, not a full render.
+// Floating region-name badges: one for the src (probe) cursor, one for the
+// tgt (output) cursor, each positioned at the bottom of whichever of that
+// side's three slice panels was last clicked — stays close to wherever the
+// person is actually looking/working, rather than a single fixed spot far
+// from either side.
+let lastActivePanel = { src: 'cor', tgt: 'cor' };
+
+function positionLabelBadge(tag) {
+  const el = document.getElementById('label-badge-'+tag);
+  if (!el) return;
+  const c = (tag === 'src' ? canvasA : canvasB)[lastActivePanel[tag]];
+  if (!c) return;
+  const r = c.getBoundingClientRect();
+  el.style.left = (r.left + r.width/2) + 'px';
+  el.style.top  = (r.bottom - 10) + 'px';
+}
+
+function updateLabelHud(tag) {
+  const el = document.getElementById('label-badge-'+tag);
+  if (!el) return;
+  if (!state.get('anat.file')) { el.style.display = 'none'; return; }
+
+  const cur = state.get(tag+'.cursor');
+  const coordEl = el.querySelector('.label-badge-coord');
+  const nameEl  = el.querySelector('.label-badge-name');
+  coordEl.textContent = `X ${cur[0].toFixed(1)}  Y ${cur[1].toFixed(1)}  Z ${cur[2].toFixed(1)} mm`;
+
+  let name = '';
+  const toggle = document.getElementById('apply-lut-toggle');
+  if (lutMap && toggle && toggle.checked && loadedAnatRaw && loadedAnatShape) {
+    const invAb = state.get('anat.invAb');
+    if (invAb) {
+      const vox = mat3mulVec(invAb, cur).map(Math.round);
+      const [nx,ny,nz] = loadedAnatShape;
+      if (vox[0]>=0 && vox[1]>=0 && vox[2]>=0 && vox[0]<nx && vox[1]<ny && vox[2]<nz) {
+        const flatIdx = vox[0] + vox[1]*nx + vox[2]*nx*ny;
+        const idx = Math.round(loadedAnatRaw[flatIdx]);
+        const entry = lutMap.get(idx);
+        name = entry ? entry.name : (idx===0 ? '' : 'label '+idx+' (unmapped)');
+      }
+    }
+  }
+  nameEl.textContent = name;
+  el.style.display = 'block';
+  positionLabelBadge(tag);
+}
 
 function splitExt(fname) {
   let base=fname,ext='';
@@ -1154,7 +1292,7 @@ async function loadTrck(f){
   document.getElementById('btn-trck-hdr').classList.remove('disabled');
   setProgress(''); checkShowHud(); controls.update();
   probeEndsOnly = document.getElementById('probe-ends-toggle').checked; // bit of a hack
-  updateProbe(); updateCoordHud();
+  updateProbe(); updateLabelHud('src'); updateLabelHud('tgt');
 }
 
 function checkShowHud(){
@@ -1198,6 +1336,7 @@ function resizeAll() {
   camera.updateProjectionMatrix();
   controls.handleResize();
   renderer3.render(scene,camera);
+  positionLabelBadge('src'); positionLabelBadge('tgt');
 }
 new ResizeObserver(resizeAll).observe(document.body);
 
@@ -1318,19 +1457,32 @@ document.getElementById('radius-slider').addEventListener('input',e=>{
   updateSlicesA();
 });
 document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
-  glassBrainAlpha=+e.target.value;
-  document.getElementById('brain-alpha-val').textContent=glassBrainAlpha.toFixed(1);
+  glassBrainAlpha=opacityFromSlider(+e.target.value);
+  document.getElementById('brain-alpha-val').textContent=glassBrainAlpha.toFixed(2);
   updateGlassBrainUniforms();
 });
 document.getElementById('brain-thresh-slider').addEventListener('input',e=>{
-  glassBrainThresh=+e.target.value;
+  glassBrainThresh=threshFromSlider(+e.target.value);
   document.getElementById('brain-thresh-val').textContent=glassBrainThresh.toFixed(2);
   updateGlassBrainUniforms();
 });
 document.getElementById('brain-rim-slider').addEventListener('input',e=>{
-  glassBrainRimPow=+e.target.value;
-  document.getElementById('brain-rim-val').textContent=glassBrainRimPow.toFixed(1);
+  glassBrainRimPow=rimFromSlider(+e.target.value);
+  document.getElementById('brain-rim-val').textContent=glassBrainRimPow.toFixed(2);
   updateGlassBrainUniforms();
+});
+document.getElementById('contrast-slider').addEventListener('input',e=>{
+  contrastGain=contrastGainFromSlider(+e.target.value);
+  document.getElementById('contrast-val').textContent=contrastGain.toFixed(2)+'×';
+  vr.setContrast(contrastGain);
+  updateSlicesA(); updateSlicesB();
+  updateGlassBrainUniforms();
+});
+document.getElementById('apply-lut-toggle').addEventListener('change',e=>{
+  vr.setApplyLUT(e.target.checked);
+  updateSlicesA(); updateSlicesB();
+  updateLabelHud('src'); updateLabelHud('tgt');
+  if (currentAnat) buildGlassBrainLocal(currentAnat);
 });
 
 function updateProbeGap() {
@@ -1385,12 +1537,14 @@ function setupDrop(dzId,inputId,handler){
 }
 setupDrop('dz-anat',  'fi-anat',  f => state.update({ 'anat.file': f }));
 setupDrop('dz-trck', 'fi-trck', f => state.update({ 'trck.file': f }));
+setupDrop('dz-lut',  'fi-lut',  f => loadLUT(f));
 
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{
   e.preventDefault();const f=e.dataTransfer.files[0];if(!f){console.log('File drop failed.');return}
   let [base,ext]=splitExt(f.name); ext = ext.toLowerCase();
   if(ext==='.tck' || ext=='.trk') state.update({ 'trck.file': f });
+  else if(ext==='.txt' || ext==='.lut') loadLUT(f);
   else state.update({ 'anat.file': f });
 });
 
@@ -1409,9 +1563,10 @@ document.body.addEventListener('drop',e=>{
   set('roll-slider',         0,                ['roll-val',        '0°']);
   set('radius-slider',       radius,           ['radius-val',      radius.toFixed(2)+' mm']);
   set('slab-slider',         slabMultiplier,   ['slab-val',        slabMultiplier.toFixed(1)+'×']);
-  set('brain-alpha-slider',  glassBrainAlpha,  ['brain-alpha-val', glassBrainAlpha.toFixed(1)]);
-  set('brain-thresh-slider', glassBrainThresh, ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
-  set('brain-rim-slider',    glassBrainRimPow, ['brain-rim-val',   glassBrainRimPow.toFixed(1)]);
+  set('brain-alpha-slider',  50,               ['brain-alpha-val', glassBrainAlpha.toFixed(2)]);
+  set('brain-thresh-slider', 50,               ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
+  set('brain-rim-slider',    50,               ['brain-rim-val',   glassBrainRimPow.toFixed(2)]);
+  set('contrast-slider',     50,               ['contrast-val',    contrastGain.toFixed(2)+'×']);
 })();
 
 // Wire canvases
@@ -1560,6 +1715,23 @@ resizeAll();
     el.addEventListener('click', () => {
       const txt = el.textContent.trim();
       if (txt && txt !== '—') navigator.clipboard?.writeText(txt);
+    });
+  });
+
+  // Label-badge copy: only the small icon is clickable (pointer-events:auto
+  // on just that element) — the rest of the badge stays click-through so
+  // it never blocks interacting with the slice underneath it.
+  document.querySelectorAll('.label-badge-copy').forEach(el => {
+    el.addEventListener('click', () => {
+      const badge = el.closest('.label-badge');
+      const coord = badge.querySelector('.label-badge-coord')?.textContent.trim() ?? '';
+      const name  = badge.querySelector('.label-badge-name')?.textContent.trim() ?? '';
+      const txt = name ? `${coord} — ${name}` : coord;
+      if (!txt) return;
+      navigator.clipboard?.writeText(txt);
+      const prev = el.textContent;
+      el.textContent = '✓';
+      setTimeout(() => { el.textContent = prev; }, 900);
     });
   });
 

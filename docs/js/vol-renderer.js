@@ -2,6 +2,7 @@
 // WebGL2 3D-texture volume renderer.
 
 import { eulerToMat3, absVec, mat3mulVec } from './affine.js';
+import { buildLutRGBA } from './lut-io.js';
 
 const VS = `#version 300 es
 in vec2 a_pos;
@@ -28,8 +29,26 @@ uniform vec2  u_res;
 uniform float u_probeRadius;
 uniform vec3 u_probeColor;
 uniform float u_isColor;
+uniform float u_contrast;
+uniform sampler2D u_lut;
+uniform float u_lutSize;
+uniform float u_applyLUT;
+uniform float u_dataMin;
+uniform float u_dataRange;
 in  vec2 v_uv;
 out vec4 fragColor;
+
+// Gamma curve: always maps 0->0 and 1->1 exactly (background can't drift),
+// and is monotonic for any exponent — unlike a two-sided S-curve, which
+// needs a sign flip to "reduce" contrast and turned out to mirror the same
+// darkening curve on both sides instead of flattening toward gray.
+// gamma<1 (contrast>1, right of centre) lifts/brightens; gamma>1
+// (contrast<1, left of centre) darkens. Center (contrast=1) is the
+// identity.
+float gammaContrast(float v, float gamma) {
+  return pow(clamp(v, 0.0, 1.0), gamma);
+}
+
 void main(){
   vec2 px = v_uv * u_res;
   vec2 cp = u_crosshair * u_res;
@@ -53,12 +72,41 @@ void main(){
   if (!inVol) {
     col = vec3(0.0);
   } else if (u_isColor > 0.5) {
-    // Colour / DEC volume: sample RGB directly, no intensity windowing.
-    col = clamp(texture(u_vol, tc).rgb, 0.0, 1.0);
+    // Colour / DEC volume. Texture stores sqrt-encoded values (see
+    // VolRenderer.upload) to spend the 8 bits/channel where DEC data
+    // actually lives (mostly under ~0.6) instead of wasting precision on
+    // the rarely-used bright end — square to get back to linear FA space,
+    // then apply the contrast slider as a straight gain (DEC values sit
+    // near 0, not around a midtone, so a gain is the useful "contrast"
+    // control here, not a pivot-based stretch).
+    vec3 enc = texture(u_vol, tc).rgb;
+    vec3 lin = enc * enc;
+    col = clamp(lin * u_contrast, 0.0, 1.0);
   } else {
-    float raw = texture(u_vol, tc).r;
-    float v   = clamp((raw - u_window.x)/u_window.y, 0.0, 1.0);
-    col = vec3(v);
+    float rawNorm = texture(u_vol, tc).r;
+    if (u_applyLUT > 0.5) {
+      // Label volume: reconstruct the original integer index from the
+      // normalized texture value (texture stores (raw-min)/range — see
+      // VolRenderer.upload), round it, and look it up in the LUT texture.
+      // No contrast/windowing applied — labels are categorical, not a
+      // continuous intensity.
+      float raw = rawNorm * u_dataRange + u_dataMin;
+      float idx = floor(raw + 0.5);
+      if (idx < 0.0 || idx >= u_lutSize) {
+        // Out of the LUT's range entirely (not just unmapped within it) —
+        // fall back to the same mid-gray convention as an unmapped index,
+        // rather than silently repeating whatever colour CLAMP_TO_EDGE
+        // happens to land on at the texture boundary.
+        col = vec3(0.5);
+      } else {
+        float uCoord = (idx + 0.5) / u_lutSize;
+        col = texture(u_lut, vec2(uCoord, 0.5)).rgb;
+      }
+    } else {
+      float v = clamp((rawNorm - u_window.x)/u_window.y, 0.0, 1.0);
+      v = gammaContrast(v, 1.0 / u_contrast);
+      col = vec3(v);
+    }
   }
 
   col = mix(col, u_chColorH, clamp(chH + capH, 0.0, 1.0) * 0.9);
@@ -90,6 +138,9 @@ export class VolRenderer {
     this._wmin = 0;
     this._wmax = 1;
     this._channels = 1;
+    this._lutTex = null;
+    this._lutSize = 0;
+    this._applyLUT = false;
     // Cached plane params per planeKey for click→RAS mapping
     // { cursor_ras, stepU_ras, stepV_ras, W, H }
     // stepU_ras = RAS mm displacement per pixel in U direction
@@ -121,8 +172,7 @@ export class VolRenderer {
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    this._applyVolFilter(); // LINEAR normally, NEAREST if a LUT is already active
 
     const ext = gl.getExtension('OES_texture_float_linear');
     let texData, fmt, srcFmt, srcType;
@@ -135,12 +185,18 @@ export class VolRenderer {
       // required WebGL2 format — always filterable, no extension needed.
       // Padded with alpha=255 for broad WebGL2/driver texture support
       // (3-component formats aren't reliably native on all GPUs).
+      // Encoded as sqrt(value) rather than value directly: DEC/FA data
+      // typically only occupies the bottom ~60% of [0,1], so a linear
+      // 8-bit encoding wastes most of its levels on values that never
+      // occur. Gamma-encoding concentrates precision at the low end,
+      // reducing banding once the contrast slider stretches it back out.
+      // Shaders undo this (square) immediately after sampling.
       texData = new Uint8Array(n*4);
       for (let i=0;i<n;i++){
         const r=anat.data[i*3+0], g=anat.data[i*3+1], b=anat.data[i*3+2];
-        texData[i*4+0] = Math.round(Math.min(Math.max(isFinite(r)?r:0,0),1)*255);
-        texData[i*4+1] = Math.round(Math.min(Math.max(isFinite(g)?g:0,0),1)*255);
-        texData[i*4+2] = Math.round(Math.min(Math.max(isFinite(b)?b:0,0),1)*255);
+        texData[i*4+0] = Math.round(Math.sqrt(Math.min(Math.max(isFinite(r)?r:0,0),1))*255);
+        texData[i*4+1] = Math.round(Math.sqrt(Math.min(Math.max(isFinite(g)?g:0,0),1))*255);
+        texData[i*4+2] = Math.round(Math.sqrt(Math.min(Math.max(isFinite(b)?b:0,0),1))*255);
         texData[i*4+3] = 255;
       }
       fmt = gl.RGBA8;
@@ -180,6 +236,46 @@ export class VolRenderer {
   setProbeRadius(px){ this._probeRadiusPx = px; }
 
   setWindow(wmin, wmax) { this._wmin=wmin; this._wmax=wmax; }
+
+  setContrast(gain) { this._contrast = gain; }
+
+  // Uploads a label lookup table as a small 1D-style (height=1) NEAREST-
+  // filtered texture, indexed directly by rounded label value — no
+  // interpolation, since blending between two label colours at a boundary
+  // would be meaningless. Unmapped indices default to black (0) or
+  // mid-gray (anything else), per lutMap; lutMaxIndex sizes the texture.
+  uploadLUT(lutMap, lutMaxIndex) {
+    const gl = this.gl;
+    const { data, size } = buildLutRGBA(lutMap, lutMaxIndex);
+    if (this._lutTex) gl.deleteTexture(this._lutTex);
+    this._lutTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this._lutTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this._lutSize = size;
+    console.log('LUT texture', size, 'entries (~'+(size*4/1024).toFixed(0)+' KB)');
+  }
+
+  setApplyLUT(on) { this._applyLUT = !!on; this._applyVolFilter(); }
+  hasLUT() { return !!this._lutTex; }
+
+  // Label volumes must be sampled with NEAREST, not LINEAR — interpolating
+  // between two categorically different label indices produces spurious
+  // in-between values with no real meaning, which show up as wrong-coloured
+  // noise right at every region boundary once looked up in the LUT.
+  // Continuous data (grayscale/DEC) keeps LINEAR as normal.
+  _applyVolFilter() {
+    if (!this._texture) return;
+    const gl = this.gl;
+    const filter = (this._applyLUT && this._channels !== 3) ? gl.NEAREST : gl.LINEAR;
+    gl.bindTexture(gl.TEXTURE_3D, this._texture);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filter);
+  }
  
   // ── renderSlice ────────────────────────────────────────
   // Renders an oblique slice centred on cursor (RAS mm).
@@ -267,6 +363,19 @@ export class VolRenderer {
       probeRadius !== null ? probeRadius : (this._probeRadiusPx||0));
     gl.uniform3fv(gl.getUniformLocation(this._prog, 'u_probeColor'), probeColor);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_isColor'), this._channels===3 ? 1 : 0);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_contrast'), this._contrast ?? 1.0);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_applyLUT'), (this._applyLUT && this._lutTex) ? 1 : 0);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_lutSize'), this._lutSize || 1);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_dataMin'), this._anat ? this._anat.mn : 0);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_dataRange'), this._anat ? ((this._anat.mx - this._anat.mn) || 1) : 1);
+    // u_lut must always be assigned a texture unit, even with no LUT
+    // loaded yet — left at its default (unit 0), it collides with u_vol's
+    // sampler3D on that same unit, which WebGL2 forbids (two different
+    // sampler types on one unit) and silently invalidates the whole draw
+    // call, leaving the canvas at its just-cleared black.
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this._lutTex); // binding null is valid — unsampled while u_applyLUT is 0
+    gl.uniform1i(gl.getUniformLocation(this._prog,'u_lut'), 1);
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorH'),chColorH);
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorV'),chColorV);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_wH'), wH);

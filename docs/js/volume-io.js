@@ -159,7 +159,14 @@ export async function parseNifti(file) {
     for (let v=0; v<3; v++) {
       const vol = readVolumeFloat32(buf, start + v*n*bytesPerElement, n, datatype, bytesPerElement);
       for (let i=0;i<n;i++) {
-        const val = intMax ? vol[i]/intMax : vol[i];
+        // abs(): eigenvector components are signed with an arbitrary sign
+        // (the eigen-decomposition doesn't fix a direction along the
+        // fiber), which can flip between neighboring voxels — notably
+        // across mirror-symmetric structures like the interhemispheric
+        // midline. The standard DEC convention colours by |eigenvector|;
+        // clamping negatives to 0 instead would silently drop a channel
+        // wherever the sign happens to land negative.
+        const val = Math.abs(intMax ? vol[i]/intMax : vol[i]);
         data[i*3+v] = val;
         if (val<mn) mn=val;
         if (val>mx) mx=val;
@@ -327,6 +334,9 @@ export async function parseMif(file, volIndex = 0) {
           for (let v = 0; v < 3; v++) {
             let val = view[dvMethod](start + (x*sx + y*sy + z*sz + v*sv) * bytes, le);
             if (intMax) val = val / intMax;
+            // abs(): see the matching comment in parseNifti — eigenvector
+            // sign is arbitrary and shouldn't be clamped to 0.
+            val = Math.abs(val);
             data[outIdx*3 + v] = val;
             if (val < mn) mn = val;
             if (val > mx) mx = val;
