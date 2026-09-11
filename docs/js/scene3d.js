@@ -91,6 +91,8 @@ uniform sampler2D u_lut;
 uniform float u_lutSize;
 uniform float u_dataMin;
 uniform float u_dataRange;
+uniform mat4  u_model;
+uniform mat4  u_projView;
 varying vec2 vNDC;
 
 vec2 boxHit(vec3 ro, vec3 rd) {
@@ -106,7 +108,10 @@ vec3 sampleRaw(vec3 p) {
   // the 8 bits/channel where DEC data actually lives — square to undo it.
   // Scalar (grayscale/label) textures store the linear normalized value
   // directly and were never sqrt-encoded, so leave those untouched.
-  vec3 enc = texture(u_vol, p / u_size).rgb;
+  // Scalar textures are RedFormat (single channel) — replicate .r into
+  // all three components. Colour textures are RGBA8 — read all three.
+  vec4 texel = texture(u_vol, p / u_size);
+  vec3 enc = u_isColor > 0.5 ? texel.rgb : vec3(texel.r);
   return u_isColor > 0.5 ? enc * enc : enc;
 }
 // Scalar "intensity" used for thresholding/gradient/rim shading: the raw
@@ -144,17 +149,15 @@ float labelBorder(vec3 p) {
   return d;
 }
 // A directional analogue of gradient() for the binary border field, used
-// only for Fresnel-style rim lighting direction. A naive 6-face-neighbour
-// version can only ever point along one of 27 fixed directions (axis-
-// aligned or diagonal), which looks faceted/blocky at high opacity since
-// label borders are hard 1-voxel shells with no natural smooth gradient.
-// This uses a full 3D Sobel kernel over the 26-voxel neighbourhood
-// instead — each neighbour that differs from the centre label casts a
-// weighted vote (weight 4 face-adjacent, 2 edge-adjacent, 1 corner,
-// standard Sobel weighting), giving a continuous-valued direction rather
-// than a coarse discrete one. Costs 26 extra samples, but only for
-// voxels that already passed the border test above (a minority of steps
-// along any ray), so the performance impact stays contained.
+// only for Fresnel-style rim lighting direction in glass mode. This stays
+// blocky by nature — a label volume has no sub-voxel information for any
+// neighbourhood-based estimate to recover, widening the sampling radius
+// just re-classifies which discrete pattern gets detected, it doesn't
+// make the result continuous. That's fine: glass mode is the translucent
+// boundary view, not meant to look like a smooth surface — the "make it
+// smooth" case is handled by the solid isosurface path at high opacity
+// instead (see occupancyAndGradient() below), which has genuine sub-voxel
+// information via trilinear interpolation to work with.
 vec3 labelNormal(vec3 p) {
   float c = sampleLabelIndex(p);
   vec3 g = vec3(0.0);
@@ -170,14 +173,59 @@ vec3 labelNormal(vec3 p) {
       }
     }
   }
-  return g;
+  // Same anisotropy correction as gradient()/smoothedOccupancyNormal() -
+  // this kernel's unit offsets (-1,0,1) aren't the same physical distance
+  // per axis for anisotropic data either.
+  return g / u_voxMm;
 }
 // LUT colour for a label index, with the same out-of-range fallback as
 // the 2D slice shader: mid-gray rather than silently repeating whatever
-// colour CLAMP_TO_EDGE lands on at the texture boundary.
+// colour CLAMP_TO_EDGE lands on at the texture boundary. Applies the same
+// gamma-curve INTENSITY control used for scalar data (see gammaContrast)
+// so the slider has an effect in LUT mode too - always keeps true black
+// fixed, brightening/darkening region colours toward or away from white
+// rather than a flat multiply that could clip saturated colours.
 vec3 lutColor(float idx) {
-  if (idx < 0.0 || idx >= u_lutSize) return vec3(0.5);
-  return texture(u_lut, vec2((idx + 0.5) / u_lutSize, 0.5)).rgb;
+  vec3 c = (idx < 0.0 || idx >= u_lutSize) ? vec3(0.5)
+         : texture(u_lut, vec2((idx + 0.5) / u_lutSize, 0.5)).rgb;
+  return pow(clamp(c, 0.0, 1.0), vec3(1.0 / u_contrast));
+}
+// Manual trilinear blend of LUT colour across the 8 voxels surrounding a
+// continuous position - mathematically the same result hardware LINEAR
+// filtering would give on a pre-baked colour texture, computed here
+// instead so the label texture itself can stay NEAREST (required: raw
+// label indices are arbitrary categorical numbers, so blending two of
+// them before lookup - e.g. averaging region 12 and region 340 into
+// "176" - would pick a meaningless third region's colour, not blend two
+// real ones). This also fixes the black-speck artifact from a single
+// discrete pick: on thin or grazing-angle structures a single nudged
+// sample can still land on a background voxel (pure black); interpolating
+// dilutes that by its neighbours instead, same as any other boundary
+// voxel would be.
+vec3 interpolatedLutColor(vec3 p) {
+  // Same -0.5 realignment as occupancyAndGradient: sampleLabelIndex(i)
+  // reads voxel i's value via NEAREST, representative of its true center
+  // at i+0.5, not at i - shifting first keeps colour transitions centred
+  // on the true voxel boundary instead of skewed toward one side of it.
+  vec3 ps = p - vec3(0.5);
+  vec3 p0 = floor(ps);
+  vec3 f  = ps - p0;
+  vec3 e  = vec3(1e-3); // same tie-avoidance nudge as occupancyAt
+  vec3 c000 = lutColor(sampleLabelIndex(p0 + vec3(0.0,0.0,0.0) + e));
+  vec3 c100 = lutColor(sampleLabelIndex(p0 + vec3(1.0,0.0,0.0) + e));
+  vec3 c010 = lutColor(sampleLabelIndex(p0 + vec3(0.0,1.0,0.0) + e));
+  vec3 c110 = lutColor(sampleLabelIndex(p0 + vec3(1.0,1.0,0.0) + e));
+  vec3 c001 = lutColor(sampleLabelIndex(p0 + vec3(0.0,0.0,1.0) + e));
+  vec3 c101 = lutColor(sampleLabelIndex(p0 + vec3(1.0,0.0,1.0) + e));
+  vec3 c011 = lutColor(sampleLabelIndex(p0 + vec3(0.0,1.0,1.0) + e));
+  vec3 c111 = lutColor(sampleLabelIndex(p0 + vec3(1.0,1.0,1.0) + e));
+  vec3 c00 = mix(c000, c100, f.x);
+  vec3 c10 = mix(c010, c110, f.x);
+  vec3 c01 = mix(c001, c101, f.x);
+  vec3 c11 = mix(c011, c111, f.x);
+  vec3 c0  = mix(c00, c10, f.y);
+  vec3 c1  = mix(c01, c11, f.y);
+  return mix(c0, c1, f.z);
 }
 // Gamma curve (matches vol-renderer.js's slice shader): always maps 0->0
 // and 1->1 exactly, and is monotonic for any exponent — the earlier
@@ -188,12 +236,134 @@ float gammaContrast(float v, float gamma) {
 }
 vec3 gradient(vec3 p) {
   vec3 e = vec3(1.0, 0.0, 0.0);
-  return vec3(
+  vec3 g = vec3(
     sampleVol(p+e.xyz) - sampleVol(p-e.xyz),
     sampleVol(p+e.zxy) - sampleVol(p-e.zxy),
     sampleVol(p+e.yzx) - sampleVol(p-e.yzx)
   );
+  // "1 voxel" is 0.9mm in X/Y but 3.3mm in Z for anisotropic data - divide
+  // by physical voxel size so the gradient direction reflects true
+  // physical space rather than being stretched toward whichever axis has
+  // the larger voxel.
+  return g / u_voxMm;
 }
+
+// ─── Solid isosurface mode (high opacity, any volume type) ────────────
+// Glass mode (above) is inherently blocky/translucent — appropriate for
+// peering through or showing many internal boundaries at once, not for
+// looking like a solid object. At high opacity the person expects an
+// actual smooth surface instead, using the SAME threshold as glass mode's
+// Fresnel rendering as the cutoff for continuous data, so the two stay
+// consistent as opacity slides between them.
+//
+// Uses sampleVol() as the field — the same "intensity" glass mode already
+// uses (raw scalar value for a normal scan, FA magnitude for DEC) — so
+// solid and glass mode agree on what the surface means for those types.
+//
+// Label+LUT data is different: it's binarized to 0/1 (occupied vs
+// background) rather than using the raw label value directly. Labels are
+// arbitrary categorical numbers, and with occupancyAndGradient's blend
+// correctly aligned to reach exactly 50% at the true zone boundary
+// (see its own comment), that 50% point corresponds to a different
+// absolute value for every different label if the raw number is used —
+// there's no single fixed threshold that finds the true boundary for all
+// of them simultaneously. Binarizing first fixes that: the blend then
+// always ramps 0 to 1 regardless of which label is present, so a fixed
+// threshold of 0.5 finds the true boundary universally (see isoThresh
+// below, where label mode ignores u_thresh entirely for this reason).
+float occupancyAt(vec3 voxCoord) {
+  // voxCoord arrives as an exact integer (p0+{0,1} from the caller below),
+  // which normalizes to precisely a texel BOUNDARY. Under NEAREST
+  // filtering (label+LUT mode) that's a genuine tie between two texels,
+  // resolved inconsistently depending on which way floating-point
+  // rounding nudges the query point - aliasing the whole occupancy field,
+  // not just internal colour boundaries. A tiny epsilon nudge resolves
+  // the tie unambiguously (texel zones are a full voxel wide, so this is
+  // nowhere near the next boundary) while staying negligible for LINEAR
+  // filtering's own blend, so both modes can share this one code path.
+  float v = sampleVol(voxCoord + vec3(1e-3));
+  bool nearestFiltered = (u_applyLUT > 0.5) && (u_isColor < 0.5);
+  return nearestFiltered ? (v > 0.0 ? 1.0 : 0.0) : v;
+}
+// Trilinear interpolation of the raw value field from its 8 surrounding
+// voxel corners, plus its analytic gradient reusing the same 8 samples —
+// a genuinely continuous function of position, unlike any discrete
+// neighbour-difference scheme, since it's a true blend rather than a
+// re-classification of nearest-voxel lookups. Returns (gradient, value)
+// as (xyz, w).
+vec4 occupancyAndGradient(vec3 p) {
+  // occupancyAt(i) reads voxel i's value via NEAREST, representative of
+  // that voxel's TRUE center at i+0.5 (not at i) - so shift p by -0.5
+  // before flooring, making corner p0 correctly represent position
+  // p0+0.5 in the blend below. Without this the blend ramps its full 0-1
+  // range across p0 to p0+1, reaching its far value already AT p0+1 (the
+  // true zone boundary) rather than being at the 50% midpoint there -
+  // meaning any small/fixed threshold finds its crossing far too early,
+  // well inside what should still read as background.
+  vec3 ps = p - vec3(0.5);
+  vec3 p0 = floor(ps);
+  vec3 f  = ps - p0;
+  float c000 = occupancyAt(p0 + vec3(0.0,0.0,0.0));
+  float c100 = occupancyAt(p0 + vec3(1.0,0.0,0.0));
+  float c010 = occupancyAt(p0 + vec3(0.0,1.0,0.0));
+  float c110 = occupancyAt(p0 + vec3(1.0,1.0,0.0));
+  float c001 = occupancyAt(p0 + vec3(0.0,0.0,1.0));
+  float c101 = occupancyAt(p0 + vec3(1.0,0.0,1.0));
+  float c011 = occupancyAt(p0 + vec3(0.0,1.0,1.0));
+  float c111 = occupancyAt(p0 + vec3(1.0,1.0,1.0));
+
+  float c00 = mix(c000, c100, f.x);
+  float c10 = mix(c010, c110, f.x);
+  float c01 = mix(c001, c101, f.x);
+  float c11 = mix(c011, c111, f.x);
+  float c0  = mix(c00, c10, f.y);
+  float c1  = mix(c01, c11, f.y);
+  float val = mix(c0, c1, f.z);
+
+  float dx = mix(mix(c100-c000, c110-c010, f.y), mix(c101-c001, c111-c011, f.y), f.z);
+  float dy = mix(mix(c010-c000, c110-c100, f.x), mix(c011-c001, c111-c101, f.x), f.z);
+  float dz = mix(mix(c001-c000, c101-c100, f.x), mix(c011-c010, c111-c110, f.x), f.y);
+
+  return vec4(dx, dy, dz, val);
+}
+// Marches the ray looking for the first point where the raw value field
+// reaches ISO_THRESH, then bisection-refines a few steps for a cleaner
+// surface than the raw step size alone would give.
+bool findIsosurface(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize, float thresh,
+                     out vec3 hitP) {
+  vec3 prevP = ro + tStart * rd;
+  for (int i = 1; i < 256; i++) {
+    if (i >= u_steps) break;
+    float t = tStart + float(i) * stepSize;
+    if (t > tEnd) break;
+    vec3 p = ro + t * rd;
+    float occ = occupancyAndGradient(p).w;
+    if (occ >= thresh) {
+      vec3 a = prevP, b = p;
+      for (int k = 0; k < 6; k++) {
+        vec3 mid = (a + b) * 0.5;
+        float om = occupancyAndGradient(mid).w;
+        if (om < thresh) a = mid; else b = mid;
+      }
+      hitP = (a + b) * 0.5;
+      return true;
+    }
+    prevP = p;
+  }
+  return false;
+}
+vec3 smoothedOccupancyNormal(vec3 p) {
+  float r = 1.0;
+  vec3 g = vec3(
+    occupancyAndGradient(p+vec3(r,0.0,0.0)).w - occupancyAndGradient(p-vec3(r,0.0,0.0)).w,
+    occupancyAndGradient(p+vec3(0.0,r,0.0)).w - occupancyAndGradient(p-vec3(0.0,r,0.0)).w,
+    occupancyAndGradient(p+vec3(0.0,0.0,r)).w - occupancyAndGradient(p-vec3(0.0,0.0,r)).w
+  );
+  // Same anisotropy correction as gradient() above - "1 voxel" is not the
+  // same physical distance in every axis for anisotropic data.
+  return g / u_voxMm;
+}
+
 void main() {
   vec4 near_w = u_invPV * vec4(vNDC, -1.0, 1.0);
   vec4 far_w  = u_invPV * vec4(vNDC,  1.0, 1.0);
@@ -210,61 +380,146 @@ void main() {
   float accAlpha = 0.0;
   vec3  accColor = vec3(0.0);
   bool labelMode = (u_applyLUT > 0.5) && (u_isColor < 0.5);
-  for (int i = 0; i < 256; i++) {
-    if (i >= u_steps) break;
-    float t = tStart + (float(i) + 0.5) * stepSize;
-    vec3 p = ro + t * rd;
-    float intensity;
-    vec3 grad;
-    vec3 col;
-    if (labelMode) {
-      intensity = labelBorder(p);
-      if (intensity < 0.5) continue; // interior voxel, not a region boundary
-      grad = labelNormal(p);
-      col = lutColor(sampleLabelIndex(p));
-    } else {
-      intensity = sampleVol(p);
-      if (intensity < u_thresh) continue;
-      grad = gradient(p);
+  // How much of the final image comes from the solid isosurface vs the
+  // translucent glass rendering, driven by the same OPACITY control:
+  // alpha=100 -> 50%, alpha=300 (max) -> 100%. Applies to every volume
+  // type — plain scans, DEC/colour, and labelled volumes alike — since
+  // occupancyAt() below is built on the same sampleVol() field glass mode
+  // already uses for each of them.
+  float solidBlend = smoothstep(0.0, 200.0, u_alpha);
+
+  if (solidBlend < 1.0) {
+    for (int i = 0; i < 256; i++) {
+      if (i >= u_steps) break;
+      float t = tStart + (float(i) + 0.5) * stepSize;
+      vec3 p = ro + t * rd;
+      float intensity;
+      vec3 grad;
+      vec3 col;
+      if (labelMode) {
+        intensity = labelBorder(p);
+        if (intensity < 0.5) continue; // interior voxel, not a region boundary
+        grad = labelNormal(p);
+        col = lutColor(sampleLabelIndex(p));
+      } else {
+        intensity = sampleVol(p);
+        if (intensity < u_thresh) continue;
+        grad = gradient(p);
+      }
+      float gLen = length(grad);
+      if (gLen < 0.0001) continue;
+      float rim = 1.0 - abs(dot(grad / gLen, rd));
+      rim = pow(rim, u_rimPow);
+      float normStep = mmPerStep / u_volDiagMm;
+      // For DEC/colour volumes, suppress the low-FA "gray matter halo": a
+      // single threshold can't distinguish faint-but-real white matter from
+      // faint gray-matter noise, since both clear the same cutoff, and gray
+      // matter forms a thick shell — many weak per-voxel contributions along
+      // that whole path still add up to visible haze even when each is small.
+      // Ramp alpha over a narrow, steep band above threshold so only voxels
+      // well past it (white matter tracts) contribute meaningfully.
+      float faWeight = 1.0;
+      if (u_isColor > 0.5) {
+        faWeight = pow(smoothstep(u_thresh, u_thresh + 0.12, intensity), 2.5);
+      }
+      if (!labelMode) {
+        // Contrast slider (shared with the 2D slice panels): a straight gain
+        // on top of DEC's baseline boost for colour volumes (their values sit
+        // near 0, not a midtone), or a stretch around mid-gray for scalar
+        // shading. Only affects the displayed colour — NOT intensity, which
+        // stays untouched for the threshold/gradient/alpha logic above.
+        float scalarDisp = gammaContrast(intensity, 1.0 / u_contrast);
+        col = (u_isColor > 0.5)
+          // DEC colours are inherently dim (each channel is FA*|eigenvector|,
+          // rarely above ~0.7) — boost and gamma-lift rather than applying the
+          // grayscale intensity-based darkening below, which would compound.
+          ? pow(clamp(sampleRaw(p) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8))
+          : mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), scalarDisp);
+      }
+      float a   = clamp(rim * u_alpha * normStep * faWeight, 0.0, 1.0);
+      accColor += (1.0 - accAlpha) * a * col;
+      accAlpha += (1.0 - accAlpha) * a;
+      if (accAlpha > 0.95) break;
     }
-    float gLen = length(grad);
-    if (gLen < 0.0001) continue;
-    float rim = 1.0 - abs(dot(grad / gLen, rd));
-    rim = pow(rim, u_rimPow);
-    float normStep = mmPerStep / u_volDiagMm;
-    // For DEC/colour volumes, suppress the low-FA "gray matter halo": a
-    // single threshold can't distinguish faint-but-real white matter from
-    // faint gray-matter noise, since both clear the same cutoff, and gray
-    // matter forms a thick shell — many weak per-voxel contributions along
-    // that whole path still add up to visible haze even when each is small.
-    // Ramp alpha over a narrow, steep band above threshold so only voxels
-    // well past it (white matter tracts) contribute meaningfully.
-    float faWeight = 1.0;
-    if (u_isColor > 0.5) {
-      faWeight = pow(smoothstep(u_thresh, u_thresh + 0.12, intensity), 2.5);
-    }
-    if (!labelMode) {
-      // Contrast slider (shared with the 2D slice panels): a straight gain
-      // on top of DEC's baseline boost for colour volumes (their values sit
-      // near 0, not a midtone), or a stretch around mid-gray for scalar
-      // shading. Only affects the displayed colour — NOT intensity, which
-      // stays untouched for the threshold/gradient/alpha logic above.
-      float scalarDisp = gammaContrast(intensity, 1.0 / u_contrast);
-      col = (u_isColor > 0.5)
-        // DEC colours are inherently dim (each channel is FA*|eigenvector|,
-        // rarely above ~0.7) — boost and gamma-lift rather than applying the
-        // grayscale intensity-based darkening below, which would compound.
-        ? pow(clamp(sampleRaw(p) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8))
-        : mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), scalarDisp);
-    }
-    float a   = clamp(rim * u_alpha * normStep * faWeight, 0.0, 1.0);
-    accColor += (1.0 - accAlpha) * a * col;
-    accAlpha += (1.0 - accAlpha) * a;
-    if (accAlpha > 0.95) break;
   }
-  if (accAlpha < 0.002) discard;
-  gl_FragColor = vec4(accColor, accAlpha);
+
+  vec3  solidColor = vec3(0.0);
+  float solidAlpha = 0.0;
+  // Depth written for this fragment. Defaults to the nearest possible
+  // value (0.0) — with depthTest now enabled, that guarantees this
+  // fragment always wins against whatever's already drawn (matching the
+  // old depthTest:false "always on top" behaviour) for the translucent,
+  // glass-dominant case, where blending many samples along the ray into
+  // one pixel means there's no single correct depth to give anyway.
+  // Once solid mode dominates (opacity pushed high enough that this is a
+  // genuinely opaque surface, not a blend), this gets overwritten with
+  // the real projected depth of the hit point below, so the solid brain
+  // correctly occludes — or is occluded by — other scene objects like
+  // the section planes, instead of always painting over them regardless
+  // of true 3D position.
+  float fragDepth = 0.0;
+  if (solidBlend > 0.0) {
+    vec3 hitP;
+    // u_thresh is a meaningful intensity cutoff for continuous FA/scan
+    // data, but labels are arbitrary categorical numbers - a magnitude
+    // threshold would find the isosurface crossing at a different,
+    // mostly-background-weighted blend fraction depending on which
+    // label's value happens to be present, displacing the surface itself
+    // toward the background side (not just its colour - see
+    // interpolatedLutColor's inward nudge above, which only patches the
+    // colour symptom of this same root cause). occupancyAt binarizes to
+    // 0/1 for label mode specifically so this doesn't depend on any
+    // particular label's value - 0.5 always finds the true boundary.
+    float isoThresh = labelMode ? 0.5 : u_thresh;
+    if (findIsosurface(ro, rd, tStart, tEnd, stepSize, isoThresh, hitP)) {
+      vec3 N = normalize(smoothedOccupancyNormal(hitP));
+      // Resample slightly inside the surface (N points from background
+      // toward tissue) rather than exactly at the ambiguous crossing, for
+      // a cleaner normal - and, for colour sampling below (both label+LUT
+      // and DEC), so it doesn't land back on background.
+      vec3 inwardP = hitP + N * 0.5;
+      N = normalize(smoothedOccupancyNormal(inwardP));
+      float shade = max(dot(N, rd), 0.0);
+
+      vec3 baseColor;
+      if (labelMode) {
+        // Sample at inwardP, not hitP: hitP sits wherever the blended
+        // occupancy exactly equals u_thresh, which for label data (raw
+        // integer values, not a normalized [0,1] range) can be barely
+        // inside the region in blend-weight terms whenever threshold is
+        // small relative to the label's own value - e.g. threshold=5
+        // against label=30 only needs ~17% real-label weight to cross,
+        // so a colour sample taken exactly there is dominated by
+        // background and comes out dark. inwardP moves the sample
+        // solidly into real tissue instead.
+        baseColor = interpolatedLutColor(inwardP);
+      } else if (u_isColor > 0.5) {
+        // DEC/colour volume: the actual FA-weighted direction colour,
+        // same boost as glass mode, at the same inward-nudged point.
+        baseColor = pow(clamp(sampleRaw(inwardP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8));
+      } else {
+        // Plain scan: shading alone defines the surface — this is the
+        // combination already confirmed to look good, left untouched.
+        baseColor = vec3(1.0);
+      }
+      solidColor = baseColor * shade;
+      solidAlpha = 1.0;
+
+      if (solidBlend > 0.5) {
+        vec3 worldPos = (u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz;
+        vec4 clipPos = u_projView * vec4(worldPos, 1.0);
+        fragDepth = clipPos.z / clipPos.w * 0.5 + 0.5;
+      }
+    }
+  }
+
+  vec3  finalColor = mix(accColor, solidColor, solidBlend);
+  float finalAlpha = mix(accAlpha, solidAlpha, solidBlend);
+  if (finalAlpha < 0.002) discard;
+  gl_FragDepth = clamp(fragDepth, 0.0, 1.0);
+  gl_FragColor = vec4(finalColor, finalAlpha);
 }`;
+
 
 export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo) {
   const isColor = (anat.channels || 1) === 3;
@@ -286,7 +541,17 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
   tex.needsUpdate    = true;
 
   const Ab  = anat.Ab;
-  const hx = anat.shape[0] / 2, hy = anat.shape[1] / 2, hz = anat.shape[2] / 2;
+  // hx,hy,hz bridges two different index conventions: the raymarcher's own
+  // local coordinate space (below, and throughout occupancyAt/sampleVol)
+  // treats voxel index i as texel i's LOWER BOUNDARY - its center sits at
+  // i+0.5, the standard texture-sampling convention - while Ab (the NIfTI
+  // affine) treats index i as ALREADY being that voxel's center, no offset
+  // needed. So the true center-of-volume in Ab's terms is (shape-1)/2, not
+  // shape/2 - using shape/2 here (missing that -0.5) shifted the entire
+  // glass brain's world-space position by half a voxel in every axis
+  // relative to the true affine, which is what the 2D slice view and
+  // section planes correctly use - hence the mismatch between them.
+  const hx = (anat.shape[0]-1) / 2, hy = (anat.shape[1]-1) / 2, hz = (anat.shape[2]-1) / 2;
   const tx = Ab[0][0]*hx + Ab[0][1]*hy + Ab[0][2]*hz + Ab[3][0];
   const ty = Ab[1][0]*hx + Ab[1][1]*hy + Ab[1][2]*hz + Ab[3][1];
   const tz = Ab[2][0]*hx + Ab[2][1]*hy + Ab[2][2]*hz + Ab[3][2];
@@ -343,10 +608,12 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
       u_lutSize:   { value: lutSize },
       u_dataMin:   { value: anat.mn || 0 },
       u_dataRange: { value: (anat.mx - anat.mn) || 1 },
+      u_model:     { value: modelMatrix },
+      u_projView:  { value: new THREE.Matrix4() },
     },
     transparent: true,
-    depthWrite:  false,
-    depthTest:   false,
+    depthWrite:  true,
+    depthTest:   true,
   });
 
   const geo  = new THREE.PlaneGeometry(2, 2);
@@ -357,6 +624,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
   const _pv = new THREE.Matrix4();
   mesh.onBeforeRender = (renderer, scene, cam) => {
     _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    mat.uniforms.u_projView.value.copy(_pv);
     mat.uniforms.u_invPV.value.copy(_pv).invert();
     mat.uniforms.u_camPos.value.copy(cam.position);
   };

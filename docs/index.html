@@ -21,7 +21,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 #left{border-right:1px solid var(--border);}
 #right{border-left:1px solid var(--border);}
 #left .slice-row,#right .slice-row{flex:1;min-height:0;}
-#middle{flex:1;position:relative;overflow:visible;z-index:10;min-width:0;}
+#middle{flex:1;position:relative;overflow:visible;z-index:100;min-width:0;}
 #three-canvas{width:100%;height:100%;display:block;}
 
 /* ── SLICE ROWS ── */
@@ -71,19 +71,31 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .top-btn .icon{font-size:16px;letter-spacing:0;margin-right:4px;vertical-align:-1px;}
 
 /* ── SETTINGS OVERLAY ── */
-#settings-overlay{position:absolute;top:36px;left:12px;
-  z-index:200;width:310px;max-height:calc(100vh - 80px);overflow-y:auto;
+#app-panel{position:fixed;
+  z-index:200;width:340px;max-height:calc(100vh - 80px);
   background:rgba(8,11,15,0.95);border:2px solid var(--border);
-  backdrop-filter:blur(6px);padding:14px 16px;display:none;pointer-events:all;}
-#settings-overlay.open{display:block;}
+  backdrop-filter:blur(6px);display:none;pointer-events:all;
+  flex-direction:column;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,0.55);}
+#app-panel.open{display:flex;}
+#app-panel.dragging{box-shadow:0 10px 34px rgba(0,0,0,0.7);}
+#app-panel-titlebar{flex:none;padding:6px 8px 6px 12px;cursor:grab;user-select:none;
+  background:rgba(255,255,255,0.04);border-bottom:1px solid var(--border);
+  color:var(--dim);font-size:10px;letter-spacing:0.16em;
+  display:flex;align-items:center;gap:8px;}
+#app-panel-titlebar:active{cursor:grabbing;}
+#app-panel-titlebar .grip{opacity:0.5;letter-spacing:0;}
+#app-panel-title{flex:1;}
+#app-panel-close{flex:none;background:none;border:none;color:var(--dim);
+  font-size:16px;cursor:pointer;font-family:'JetBrains Mono',monospace;
+  line-height:1;padding:2px 4px;}
+#app-panel-close:hover{color:var(--accent);}
+#app-panel-body{overflow-y:auto;padding:14px 16px;flex:1 1 auto;}
+.panel-content{display:none;}
+.panel-content.active{display:block;}
 
-/* ── LOAD DROPDOWN + DROP ZONES ── */
-#load-dropdown{position:absolute;top:36px;left:12px;z-index:200;width:320px;
-  background:rgba(8,11,15,0.95);border:2px solid var(--border);
-  backdrop-filter:blur(6px);padding:14px;display:none;flex-direction:column;
-  pointer-events:all;gap:10px;}
-#load-dropdown.open{display:flex;}
-.dz-row{display:flex;align-items:stretch;border:1px solid var(--border);}
+/* ── DROP ZONES (FILE panel content) ── */
+.dz-row{display:flex;align-items:stretch;border:1px solid var(--border);margin-bottom:10px;}
+.dz-row:last-child{margin-bottom:0;}
 .dz-row:hover{border-color:var(--accent);}
 .drop-zone{padding:10px 14px;cursor:pointer;flex:1;min-width:0;}
 .drop-zone .tag{color:var(--accent);font-size:10px;margin-bottom:3px;letter-spacing:0.1em;}
@@ -109,6 +121,15 @@ a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
 #hdr-panel-close{background:none;border:none;color:var(--dim);font-size:16px;
   cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:1;padding:0;}
 #hdr-panel-close:hover{color:var(--accent);}
+/* about.html ships as an unstyled fragment (text + logos) — give it
+   sensible defaults here so it reads well without needing its own CSS. */
+#about-panel-content{color:var(--text);font-size:11px;line-height:1.7;}
+#about-panel-content p{margin:0 0 10px;}
+#about-panel-content a{color:var(--accent);}
+#about-panel-content img{max-height:48px;max-width:100%;margin:4px 10px 8px 0;vertical-align:middle;}
+#about-panel-content h1,#about-panel-content h2,#about-panel-content h3{
+  color:var(--bright);font-weight:400;letter-spacing:0.1em;margin:0 0 10px;font-size:12px;}
+#about-panel-content ul,#about-panel-content ol{margin:0 0 10px 18px;padding:0;}
 .accent-link.disabled{opacity:0.35;pointer-events:none;cursor:default;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
 /* inline toggle inside a ctl-row */
@@ -180,7 +201,7 @@ input[type=file]{display:none;}
 
 /* ── MIDDLE HUD ── */
 #middle-hud{position:absolute;inset:0;pointer-events:none;}
-#stats{position:absolute;top:16px;right:16px;text-align:right;line-height:2;color:var(--dim);}
+#stats{position:absolute;bottom:16px;right:16px;text-align:right;line-height:2;color:var(--dim);}
 .label-badge{position:fixed;z-index:60;pointer-events:none;
   background:var(--panel);border:1px solid var(--border);
   font-family:'JetBrains Mono',monospace;
@@ -261,10 +282,18 @@ input[type=file]{display:none;}
   <div id="top-btns">
     <button class="top-btn" id="load-btn"><span class="icon">⊞</span>FILE</button>
     <button class="top-btn" id="settings-btn"><span class="icon">⚙</span>SETTINGS</button>
+    <button class="top-btn" id="about-btn"><span class="icon">ⓘ</span>ABOUT</button>
   </div>
 
-  <!-- Load dropdown -->
-  <div id="load-dropdown">
+  <!-- Unified floating panel — shared by FILE / SETTINGS / ABOUT -->
+  <div id="app-panel">
+    <div id="app-panel-titlebar">
+      <span class="grip">⠿</span><span id="app-panel-title">FILE</span>
+      <button id="app-panel-close" title="close">×</button>
+    </div>
+    <div id="app-panel-body">
+
+    <div id="panel-content-file" class="panel-content">
     <div class="dz-row">
       <div class="drop-zone" id="dz-anat" onclick="document.getElementById('fi-anat').click()">
         <div class="tag">ANATOMY</div>
@@ -316,20 +345,9 @@ input[type=file]{display:none;}
         <button class="accent-link" id="btn-show-state">show state</button>
       </div>
     </div>
-  </div>
-    
-  <!-- Header / indices panel -->
-  <div id="hdr-panel">
-    <div id="hdr-panel-head">
-      <span id="hdr-panel-title">HEADER</span>
-      <button id="hdr-panel-close">×</button>
-    </div>
-    <pre id="hdr-panel-pre"></pre>
-  </div>
+    </div><!-- /panel-content-file -->
 
-  <!-- Settings overlay -->
-  <div id="settings-overlay">
-
+    <div id="panel-content-settings" class="panel-content">
     <div class="cfg-section" data-tip="Adjusts how the anatomy volume displays in the SAG/COR/AXI slice panels AND the glass brain in the 3D view.\nFor a scan: stretches contrast around mid-gray.\nFor a colour (DEC/FA) volume: brightens colours, which are dim by nature.">ANATOMY DISPLAY</div>
     <div class="ctl-row" data-tip="Logarithmic gain, neutral (1.0x) in the middle.\nFor a scan: a gamma curve — raise to brighten, lower to darken — that always keeps true black and true white fixed, so background stays dark at any setting.\nFor a colour (DEC/FA) volume: brightens colours, which are dim by nature.\nApplies to both the 2D slices and the 3D glass brain.">
       <label>INTENSITY</label>
@@ -398,10 +416,10 @@ input[type=file]{display:none;}
 
 
     <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.\nAll three sliders default to their centre (raw=50) position — the mathematically 'neutral' reference value for each.">VOLUME RENDERING</div>
-    <div class="ctl-row" data-tip="Density-like multiplier for the glass brain silhouette (shown at right), 0 to ∞.\nMöbius-mapped: centre = 10 (where the glass brain becomes clearly visible), right end approaches infinity (fully opaque at first hit).">
+    <div class="ctl-row" data-tip="0-100%, shown at right. Past ~90%, the glass brain smoothly hands off to a solid isosurface — a real, opaque surface instead of the translucent boundary view, since that needs genuine sub-voxel smoothness a translucent render can't give. Applies to scans, colour (DEC/FA) volumes, and labelled volumes alike.">
       <label>OPACITY</label>
       <input type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
-      <span class="ctl-val" id="brain-alpha-val">10.00</span>
+      <span class="ctl-val" id="brain-alpha-val">50%</span>
     </div>
     <div class="ctl-row" data-tip="Minimum intensity (or FA, for a colour volume) to contribute — shown at right, 0 to 1.\nRaise to suppress skull/CSF/gray matter. Rational curve: centre = 0.1, the typical white-matter FA cutoff.">
       <label>THRESHOLD</label>
@@ -451,7 +469,23 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="roll-val">0°</span>
     </div>
     <button id="rot-reset">RESET PLANES</button>
-  </div><!-- /settings-overlay -->
+    </div><!-- /panel-content-settings -->
+
+    <div id="panel-content-about" class="panel-content">
+      <div id="about-panel-content"></div>
+    </div><!-- /panel-content-about -->
+
+    </div><!-- /app-panel-body -->
+  </div><!-- /app-panel -->
+
+  <!-- Header / indices panel (separate, triggered from within FILE content) -->
+  <div id="hdr-panel">
+    <div id="hdr-panel-head">
+      <span id="hdr-panel-title">HEADER</span>
+      <button id="hdr-panel-close">×</button>
+    </div>
+    <pre id="hdr-panel-pre"></pre>
+  </div>
 
   <!-- Welcome screen (shown when no data loaded) -->
   <div id="welcome">
@@ -882,16 +916,20 @@ function updatePlaneMeshes() {
 // map that to the actual value sent to the shader. All three default to
 // raw=50 at their mathematically "neutral"/reference value.
 //
-// OPACITY (u_alpha) is a density-like quantity with no natural ceiling —
-// the shader's per-step alpha is clamped to 1, so past some point a
-// higher u_alpha just saturates sooner along the ray rather than doing
-// anything new. A Möbius transform maps the bounded slider directly onto
-// the true [0,∞) range with no ceiling to pick. Scaled by 10 so the
-// centre lands on 10 — empirically where the glass brain starts looking
-// properly solid — rather than the mathematically "neutral" 1.
+// OPACITY (u_alpha) used to need an unbounded Möbius map, back when very
+// high opacity just meant "saturate the glass render sooner." Now that
+// high opacity hands off to a genuinely solid isosurface (see
+// scene3d.js), alpha has a real, meaningful ceiling — 300 is where the
+// glass render is already fully saturated for any ordinary rim value, so
+// there's nothing further for a higher number to do. With a real bound,
+// this uses the same rational-curve family as THRESHOLD instead: t=0.5
+// -> 10 (empirically where the glass brain starts looking properly
+// solid), t=1 -> 300 exactly. The slider itself just shows its own raw
+// 0-100 position — the internal alpha value is a shader-side detail, not
+// something the person needs to see or reason about.
 function opacityFromSlider(raw) {
-  const t = Math.min(raw/100, 0.995); // keep finite as raw->100
-  return 10 * t / (1 - t);
+  const t = raw/100;
+  return 300 * t / (29 - 28*t);
 }
 
 // THRESHOLD (u_thresh) is a genuinely bounded [0,1] quantity (FA/intensity
@@ -1361,17 +1399,97 @@ document.getElementById('roll-slider').addEventListener('input',e=>{roll=+e.targ
   });
 });
 // Button toggles
-function toggleDropdown(id, e) {
-  e.stopPropagation();
-  const el = document.getElementById(id);
-  const wasOpen = el.classList.contains('open');
-  // Close all dropdowns first
-  document.getElementById('settings-overlay').classList.remove('open');
-  document.getElementById('load-dropdown').classList.remove('open');
-  if (!wasOpen) el.classList.add('open');
+// Unified floating panel — shared by FILE / SETTINGS / ABOUT. Only one
+// physical panel div exists; clicking a button switches which content
+// section is visible inside it and updates the titlebar text, rather
+// than opening a separate div per button.
+const PANEL_TITLES = { file: 'FILE', settings: 'SETTINGS', about: 'ABOUT' };
+let aboutLoaded = false;
+
+async function openPanel(name) {
+  const panel = document.getElementById('app-panel');
+  const wasOpen = panel.classList.contains('open');
+  const wasShowing = panel.dataset.active === name;
+  if (wasOpen && wasShowing) { panel.classList.remove('open'); return; }
+  document.querySelectorAll('.panel-content').forEach(el => el.classList.remove('active'));
+  document.getElementById('panel-content-' + name).classList.add('active');
+  document.getElementById('app-panel-title').textContent = PANEL_TITLES[name];
+  panel.dataset.active = name;
+  if (!wasOpen) positionAppPanel(); // only reset position on a fresh open, not when switching content while already open
+  panel.classList.add('open');
+  if (name === 'about') await loadAboutContent();
 }
-document.getElementById('load-btn').addEventListener('click',     e => toggleDropdown('load-dropdown', e));
-document.getElementById('settings-btn').addEventListener('click', e => toggleDropdown('settings-overlay', e));
+async function loadAboutContent() {
+  if (aboutLoaded) return;
+  const content = document.getElementById('about-panel-content');
+  try {
+    const res = await fetch('about.html');
+    if (res.ok) { content.innerHTML = await res.text(); aboutLoaded = true; }
+    else content.textContent = 'Could not load about.html (HTTP ' + res.status + ').';
+  } catch (e) {
+    content.textContent = 'Could not load about.html.';
+  }
+}
+document.getElementById('load-btn').addEventListener('click',     e => { e.stopPropagation(); openPanel('file'); });
+document.getElementById('settings-btn').addEventListener('click', e => { e.stopPropagation(); openPanel('settings'); });
+document.getElementById('about-btn').addEventListener('click',    e => { e.stopPropagation(); openPanel('about'); });
+
+// Draggable panel window — grab the titlebar to move it out of the way
+// of the 3D view while tuning glass-brain settings, since the panel sits
+// right on top of it otherwise. Always resets to the default position
+// (aligned with the FILE button, which stays clear of the 2D slice
+// panels — the more commonly-adjusted settings) on a fresh open; dragging
+// is a one-off, per-session adjustment, not remembered across reopens.
+function clampPanelPos(panel, left, top) {
+  const margin = 60; // keep at least this much of the panel reachable/visible
+  const maxLeft = window.innerWidth  - margin;
+  const maxTop  = window.innerHeight - margin;
+  return [
+    Math.min(Math.max(left, margin - panel.offsetWidth), maxLeft),
+    Math.min(Math.max(top, 0), maxTop),
+  ];
+}
+let panelWasDragged = false;
+function positionAppPanel() {
+  const panel = document.getElementById('app-panel');
+  const r = document.getElementById('load-btn').getBoundingClientRect();
+  const [l, t] = clampPanelPos(panel, r.left, r.bottom + 6);
+  panel.style.left = l + 'px';
+  panel.style.top  = t + 'px';
+  panelWasDragged = false; // fresh open at the default spot — not dragged (yet)
+}
+(function initAppPanelDrag() {
+  const panel  = document.getElementById('app-panel');
+  const handle = document.getElementById('app-panel-titlebar');
+  let dragging = false, startX, startY, startLeft, startTop, moved;
+  handle.addEventListener('mousedown', e => {
+    if (e.target.closest('#app-panel-close')) return; // let the close button handle its own click
+    dragging = true;
+    moved = false;
+    startX = e.clientX; startY = e.clientY;
+    const r = panel.getBoundingClientRect();
+    startLeft = r.left; startTop = r.top;
+    panel.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+    const [l, t] = clampPanelPos(panel, startLeft + dx, startTop + dy);
+    panel.style.left = l + 'px';
+    panel.style.top  = t + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (dragging && moved) panelWasDragged = true;
+    dragging = false;
+    panel.classList.remove('dragging');
+  });
+})();
+document.getElementById('app-panel-close').addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('app-panel').classList.remove('open');
+});
 document.getElementById('dz-save').addEventListener('click', () => saveTck());
 document.getElementById('dz-state').addEventListener('click', () => saveState());
 
@@ -1423,11 +1541,10 @@ document.getElementById('btn-show-state').addEventListener('click', e => {
 });
 
 document.addEventListener('click', () => {
-  document.getElementById('settings-overlay').classList.remove('open');
-  document.getElementById('load-dropdown').classList.remove('open');
+  if (panelWasDragged) return; // dragged away on purpose — only the X button (or opening a different panel) closes it now
+  document.getElementById('app-panel').classList.remove('open');
 });
-document.getElementById('settings-overlay').addEventListener('click', e => e.stopPropagation());
-document.getElementById('load-dropdown').addEventListener('click',    e => e.stopPropagation());
+document.getElementById('app-panel').addEventListener('click', e => e.stopPropagation());
 
 // ── Floating tooltip ──────────────────────────────────────
 const tipEl = document.getElementById('tip');
@@ -1457,8 +1574,9 @@ document.getElementById('radius-slider').addEventListener('input',e=>{
   updateSlicesA();
 });
 document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
-  glassBrainAlpha=opacityFromSlider(+e.target.value);
-  document.getElementById('brain-alpha-val').textContent=glassBrainAlpha.toFixed(2);
+  const raw = +e.target.value;
+  glassBrainAlpha=opacityFromSlider(raw);
+  document.getElementById('brain-alpha-val').textContent=raw+'%';
   updateGlassBrainUniforms();
 });
 document.getElementById('brain-thresh-slider').addEventListener('input',e=>{
@@ -1563,7 +1681,7 @@ document.body.addEventListener('drop',e=>{
   set('roll-slider',         0,                ['roll-val',        '0°']);
   set('radius-slider',       radius,           ['radius-val',      radius.toFixed(2)+' mm']);
   set('slab-slider',         slabMultiplier,   ['slab-val',        slabMultiplier.toFixed(1)+'×']);
-  set('brain-alpha-slider',  50,               ['brain-alpha-val', glassBrainAlpha.toFixed(2)]);
+  set('brain-alpha-slider',  50,               ['brain-alpha-val', '50%']);
   set('brain-thresh-slider', 50,               ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
   set('brain-rim-slider',    50,               ['brain-rim-val',   glassBrainRimPow.toFixed(2)]);
   set('contrast-slider',     50,               ['contrast-val',    contrastGain.toFixed(2)+'×']);
