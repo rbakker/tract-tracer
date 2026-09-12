@@ -858,7 +858,14 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
       u_thresh:    { value: 0.15 },
       u_rimPow:    { value: 1.0 },
       u_contrast:  { value: 1.0 },
-      u_steps:     { value: 150 },
+      // Starts throttled (see index.html's useDraggingStepCount, which
+      // ramps this back up to full quality shortly after every rebuild):
+      // the render call a few lines down, right after this material is
+      // created, is the very FIRST time this shader actually executes on
+      // the GPU — on a weak mobile GPU, that unthrottled first frame alone
+      // has been enough to trip a driver watchdog and lose the WebGL
+      // context outright, with no user interaction involved at all.
+      u_steps:     { value: 40 },
       u_invPV:     { value: new THREE.Matrix4() },
       u_invModel:  { value: invModel },
       u_camPos:    { value: new THREE.Vector3() },

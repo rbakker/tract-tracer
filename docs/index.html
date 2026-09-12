@@ -1127,6 +1127,15 @@ function buildGlassBrainLocal(anat) {
   const toggle = document.getElementById('apply-lut-toggle');
   const lutInfo = { map: lutMap, maxIndex: lutMaxIndex, apply: toggle?.checked ?? false };
   glassBrainMesh = buildGlassBrain(anat, vr.texData, scene, renderer3, camera, lutInfo);
+  // Start at reduced raymarch quality and ramp up shortly after (same
+  // mechanism as dragging a slider — see useDraggingStepCount), rather
+  // than the full step count immediately. buildGlassBrain's own internal
+  // "compile now" render (to surface shader errors early) is the very
+  // FIRST time this shader actually executes on the GPU — on a weak
+  // mobile GPU, running the full-quality raymarch on that very first,
+  // unthrottled frame is plausibly enough on its own to trip a driver
+  // watchdog and lose the WebGL context, with no dragging involved at all.
+  useDraggingStepCount();
   updateGlassBrainUniforms();
 }
 
