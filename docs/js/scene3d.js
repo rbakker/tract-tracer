@@ -24,7 +24,7 @@ export class TrackballControls extends EventDispatcher {
     let st = S.NONE;
     const eye = new Vector3(), mp = new Vector2(), mc = new Vector2(),
           la = new Vector3(), zs = new Vector2(), ze = new Vector2(),
-          ps = new Vector2(), pe = new Vector2(), ptrs = [], ppos = {};
+          ps = new Vector2(), pe = new Vector2(), ptrs = [], ppos = {}, torder = [];
     this.target0 = this.target.clone(); this.position0 = obj.position.clone(); this.up0 = obj.up.clone();
     this.handleResize = () => {
       const b = el.getBoundingClientRect(), d = el.ownerDocument.documentElement;
@@ -50,9 +50,65 @@ export class TrackballControls extends EventDispatcher {
     const omm = e => { if (st === S.ROTATE) { mp.copy(mc); mc.copy(gmc(e.pageX, e.pageY)); } else if (st === S.ZOOM) ze.copy(gms(e.pageX, e.pageY)); else if (st === S.PAN) pe.copy(gms(e.pageX, e.pageY)); sc.update(); };
     const omu = () => { st = S.NONE; sc.update(); };
     const omw = e => { if (!sc.enabled) return; e.preventDefault(); if (e.deltaMode === 2) zs.y -= e.deltaY * .025; else if (e.deltaMode === 1) zs.y -= e.deltaY * .01; else zs.y -= e.deltaY * .00025; sc.update(); };
-    const opd = e => { if (!sc.enabled) return; if (ptrs.length === 0) { el.setPointerCapture(e.pointerId); el.addEventListener('pointermove', opm); el.addEventListener('pointerup', opu); } ptrs.push(e); if (e.pointerType === 'touch') { } else omd(e); };
-    const opm = e => { if (!sc.enabled) return; if (e.pointerType !== 'touch') omm(e); };
-    const opu = e => { if (!sc.enabled) return; omu(); ptrs.splice(ptrs.findIndex(p => p.pointerId === e.pointerId), 1); if (ptrs.length === 0) { el.releasePointerCapture(e.pointerId); el.removeEventListener('pointermove', opm); el.removeEventListener('pointerup', opu); } };
+    // Touch: one finger rotates (mirrors a left-mouse-button drag); two
+    // fingers pinch-zoom and pan together, the classic trackball touch
+    // scheme. ptrs/ppos already existed (tracking pointer-capture and, via
+    // ppos, each active touch's latest page position) but the actual
+    // gesture logic here was never filled in - touchstart/move fell
+    // through to an empty block, so touch input did nothing at all.
+    // panCamera() has no state gate (unlike zoomCamera(), which only runs
+    // while st===S.ZOOM or S.NONE), so driving both from st=S.ZOOM during
+    // a two-finger gesture is enough to get simultaneous pinch+pan.
+    let pinchDist0 = 0;
+    const touchMid = () => { const a = ppos[torder[0]], b = ppos[torder[1]]; return { dx: a.x - b.x, dy: a.y - b.y, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; };
+    const startRotateTouch = () => { const p = ppos[torder[0]]; mc.copy(gmc(p.x, p.y)); mp.copy(mc); st = S.ROTATE; };
+    const startZoomPanTouch = () => { const { dx, dy, mx, my } = touchMid(); pinchDist0 = Math.hypot(dx, dy); ps.copy(gms(mx, my)); pe.copy(ps); st = S.ZOOM; };
+    const opd = e => {
+      if (!sc.enabled) return;
+      if (ptrs.length === 0) { el.setPointerCapture(e.pointerId); el.addEventListener('pointermove', opm); el.addEventListener('pointerup', opu); }
+      ptrs.push(e);
+      if (e.pointerType === 'touch') {
+        ppos[e.pointerId] = { x: e.pageX, y: e.pageY };
+        torder.push(e.pointerId);
+        if (torder.length === 1) startRotateTouch();
+        else if (torder.length === 2) startZoomPanTouch();
+        // 3rd+ finger: ignore (still tracked in ppos/torder for bookkeeping
+        // on release, but doesn't change the active gesture).
+      } else omd(e);
+    };
+    const opm = e => {
+      if (!sc.enabled) return;
+      if (e.pointerType === 'touch') {
+        if (!(e.pointerId in ppos)) return;
+        ppos[e.pointerId] = { x: e.pageX, y: e.pageY };
+        if (torder.length === 1) { mp.copy(mc); mc.copy(gmc(e.pageX, e.pageY)); sc.update(); }
+        else if (torder.length >= 2) {
+          const { dx, dy, mx, my } = touchMid();
+          const dist = Math.hypot(dx, dy);
+          // Feed the CHANGE in pinch distance into ze.y as if it were a
+          // middle-mouse-drag position: zoomCamera() only ever reads the
+          // delta against zs.y (re-synced to ze.y after every use, since
+          // staticMoving is on), so an incremental value here is enough -
+          // it doesn't need to carry any absolute meaning.
+          zs.y = 0; ze.y = (dist - pinchDist0) / sc.screen.height;
+          pinchDist0 = dist;
+          pe.copy(gms(mx, my));
+          sc.update();
+        }
+      } else omm(e);
+    };
+    const opu = e => {
+      if (!sc.enabled) return;
+      if (e.pointerType === 'touch' && e.pointerId in ppos) {
+        delete ppos[e.pointerId];
+        torder.splice(torder.indexOf(e.pointerId), 1);
+        if (torder.length === 0) st = S.NONE;
+        else if (torder.length === 1) startRotateTouch();      // resume 1-finger rotate without a jump
+        else if (torder.length === 2) startZoomPanTouch();     // dropped from 3+ back to 2
+      } else omu();
+      ptrs.splice(ptrs.findIndex(p => p.pointerId === e.pointerId), 1);
+      if (ptrs.length === 0) { el.releasePointerCapture(e.pointerId); el.removeEventListener('pointermove', opm); el.removeEventListener('pointerup', opu); }
+    };
     el.addEventListener('contextmenu', e => { if (sc.enabled) e.preventDefault(); });
     el.addEventListener('pointerdown', opd);
     el.addEventListener('wheel', omw, { passive: false });

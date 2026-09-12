@@ -68,6 +68,9 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
   letter-spacing:0.12em;padding:5px 14px;cursor:pointer;
   transition:border-color 0.15s,color 0.15s;}
 .top-btn:hover{border-color:var(--accent);color:var(--accent);}
+.top-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(255,255,255,0.06);}
+.top-btn.icon-only{padding:5px 8px;}
+.top-btn.icon-only svg{display:block;width:14px;height:14px;}
 .top-btn .icon{font-size:16px;letter-spacing:0;margin-right:4px;vertical-align:-1px;}
 
 /* ── SETTINGS OVERLAY ── */
@@ -295,6 +298,7 @@ input[type=file]{display:none;}
   <canvas id="three-canvas"></canvas>
   <!-- Top-left buttons -->
   <div id="top-btns">
+    <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
     <button class="top-btn" id="load-btn"><span class="icon">⊞</span>FILE</button>
     <button class="top-btn" id="settings-btn"><span class="icon">⚙</span>SETTINGS</button>
     <button class="top-btn" id="about-btn"><span class="icon">ⓘ</span>ABOUT</button>
@@ -802,16 +806,18 @@ function initSliceInteraction(planeKey, getCanvas, tag, redrawFn) {
       state.update({ [tag+'.cursor']:newRas });
     }
 
-    c.addEventListener('mousedown', e => {
+    c.style.touchAction = 'none'; // don't let the browser scroll/zoom the page while dragging
+    c.addEventListener('pointerdown', e => {
       e.preventDefault();
       dragBtn = e.button;
       dragLast = {x: e.clientX, y: e.clientY};
       lastActivePanel[tag] = planeKey;
       positionLabelBadge(tag);
+      c.setPointerCapture(e.pointerId);
       if (e.button === 0) place(e);
     });
 
-    c.addEventListener('mousemove', e => {
+    c.addEventListener('pointermove', e => {
       if (dragBtn === 0) {
         place(e);
       } else if (dragBtn === 1 || dragBtn === 2) {
@@ -839,7 +845,7 @@ function initSliceInteraction(planeKey, getCanvas, tag, redrawFn) {
       }
     });
 
-    document.addEventListener('mouseup', () => { dragBtn = -1; dragLast = null; });
+    c.addEventListener('pointerup', () => { dragBtn = -1; dragLast = null; });
 
     // Right-click: suppress context menu
     c.addEventListener('contextmenu', e => e.preventDefault());
@@ -1551,6 +1557,45 @@ document.getElementById('load-btn').addEventListener('click',     e => { e.stopP
 document.getElementById('settings-btn').addEventListener('click', e => { e.stopPropagation(); openPanel('settings'); });
 document.getElementById('about-btn').addEventListener('click',    e => { e.stopPropagation(); openPanel('about'); });
 
+// Fullscreen toggle — F11 does this on a laptop, but on a tablet the
+// browser chrome (address bar etc.) just scrolls out of the way, taking
+// some of the app with it, without a keyboard shortcut to fix that. This
+// button uses the actual Fullscreen API instead, requesting it on the
+// whole page (documentElement) rather than any one panel.
+(function initFullscreenToggle() {
+  const btn = document.getElementById('fullscreen-btn');
+  const root = document.documentElement;
+  const supported = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  if (!supported) { btn.style.display = 'none'; return; } // e.g. older iOS Safari
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  // Corner-bracket icons, matching the common expand/compress convention:
+  // brackets pointing outward (toward the corners) to enter fullscreen,
+  // pointing inward (toward the centre) to exit it.
+  const ICON_ENTER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  const ICON_EXIT  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v3a2 2 0 0 1-2 2H4"/><path d="M15 3v3a2 2 0 0 0 2 2h3"/><path d="M9 21v-3a2 2 0 0 0-2-2H4"/><path d="M15 21v-3a2 2 0 0 1 2-2h3"/></svg>';
+  function toggle() {
+    try {
+      if (!isFs()) {
+        const p = (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
+        if (p && p.catch) p.catch(() => {}); // e.g. blocked outside a direct user gesture
+      } else {
+        const p = (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        if (p && p.catch) p.catch(() => {});
+      }
+    } catch (err) { /* ignore */ }
+  }
+  function refresh() {
+    const fs = isFs();
+    btn.innerHTML = fs ? ICON_EXIT : ICON_ENTER;
+    btn.title = fs ? 'Exit fullscreen' : 'Enter fullscreen';
+    btn.classList.toggle('active', fs);
+  }
+  btn.addEventListener('click', e => { e.stopPropagation(); toggle(); });
+  document.addEventListener('fullscreenchange', refresh);
+  document.addEventListener('webkitfullscreenchange', refresh);
+  refresh();
+})();
+
 // Draggable panel window — grab the titlebar to move it out of the way
 // of the 3D view while tuning glass-brain settings, since the panel sits
 // right on top of it otherwise. Always resets to the default position
@@ -1579,7 +1624,11 @@ function positionAppPanel() {
   const panel  = document.getElementById('app-panel');
   const handle = document.getElementById('app-panel-titlebar');
   let dragging = false, startX, startY, startLeft, startTop, moved;
-  handle.addEventListener('mousedown', e => {
+  // Pointer Events (not mouse-only) so this also works with touch — a
+  // PointerEvent carries the same clientX/clientY/button fields as a
+  // MouseEvent, so this is otherwise identical to the old mouse handlers.
+  handle.style.touchAction = 'none'; // don't let the browser scroll/zoom the page while dragging
+  handle.addEventListener('pointerdown', e => {
     if (e.target.closest('#app-panel-close')) return; // let the close button handle its own click
     dragging = true;
     moved = false;
@@ -1587,9 +1636,10 @@ function positionAppPanel() {
     const r = panel.getBoundingClientRect();
     startLeft = r.left; startTop = r.top;
     panel.classList.add('dragging');
+    handle.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
-  document.addEventListener('mousemove', e => {
+  handle.addEventListener('pointermove', e => {
     if (!dragging) return;
     const dx = e.clientX - startX, dy = e.clientY - startY;
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
@@ -1597,7 +1647,7 @@ function positionAppPanel() {
     panel.style.left = l + 'px';
     panel.style.top  = t + 'px';
   });
-  document.addEventListener('mouseup', () => {
+  handle.addEventListener('pointerup', () => {
     if (dragging && moved) panelWasDragged = true;
     dragging = false;
     panel.classList.remove('dragging');
@@ -1861,11 +1911,13 @@ resizeAll();
 
   function makeDragger(sep, getOtherW, buildWidths) {
     let startX, startW;
-    sep.addEventListener('mousedown', e => {
+    sep.style.touchAction = 'none'; // don't let the browser scroll/zoom the page while dragging
+    sep.addEventListener('pointerdown', e => {
       e.preventDefault();
       startX = e.clientX;
       startW = getOtherW();
       sep.classList.add('dragging');
+      sep.setPointerCapture(e.pointerId);
       const onMove = e => {
         const delta = e.clientX - startX;
         const [lw, rw] = buildWidths(startW, delta);
@@ -1873,11 +1925,11 @@ resizeAll();
       };
       const onUp = () => {
         sep.classList.remove('dragging');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
+        sep.removeEventListener('pointermove', onMove);
+        sep.removeEventListener('pointerup', onUp);
       };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
+      sep.addEventListener('pointermove', onMove);
+      sep.addEventListener('pointerup', onUp);
     });
   }
 
