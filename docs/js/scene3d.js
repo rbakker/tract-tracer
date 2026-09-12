@@ -1020,9 +1020,12 @@ export function makeDotsMaterial3d(endsPx = 6) {
 //   null (pass-through)   → assign by Euclidean distance to cursor
 //
 // cursor: [cx,cy,cz] RAS mm.
-// endsPx: dot screen size.
+// endsPx: dot screen size (in CSS pixels; scaled to framebuffer pixels via
+// pixelRatio, which the caller should pass as whatever the renderer is
+// ACTUALLY using — renderer.getPixelRatio() — not window.devicePixelRatio
+// directly, since those two can differ (e.g. a capped render resolution).
 // Returns { src: THREE.Points, tgt: THREE.Points }
-export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6) {
+export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRatio = window.devicePixelRatio) {
   const n = tracts.length;
   const srcPos = new Float32Array(n * 6), srcCol = new Float32Array(n * 6);
   const tgtPos = new Float32Array(n * 6), tgtCol = new Float32Array(n * 6);
@@ -1072,7 +1075,7 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, count*3), 3));
     geo.setAttribute('color',    new THREE.BufferAttribute(col.slice(0, count*3), 3));
-    return new THREE.Points(geo, makeDotsMaterial3d(endsPx * window.devicePixelRatio));
+    return new THREE.Points(geo, makeDotsMaterial3d(endsPx * pixelRatio));
   };
 
   return {

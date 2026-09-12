@@ -921,7 +921,14 @@ function initSliceInteraction(planeKey, getCanvas, tag, redrawFn) {
 const threeCanvas=document.getElementById('three-canvas');
 const renderer3=new THREE.WebGLRenderer({canvas:threeCanvas,antialias:true});
 slabRenderer = new SlabRenderer(renderer3);
-renderer3.setPixelRatio(window.devicePixelRatio);
+// Cap the render resolution rather than following the device's full pixel
+// ratio (2-3x on many tablets/phones): the raymarcher's cost scales with
+// pixel count, so an uncapped 3x ratio is up to 9x the shaded pixels of a
+// 1x render for no benefit on a screen this size — and is squarely in the
+// territory that can trip a mobile GPU driver's watchdog and lose the
+// WebGL context outright on weaker hardware. 1.5 keeps things reasonably
+// crisp while cutting that worst case roughly in half to two-thirds.
+renderer3.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer3.setClearColor(0x080b0f);
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(45,1,0.1,5000);
@@ -1117,6 +1124,28 @@ function updateGlassBrainUniforms() {
   renderer3.render(scene, camera);
 }
 
+// Raymarch quality throttle while actively dragging a slider that affects
+// the glass brain (opacity/threshold/rim/contrast). Per-pixel cost varies a
+// lot with these — on weak/mobile GPUs, rapid dragging means many
+// back-to-back expensive frames in a row, which is exactly the kind of
+// thing that can trip a driver's watchdog and lose the WebGL context
+// entirely (see the context-loss banner below). Dropping the step count
+// during the drag itself, then restoring full quality shortly after the
+// last input event, costs nothing visible once the hand settles but cuts
+// worst-case per-frame cost sharply while it's actually being dragged.
+const GLASS_STEPS_FULL = 150, GLASS_STEPS_DRAGGING = 40;
+let _stepsRestoreTimer = null;
+function useDraggingStepCount() {
+  if (!glassBrainMesh) return;
+  glassBrainMesh.material.uniforms.u_steps.value = GLASS_STEPS_DRAGGING;
+  clearTimeout(_stepsRestoreTimer);
+  _stepsRestoreTimer = setTimeout(() => {
+    if (!glassBrainMesh) return;
+    glassBrainMesh.material.uniforms.u_steps.value = GLASS_STEPS_FULL;
+    renderer3.render(scene, camera);
+  }, 250);
+}
+
 // Shading light direction, fixed relative to the viewer (see scene3d.js's
 // buildGlassBrain, which turns this into a proper world/local direction
 // each frame from the camera's own orientation). s ranges -1 (downward-left)
@@ -1185,7 +1214,7 @@ function updateProbe(){
     selMesh=makeLineSegments(setStreamlines);
     _lastCursor=[cx,cy,cz];
     _lastProbedEnds=probedEnds;
-    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, probedEnds, [cx,cy,cz], endsPx));
+    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, probedEnds, [cx,cy,cz], endsPx, renderer3.getPixelRatio()));
   }
   if(slabRenderer) slabRenderer.invalidate(selMesh);
   updateScene3d();
@@ -1196,7 +1225,7 @@ function rebuildDots() {
   if (!setStreamlines || !setStreamlines.length) return;
   if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
   if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
-  ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, _lastProbedEnds, _lastCursor, endsPx));
+  ({src: srcDots, tgt: tgtDots} = makeEndpointDots(setStreamlines, _lastProbedEnds, _lastCursor, endsPx, renderer3.getPixelRatio()));
   if(slabRenderer) slabRenderer.invalidate(selMesh);
   updateScene3d();
 }
@@ -1792,16 +1821,19 @@ document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
   const raw = +e.target.value;
   glassBrainAlpha=opacityFromSlider(raw);
   document.getElementById('brain-alpha-val').textContent=raw+'%';
+  useDraggingStepCount();
   updateGlassBrainUniforms();
 });
 document.getElementById('brain-thresh-slider').addEventListener('input',e=>{
   glassBrainThresh=threshFromSlider(+e.target.value);
   document.getElementById('brain-thresh-val').textContent=glassBrainThresh.toFixed(2);
+  useDraggingStepCount();
   updateGlassBrainUniforms();
 });
 document.getElementById('brain-rim-slider').addEventListener('input',e=>{
   glassBrainRimPow=rimFromSlider(+e.target.value);
   document.getElementById('brain-rim-val').textContent=glassBrainRimPow.toFixed(2);
+  useDraggingStepCount();
   updateGlassBrainUniforms();
 });
 document.getElementById('contrast-slider').addEventListener('input',e=>{
@@ -1809,6 +1841,7 @@ document.getElementById('contrast-slider').addEventListener('input',e=>{
   document.getElementById('contrast-val').textContent=contrastGain.toFixed(2)+'×';
   vr.setContrast(contrastGain);
   updateSlicesA(); updateSlicesB();
+  useDraggingStepCount();
   updateGlassBrainUniforms();
 });
 document.getElementById('apply-lut-toggle').addEventListener('change',e=>{
