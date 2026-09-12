@@ -372,7 +372,7 @@ input[type=file]{display:none;}
     <div class="ctl-row" data-tip="Colour a scalar (label) volume via the loaded LUT: each voxel's rounded integer value is looked up as a label index. Disabled until a colormap file is loaded — dropping one turns this on automatically.">
       <label>COLORMAP</label>
       <label class="ctl-toggle">
-        <input type="checkbox" id="apply-lut-toggle" disabled>
+        <input type="checkbox" autocomplete="off" id="apply-lut-toggle" disabled>
         <div class="pill"></div>
       </label>
     </div>
@@ -386,7 +386,7 @@ input[type=file]{display:none;}
     <div class="ctl-row" data-tip="When on: only streamlines with a start or end point within the probe sphere are selected.\nWhen off: all streamlines passing through the sphere.">
       <label>ENDS·ONLY</label>
       <label class="ctl-toggle">
-        <input type="checkbox" id="probe-ends-toggle">
+        <input type="checkbox" autocomplete="off" id="probe-ends-toggle">
         <div class="pill"></div>
       </label>
     </div>
@@ -399,7 +399,7 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="ras" checked>
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="flat"><input type="color" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="flat"><input type="color" autocomplete="off" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
 <div class="ctl-row" data-tip="NEAR-END dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
   <label>NEAR·ENDS</label>
@@ -407,7 +407,7 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="ras" checked>
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat"><input type="color" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat"><input type="color" autocomplete="off" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
 <div class="ctl-row" data-tip="FAR-END dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
   <label>FAR·ENDS</label>
@@ -415,7 +415,7 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="ras">
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="flat" checked><input type="color" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="flat" checked><input type="color" autocomplete="off" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
 <div class="ctl-row" data-tip="Near/far-end dot size in screen pixels.">
   <label>ENDS·SIZE</label>
@@ -462,17 +462,17 @@ input[type=file]{display:none;}
     </div>
     <div class="clip-sub-row">
       <label class="ctl-toggle">
-        <input type="checkbox" id="clip-flip">
+        <input type="checkbox" autocomplete="off" id="clip-flip">
         <div class="pill"></div>
         <span class="tog-label">FLIP</span>
       </label>
       <label class="ctl-toggle">
-        <input type="checkbox" id="clip-cover" checked>
+        <input type="checkbox" autocomplete="off" id="clip-cover" checked>
         <div class="pill"></div>
         <span class="tog-label">COVER</span>
       </label>
       <label class="ctl-toggle">
-        <input type="checkbox" id="clip-frames" checked>
+        <input type="checkbox" autocomplete="off" id="clip-frames" checked>
         <div class="pill"></div>
         <span class="tog-label">FRAMES</span>
       </label>
