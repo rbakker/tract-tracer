@@ -93,6 +93,35 @@ uniform float u_dataMin;
 uniform float u_dataRange;
 uniform mat4  u_model;
 uniform mat4  u_projView;
+// Off-axis "three-quarter" light direction, fixed relative to the viewer
+// (recomputed from camera orientation each frame in onBeforeRender, then
+// pre-transformed into this same local voxel-index space rd already uses —
+// see u_lightDir's JS-side computation for why). A light glued to the view
+// direction (the previous dot(N,rd) headlamp) is exactly the lighting
+// condition under which convex and concave detail become indistinguishable
+// (the classic "hollow-face" illusion) — this breaks that degeneracy for a
+// static, unrotated view, without needing any continuous animation.
+uniform vec3  u_lightDir;
+// Section-plane clipping — anatomy only (tractogram lines are a separate
+// mesh, untouched by this). Each of the 3 planes (sag/cor/axi) is a half-
+// space test in LOCAL voxel-index space (same space as ro/rd/t below), so
+// it can be applied once to tighten [tStart,tEnd] before either the glass
+// accumulation loop or the solid isosurface march — clipping both at once
+// for free. u_clipNormal/u_clipPoint are pre-transformed on the JS side
+// from the plane's world/RAS normal+point into this local space (normal
+// via transpose(linear part of u_model), point via u_invModel — see
+// updateClipUniforms in index.html), so no matrix work is needed per-pixel.
+// u_clipDir encodes both "is this plane clipping" and which side is kept:
+//   0      -> clipping disabled for this plane (OFF or THROUGH/no-clip mode)
+//   +1.0   -> "clip -": hide the negative (L/P/I) side, keep positive
+//   -1.0   -> "clip +": hide the positive (R/A/S) side, keep negative
+uniform vec3  u_clipNormal[3];
+uniform vec3  u_clipPoint[3];
+uniform float u_clipDir[3];
+// Fill-in: whether the clip-plane cut face is painted with sampled anatomy
+// (1.0, default) or skipped entirely (0.0) so the ray looks past the cut
+// into whatever real tissue lies behind it. See the solid-mode block below.
+uniform float u_fillIn;
 varying vec2 vNDC;
 
 vec2 boxHit(vec3 ro, vec3 rd) {
@@ -285,22 +314,46 @@ float occupancyAt(vec3 voxCoord) {
   bool nearestFiltered = (u_applyLUT > 0.5) && (u_isColor < 0.5);
   return nearestFiltered ? (v > 0.0 ? 1.0 : 0.0) : v;
 }
-// Trilinear interpolation of the raw value field from its 8 surrounding
-// voxel corners, plus its analytic gradient reusing the same 8 samples —
-// a genuinely continuous function of position, unlike any discrete
-// neighbour-difference scheme, since it's a true blend rather than a
-// re-classification of nearest-voxel lookups. Returns (gradient, value)
-// as (xyz, w).
+// Trilinear-ish reconstruction of the field, plus (for label data only) an
+// analytic gradient reusing the same 8 corner samples. Returns (gradient,
+// value) as (xyz, w) — only .w is ever read by any caller below; .xyz is
+// meaningful for label mode only and left at zero for continuous data.
+//
+// For continuous (LINEAR-filtered) data this deliberately does MORE
+// smoothing than a single hardware trilinear sample would: each "corner"
+// below is itself already a hardware-interpolated sample (see occupancyAt),
+// so blending 8 of THOSE together is a second layer of interpolation on
+// top of the first - a wider, quadratic-ish kernel that's what makes
+// acquisition-slice banding disappear from the isosurface. A single plain
+// sampleVol(p) call looks correct but noticeably faceted along slice
+// boundaries by comparison; this is a deliberate, wanted trade of a little
+// extra softness for that. Label data doesn't have this option (or need
+// it) - occupancyAt(k) for it is a genuine discrete per-voxel classification
+// via NEAREST, not a blend, so the very same corner construction below is
+// simply the correct way to build a smooth occupancy field from arbitrary
+// categorical labels, not an extra-smoothing add-on.
 vec4 occupancyAndGradient(vec3 p) {
-  // occupancyAt(i) reads voxel i's value via NEAREST, representative of
-  // that voxel's TRUE center at i+0.5 (not at i) - so shift p by -0.5
-  // before flooring, making corner p0 correctly represent position
-  // p0+0.5 in the blend below. Without this the blend ramps its full 0-1
-  // range across p0 to p0+1, reaching its far value already AT p0+1 (the
-  // true zone boundary) rather than being at the 50% midpoint there -
-  // meaning any small/fixed threshold finds its crossing far too early,
-  // well inside what should still read as background.
-  vec3 ps = p - vec3(0.5);
+  bool nearestFiltered = (u_applyLUT > 0.5) && (u_isColor < 0.5); // same test as occupancyAt's
+  // Label mode: occupancyAt(i) reads voxel i's value via NEAREST,
+  // representative of that voxel's TRUE center at i+0.5 (not at i) - so
+  // shift p by -0.5 before flooring, making corner p0 correctly represent
+  // position p0+0.5 in the blend below. Without this the blend ramps its
+  // full 0-1 range across p0 to p0+1, reaching its far value already AT
+  // p0+1 (the true zone boundary) rather than being at the 50% midpoint
+  // there - meaning any small/fixed threshold finds its crossing far too
+  // early, well inside what should still read as background.
+  //
+  // Continuous mode deliberately does NOT apply that same -0.5 shift.
+  // occupancyAt(k) here is itself already H(k), the hardware-interpolated
+  // value AT k (not at k+0.5) - so building the outer blend directly from
+  // floor(p)/fract(p), with no pre-shift, keeps its result correctly
+  // centered on p. (Reusing the label branch's -0.5 shift here was the
+  // actual bug fixed previously: it re-centered this same extra-smoothing
+  // blend a half voxel away from p - e.g. at p=3.2, the correctly-centered
+  // version below weights texel centers 2.5/3.5/4.5 by 0.4/0.5/0.1, whose
+  // weighted centroid is exactly 3.2; shifting first, as label mode needs,
+  // instead lands that centroid at 2.7.)
+  vec3 ps = nearestFiltered ? (p - vec3(0.5)) : p;
   vec3 p0 = floor(ps);
   vec3 f  = ps - p0;
   float c000 = occupancyAt(p0 + vec3(0.0,0.0,0.0));
@@ -320,30 +373,42 @@ vec4 occupancyAndGradient(vec3 p) {
   float c1  = mix(c01, c11, f.y);
   float val = mix(c0, c1, f.z);
 
+  if (!nearestFiltered) return vec4(0.0, 0.0, 0.0, val); // gradient unused outside label mode
+
   float dx = mix(mix(c100-c000, c110-c010, f.y), mix(c101-c001, c111-c011, f.y), f.z);
   float dy = mix(mix(c010-c000, c110-c100, f.x), mix(c011-c001, c111-c101, f.x), f.z);
   float dz = mix(mix(c001-c000, c101-c100, f.x), mix(c011-c010, c111-c110, f.x), f.y);
 
   return vec4(dx, dy, dz, val);
 }
-// Marches the ray looking for the first point where the raw value field
-// reaches ISO_THRESH, then bisection-refines a few steps for a cleaner
-// surface than the raw step size alone would give.
+// Marches the ray looking for the first place the raw value field crosses
+// thresh, then bisection-refines a few steps for a cleaner surface than the
+// raw step size alone would give. Generalized to start from either side of
+// thresh: ordinarily tStart sits in background (the natural bounding box
+// always does), so this finds the usual entry surface — but when a clip
+// plane cuts through the middle of tissue, tStart can start already inside
+// it, and this instead finds that tissue's exit boundary, a genuine
+// anatomical transition with a well-defined gradient (unlike the cut face
+// itself). That's what lets FILL-IN=off "look inside" the anatomy: no flat
+// cap, just whatever real surface the ray hits next.
 bool findIsosurface(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize, float thresh,
-                     out vec3 hitP) {
+                     out vec3 hitP, out bool wasExit) {
   vec3 prevP = ro + tStart * rd;
+  bool startInside = occupancyAndGradient(prevP).w >= thresh;
+  wasExit = startInside;
   for (int i = 1; i < 256; i++) {
     if (i >= u_steps) break;
     float t = tStart + float(i) * stepSize;
     if (t > tEnd) break;
     vec3 p = ro + t * rd;
     float occ = occupancyAndGradient(p).w;
-    if (occ >= thresh) {
-      vec3 a = prevP, b = p;
+    bool inside = occ >= thresh;
+    if (inside != startInside) {
+      vec3 a = prevP, b = p; // a stays on the startInside side, b on the other
       for (int k = 0; k < 6; k++) {
         vec3 mid = (a + b) * 0.5;
-        float om = occupancyAndGradient(mid).w;
-        if (om < thresh) a = mid; else b = mid;
+        bool midInside = occupancyAndGradient(mid).w >= thresh;
+        if (midInside == startInside) a = mid; else b = mid;
       }
       hitP = (a + b) * 0.5;
       return true;
@@ -375,6 +440,32 @@ void main() {
   if (hit.y < hit.x || hit.y < 0.0) discard;
   float tStart   = max(hit.x, 0.0);
   float tEnd     = hit.y;
+
+  // Section-plane clipping: shrink [tStart,tEnd] by each active plane's
+  // half-space, in local voxel-index space (same parametrization as
+  // ro + t*rd everywhere else in this shader). D(t) = d0 + t*dn is the
+  // signed "kept-side" distance along the ray; D>=0 is kept, D<0 clipped.
+  // clipEntryPlane tracks which plane (if any) ends up defining the near
+  // boundary tStart — i.e. whether this ray enters through an artificial
+  // cut face rather than the volume's real edge. Used below to render a
+  // proper cut-face "cap" in solid mode instead of running the ordinary
+  // isosurface search from a starting point that may already be mid-tissue.
+  int clipEntryPlane = -1;
+  for (int i = 0; i < 3; i++) {
+    float dir = u_clipDir[i];
+    if (dir == 0.0) continue;
+    float d0 = dot(ro - u_clipPoint[i], u_clipNormal[i]) * dir;
+    float dn = dot(rd,                  u_clipNormal[i]) * dir;
+    if (abs(dn) < 1e-8) {
+      if (d0 < 0.0) tEnd = tStart - 1.0; // whole ray on the clipped side
+    } else {
+      float tCross = -d0 / dn;
+      if (dn > 0.0) { if (tCross > tStart) { tStart = tCross; clipEntryPlane = i; } }
+      else          { tEnd = min(tEnd, tCross); }
+    }
+  }
+  if (tEnd <= tStart) discard;
+
   float stepSize = (tEnd - tStart) / float(u_steps);
   float mmPerStep = length(rd * u_voxMm) * stepSize;
   float accAlpha = 0.0;
@@ -460,6 +551,10 @@ void main() {
   float fragDepth = 0.0;
   if (solidBlend > 0.0) {
     vec3 hitP;
+    bool haveHit = false;
+    bool isCap   = false;
+    bool wasExit = false;
+
     // u_thresh is a meaningful intensity cutoff for continuous FA/scan
     // data, but labels are arbitrary categorical numbers - a magnitude
     // threshold would find the isosurface crossing at a different,
@@ -471,36 +566,103 @@ void main() {
     // 0/1 for label mode specifically so this doesn't depend on any
     // particular label's value - 0.5 always finds the true boundary.
     float isoThresh = labelMode ? 0.5 : u_thresh;
-    if (findIsosurface(ro, rd, tStart, tEnd, stepSize, isoThresh, hitP)) {
-      vec3 N = normalize(smoothedOccupancyNormal(hitP));
-      // Resample slightly inside the surface (N points from background
-      // toward tissue) rather than exactly at the ambiguous crossing, for
-      // a cleaner normal - and, for colour sampling below (both label+LUT
-      // and DEC), so it doesn't land back on background.
-      vec3 inwardP = hitP + N * 0.5;
-      N = normalize(smoothedOccupancyNormal(inwardP));
-      float shade = max(dot(N, rd), 0.0);
 
+    // This ray's near boundary is an artificial clip-plane cut, not the
+    // volume's real edge — inspect what's actually there. When FILL-IN is
+    // on (default), and there IS anatomy right at the cut (using the SAME
+    // isoThresh as the surface search — the THRESHOLD slider — or the
+    // booleanized occupancy for LUT data, where a magnitude threshold has
+    // no meaning), paint an anatomy-colored cap there, like a 2D slice.
+    // When FILL-IN is off, or the cut lands on background (e.g. tissue
+    // deliberately blanked out for a "see-inside" view), skip the cap and
+    // fall through to the isosurface search below instead — which, thanks
+    // to findIsosurface's generalized start-from-either-side handling, is
+    // exactly what reveals a genuine shaded boundary further behind the
+    // cut rather than the old degenerate result (a bisection collapsing
+    // onto the entry point itself, where the local gradient is often
+    // ~flat mid-tissue and normalizing it produced the black flecks
+    // originally seen when clipping through solid anatomy). And since an
+    // empty hole here writes no depth at all, streamlines occupying that
+    // same gap render through normally rather than being hidden behind an
+    // opaque cap.
+    if (clipEntryPlane >= 0 && u_fillIn > 0.5) {
+      vec3 capP = ro + tStart * rd;
+      bool hasCapData = labelMode ? (occupancyAt(capP) > 0.5) : (sampleVol(capP) > isoThresh);
+      if (hasCapData) { hitP = capP; isCap = true; haveHit = true; }
+    }
+
+    if (!haveHit && findIsosurface(ro, rd, tStart, tEnd, stepSize, isoThresh, hitP, wasExit)) {
+      haveHit = true;
+    }
+
+    if (haveHit) {
       vec3 baseColor;
-      if (labelMode) {
-        // Sample at inwardP, not hitP: hitP sits wherever the blended
-        // occupancy exactly equals u_thresh, which for label data (raw
-        // integer values, not a normalized [0,1] range) can be barely
-        // inside the region in blend-weight terms whenever threshold is
-        // small relative to the label's own value - e.g. threshold=5
-        // against label=30 only needs ~17% real-label weight to cross,
-        // so a colour sample taken exactly there is dominated by
-        // background and comes out dark. inwardP moves the sample
-        // solidly into real tissue instead.
-        baseColor = interpolatedLutColor(inwardP);
-      } else if (u_isColor > 0.5) {
-        // DEC/colour volume: the actual FA-weighted direction colour,
-        // same boost as glass mode, at the same inward-nudged point.
-        baseColor = pow(clamp(sampleRaw(inwardP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8));
+      float shade;
+      if (isCap) {
+        // Flat, unlit — like the 2D slice panels: this is an artificial
+        // cut face, not a real anatomical boundary, so isosurface-style
+        // rim/normal shading would be meaningless here (and the gradient
+        // at an arbitrary cut is often close to zero anyway).
+        // Label/LUT: nearest-neighbour, not interpolatedLutColor's trilinear
+        // blend. The blend is what makes the isosurface itself look good
+        // (a previous session's conclusion, left untouched below) — but a
+        // cut face is a flat cross-section, exactly like the 2D slice
+        // panels, which also read raw per-voxel labels with no blending.
+        // sampleLabelIndex already does this NN lookup (the label texture
+        // is NEAREST-filtered — see buildGlassBrain), so this is a direct
+        // per-voxel color with no extra interpolation math needed.
+        baseColor = labelMode ? lutColor(sampleLabelIndex(hitP))
+                  : (u_isColor > 0.5
+                      ? pow(clamp(sampleRaw(hitP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8))
+                      : vec3(gammaContrast(sampleVol(hitP), 1.0 / u_contrast)));
+        shade = 1.0;
       } else {
-        // Plain scan: shading alone defines the surface — this is the
-        // combination already confirmed to look good, left untouched.
-        baseColor = vec3(1.0);
+        vec3 N = normalize(smoothedOccupancyNormal(hitP));
+        // Resample slightly inside the surface (N points from background
+        // toward tissue) rather than exactly at the ambiguous crossing, for
+        // a cleaner normal - and, for colour sampling below (both label+LUT
+        // and DEC), so it doesn't land back on background.
+        vec3 inwardP = hitP + N * 0.5;
+        N = normalize(smoothedOccupancyNormal(inwardP));
+        // N points from background toward tissue (established by this same
+        // gradient's sign convention throughout the file), so a normal
+        // entry surface faces toward the light and dot(N,u_lightDir)>0. An
+        // interior surface revealed by FILL-IN=off (wasExit) is the
+        // opposite: its natural gradient faces back the way the ray came,
+        // so straight front-facing shading would render it almost
+        // uniformly dark. Two-sided shading here instead — this is an
+        // otherwise-invisible internal wall, so showing it regardless of
+        // which way it happens to face is more useful than a dark silhouette.
+        //
+        // wasExit also gets a deliberately dimmer, flatter treatment on top
+        // of that: peeking inside a solid object is exactly the situation
+        // where light doesn't reach directly, so both the ambient floor and
+        // the diffuse term's own weight are pulled down versus the
+        // exterior's fuller-range, brighter shading.
+        float diffuse = wasExit ? abs(dot(N, u_lightDir)) : max(dot(N, u_lightDir), 0.0);
+        shade = wasExit ? (0.3 + 0.3 * diffuse)
+                        : (0.2 + 0.8 * diffuse);
+
+        if (labelMode) {
+          // Sample at inwardP, not hitP: hitP sits wherever the blended
+          // occupancy exactly equals u_thresh, which for label data (raw
+          // integer values, not a normalized [0,1] range) can be barely
+          // inside the region in blend-weight terms whenever threshold is
+          // small relative to the label's own value - e.g. threshold=5
+          // against label=30 only needs ~17% real-label weight to cross,
+          // so a colour sample taken exactly there is dominated by
+          // background and comes out dark. inwardP moves the sample
+          // solidly into real tissue instead.
+          baseColor = interpolatedLutColor(inwardP);
+        } else if (u_isColor > 0.5) {
+          // DEC/colour volume: the actual FA-weighted direction colour,
+          // same boost as glass mode, at the same inward-nudged point.
+          baseColor = pow(clamp(sampleRaw(inwardP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8));
+        } else {
+          // Plain scan: shading alone defines the surface — this is the
+          // combination already confirmed to look good, left untouched.
+          baseColor = vec3(1.0);
+        }
       }
       solidColor = baseColor * shade;
       solidAlpha = 1.0;
@@ -610,6 +772,15 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
       u_dataRange: { value: (anat.mx - anat.mn) || 1 },
       u_model:     { value: modelMatrix },
       u_projView:  { value: new THREE.Matrix4() },
+      // Section-plane clipping (anatomy only) — see updateClipUniforms()
+      // in index.html, which keeps these in sync with the PLANES controls,
+      // the section-plane rotation (PITCH/YAW/ROLL), and plane position.
+      // Disabled (u_clipDir=0) for all three planes by default.
+      u_clipDir:    { value: [0, 0, 0] },
+      u_clipNormal: { value: [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)] },
+      u_clipPoint:  { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+      u_fillIn:     { value: 1.0 },
+      u_lightDir:   { value: new THREE.Vector3(0, 0, 1) },
     },
     transparent: true,
     depthWrite:  true,
@@ -622,11 +793,40 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
   mesh.renderOrder   = 999;
 
   const _pv = new THREE.Matrix4();
+  // Offset from the view direction, in camera space: mostly forward, plus
+  // some down/left-right lean - "three-quarter" studio lighting. Exposed as
+  // mutable mesh.userData.lightCam (default: dead ahead, i.e. CENTER) so
+  // index.html's LIGHT slider can move it, including all the way back to
+  // (0,0,1) - pure view-aligned - which reproduces the original camera-glued
+  // "headlamp" light exactly. Recomputed into world space from the camera's
+  // own basis each frame so it always reads as coming from the same
+  // direction relative to the VIEWER regardless of how far they've orbited,
+  // then converted into local voxel-index space the same way rd is (see
+  // main()'s "rd = normalize(mat3(u_invModel) * rd_world)"). This is a
+  // plain per-frame vector update piggybacking on the render Three.js
+  // already does for camera movement — no extra draw calls, no idle redraw
+  // loop, so it costs nothing while the view is static.
+  mesh.userData.lightCam = new THREE.Vector3(0, 0, 1);
+  const _camRight   = new THREE.Vector3();
+  const _camUp      = new THREE.Vector3();
+  const _camFwd     = new THREE.Vector3();
+  const _lightWorld = new THREE.Vector3();
   mesh.onBeforeRender = (renderer, scene, cam) => {
     _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     mat.uniforms.u_projView.value.copy(_pv);
     mat.uniforms.u_invPV.value.copy(_pv).invert();
     mat.uniforms.u_camPos.value.copy(cam.position);
+
+    const lightCam = mesh.userData.lightCam;
+    _camRight.setFromMatrixColumn(cam.matrixWorld, 0);
+    _camUp.setFromMatrixColumn(cam.matrixWorld, 1);
+    _camFwd.setFromMatrixColumn(cam.matrixWorld, 2).multiplyScalar(-1); // camera looks down -Z
+    _lightWorld.set(0, 0, 0)
+      .addScaledVector(_camRight, lightCam.x)
+      .addScaledVector(_camUp,    lightCam.y)
+      .addScaledVector(_camFwd,   lightCam.z)
+      .normalize();
+    mat.uniforms.u_lightDir.value.copy(_lightWorld).transformDirection(invModel).normalize();
   };
 
   scene.add(mesh);

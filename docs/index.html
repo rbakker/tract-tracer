@@ -184,6 +184,21 @@ input[type=file]{display:none;}
 .pt-sag .pill{border-color:var(--sag);background:var(--sag);}
 .pt-cor .pill{border-color:var(--cor);background:var(--cor);}
 .pt-axi .pill{border-color:var(--axi);background:var(--axi);}
+
+.clip-radio-row{display:flex;gap:2px;}
+.clip-radio-opt{position:relative;cursor:pointer;user-select:none;}
+.clip-radio-opt input{position:absolute;opacity:0;width:0;height:0;}
+.clip-radio-opt span{display:inline-block;font-size:9px;letter-spacing:0.05em;line-height:1;
+  padding:4px 8px;border:1px solid var(--rc-color);border-radius:3px;
+  background:transparent;color:var(--rc-color);}
+.clip-radio-opt:hover span{filter:brightness(1.4);}
+.clip-radio-opt input:checked + span{background:var(--rc-color);color:#090909;}
+.cro-sag{--rc-color:var(--sag);}
+.cro-cor{--rc-color:var(--cor);}
+.cro-axi{--rc-color:var(--axi);}
+.cro-none{--rc-color:var(--dim);}
+.clip-sub-row{display:flex;gap:16px;margin:9px 0 3px 70px;}
+.clip-sub-row .ctl-toggle{gap:6px;}
 .radio-opt {
   display: flex;
   align-items: center;
@@ -240,7 +255,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-sag-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-	    <span class="slice-label sag"><span class="plane-id">SAG</span>source</span>
+	    <span class="slice-label sag"><span class="plane-id">SAG</span>probe</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-sag-src" title="click to copy">—</span>
@@ -252,7 +267,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-cor-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label cor"><span class="plane-id">COR</span>source</span>
+        <span class="slice-label cor"><span class="plane-id">COR</span>probe</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-cor-src" title="click to copy">—</span>
@@ -264,7 +279,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-axi-src">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label axi"><span class="plane-id">AXI</span>source</span>
+        <span class="slice-label axi"><span class="plane-id">AXI</span>probe</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-axi-src" title="click to copy">—</span>
@@ -380,29 +395,29 @@ input[type=file]{display:none;}
 
 <div class="ctl-row" data-tip="Streamline color: None to switch off, RAS for directional coloring, or custom uniform color.">
   <label>LINE·COLOR</label>
-  <label class="radio-opt"><input type="radio" name="lines-color" value="hide"> None</label>
-  <label class="radio-opt"><input type="radio" name="lines-color" value="ras" checked>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="ras" checked>
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
-  <label class="radio-opt"><input type="radio" name="lines-color" value="flat"><input type="color" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="flat"><input type="color" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="SOURCE dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
-  <label>SOURCE·COLOR</label>
-  <label class="radio-opt"><input type="radio" name="src-color" value="hide"> None</label>
-  <label class="radio-opt"><input type="radio" name="src-color" value="ras" checked>
+<div class="ctl-row" data-tip="NEAR-END dot color: endpoint closest to probe. None=off, RAS=directional, custom color.">
+  <label>NEAR·ENDS</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="ras" checked>
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
-  <label class="radio-opt"><input type="radio" name="src-color" value="flat"><input type="color" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat"><input type="color" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="TARGET dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
-  <label>TARGET·COLOR</label>
-  <label class="radio-opt"><input type="radio" name="tgt-color" value="hide"> None</label>
-  <label class="radio-opt"><input type="radio" name="tgt-color" value="ras">
+<div class="ctl-row" data-tip="FAR-END dot color: endpoint farthest from probe. None=off, RAS=directional, custom color.">
+  <label>FAR·ENDS</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="ras">
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
-  <label class="radio-opt"><input type="radio" name="tgt-color" value="flat" checked><input type="color" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="flat" checked><input type="color" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="SOURCE and TARGET dot size in screen pixels.">
+<div class="ctl-row" data-tip="Near/far-end dot size in screen pixels.">
   <label>ENDS·SIZE</label>
   <input type="range" id="ends-size" min="1" max="16" step="0.5" value="6">
   <span class="slider-val" id="ends-size-val">6</span>
@@ -431,25 +446,36 @@ input[type=file]{display:none;}
       <input type="range" id="brain-rim-slider" min="0" max="100" value="50" step="1">
       <span class="ctl-val" id="brain-rim-val">1.00</span>
     </div>
-    <div class="ctl-row" data-tip="Toggle section plane rectangles in the 3D view.">
-      <label>PLANES</label>
-      <div class="plane-toggles" style="margin:0;">
-        <label class="plane-toggle pt-sag">
-          <input type="checkbox" id="tog-sag" checked>
-          <div class="pill"></div>
-          <span style="color:var(--sag)">SAG</span>
-        </label>
-        <label class="plane-toggle pt-cor">
-          <input type="checkbox" id="tog-cor" checked>
-          <div class="pill"></div>
-          <span style="color:var(--cor)">COR</span>
-        </label>
-        <label class="plane-toggle pt-axi">
-          <input type="checkbox" id="tog-axi" checked>
-          <div class="pill"></div>
-          <span style="color:var(--axi)">AXI</span>
-        </label>
+    <div class="ctl-row" data-tip="Shading light direction. CENTER matches the old camera-aligned 'headlamp' light (flatter, but sometimes an easier fixed reference); LEFT/RIGHT nudges it off-axis, which reads as more three-dimensional on a static view.">
+      <label>LIGHT</label>
+      <input type="range" id="light-slider" min="-100" max="100" value="0" step="1">
+      <span class="ctl-val" id="light-val">CENTER</span>
+    </div>
+    <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped). Default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead. FRAMES shows/hides all three plane rectangles without affecting clipping.">
+      <label>CLIPPING</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-none"><input type="radio" autocomplete="off" name="clip-plane" value="none" checked><span>NONE</span></label>
+        <label class="clip-radio-opt cro-sag"><input type="radio" autocomplete="off" name="clip-plane" value="sag"><span>SAG</span></label>
+        <label class="clip-radio-opt cro-cor"><input type="radio" autocomplete="off" name="clip-plane" value="cor"><span>COR</span></label>
+        <label class="clip-radio-opt cro-axi"><input type="radio" autocomplete="off" name="clip-plane" value="axi"><span>AXI</span></label>
       </div>
+    </div>
+    <div class="clip-sub-row">
+      <label class="ctl-toggle">
+        <input type="checkbox" id="clip-flip">
+        <div class="pill"></div>
+        <span class="tog-label">FLIP</span>
+      </label>
+      <label class="ctl-toggle">
+        <input type="checkbox" id="clip-cover" checked>
+        <div class="pill"></div>
+        <span class="tog-label">COVER</span>
+      </label>
+      <label class="ctl-toggle">
+        <input type="checkbox" id="clip-frames" checked>
+        <div class="pill"></div>
+        <span class="tog-label">FRAMES</span>
+      </label>
     </div>
 
     <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.\nPitch = left-right axis · Yaw = up-down · Roll = front-back.\nUse Reset Planes to return to standard orientation.">SECTION PLANES</div>
@@ -513,7 +539,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-sag-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label sag"><span class="plane-id">SAG</span>target</span>
+        <span class="slice-label sag"><span class="plane-id">SAG</span>explore</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-sag-tgt" title="click to copy">—</span>
@@ -525,7 +551,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-cor-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label cor"><span class="plane-id">COR</span>target</span>
+        <span class="slice-label cor"><span class="plane-id">COR</span>explore</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-cor-tgt" title="click to copy">—</span>
@@ -537,7 +563,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-axi-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label axi"><span class="plane-id">AXI</span>target</span>
+        <span class="slice-label axi"><span class="plane-id">AXI</span>explore</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-axi-tgt" title="click to copy">—</span>
@@ -895,18 +921,75 @@ let selMesh=null, srcDots=null, tgtDots=null, probeSphere=null;
 let _lastProbedEnds=null, _lastCursor=[0,0,0];
 // Slice plane meshes in 3D view
 const planeMeshes = {sag:null, cor:null, axi:null};
-const planeVisible = {sag:true, cor:true, axi:true};
+// Which single plane (if any) clips the anatomy: 'none' | 'sag' | 'cor' | 'axi'.
+let clipPlane = 'none';
+// Default clips away the positive (R/A/S) side; FLIP flips to negative (L/P/I).
+let clipFlip = false;
+// When on (default), the cut face is painted with the sampled anatomy, like
+// a 2D slice. When off, that flat cap is skipped so the ray looks past the
+// cut into whatever real tissue boundary lies behind it.
+let cover = true;
+// Shows all three plane rectangles (default) — independent of clipping.
+let framesVisible = true;
+const PLANE_AXIS_INDEX = {sag:0, cor:1, axi:2}; // matches vr._getNormalAxis / vr._rot_dirs
 
 function updatePlaneMeshes() {
   for (const k of ['sag','cor','axi']) {
     if (planeMeshes[k]) { scene.remove(planeMeshes[k]); planeMeshes[k]=null; }
-    if (planeVisible[k] && state.get('anat.file')) {
+    if (framesVisible && state.get('anat.file')) {
       const vc = state.get('tgt.view.'+k) || state.get('tgt.cursor');
       planeMeshes[k] = makePlaneMesh(k, vr, vc);
       if (planeMeshes[k]) scene.add(planeMeshes[k]);
     }
   }
+  updateClipUniforms();
   renderer3.render(scene,camera);
+}
+
+// Keeps the glass-brain shader's clip-plane uniforms (u_clipDir/u_clipNormal/
+// u_clipPoint) in sync with the chosen clip plane, invert state, plane
+// position, and rotation. Clipping only ever applies to the anatomy
+// raymarcher — the tractogram LineSegments mesh is untouched, so
+// streamlines never get cut.
+function updateClipUniforms() {
+  if (!glassBrainMesh) return;
+  const u = glassBrainMesh.material.uniforms;
+  const modelMatrix = u.u_model.value;   // THREE.Matrix4 (local voxel-index -> world/RAS)
+  const invModel    = u.u_invModel.value;
+  const size        = u.u_size.value;    // THREE.Vector3, anat.shape
+  const L  = new THREE.Matrix3().setFromMatrix4(modelMatrix);
+  const Lt = L.clone().transpose();
+  const haveAnat = !!state.get('anat.file');
+
+  for (const k of ['sag','cor','axi']) {
+    const i = PLANE_AXIS_INDEX[k];
+    // dir=+1 ("clip-"): hide negative side, keep positive. dir=-1 ("clip+"):
+    // hide positive side, keep negative. Default (not inverted) is clip+,
+    // per the requested "default positive side is clipped".
+    let dir = 0;
+    if (clipPlane === k) dir = clipFlip ? 1 : -1;
+
+    if (dir !== 0 && haveAnat) {
+      const vc = state.get('tgt.view.'+k) || state.get('tgt.cursor');
+      const nWorld = vr._rot_dirs[i]; // plane normal, RAS unit vector (rotated by PITCH/YAW/ROLL)
+
+      // Local-space plane normal: n_local = transpose(linear part of u_model) * n_world
+      // (a plain direction transform would be wrong once the affine includes
+      // anisotropic voxel scaling — see scene3d.js's clip-plane comment).
+      const nLocal = new THREE.Vector3(nWorld[0], nWorld[1], nWorld[2]).applyMatrix3(Lt);
+
+      // Local-space plane point: full inverse-affine point transform, same
+      // "+size*0.5" re-centring the shader already applies to ro/u_camPos.
+      const qLocal4 = new THREE.Vector4(vc[0], vc[1], vc[2], 1).applyMatrix4(invModel);
+      const qLocal  = new THREE.Vector3(qLocal4.x, qLocal4.y, qLocal4.z)
+                        .add(new THREE.Vector3(size.x, size.y, size.z).multiplyScalar(0.5));
+
+      u.u_clipNormal.value[i].copy(nLocal);
+      u.u_clipPoint.value[i].copy(qLocal);
+    }
+    u.u_clipDir.value[i] = dir;
+  }
+  u.u_fillIn.value = cover ? 1.0 : 0.0;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -975,6 +1058,25 @@ function updateGlassBrainUniforms() {
   u.u_thresh.value = glassBrainThresh;
   u.u_rimPow.value = glassBrainRimPow;
   u.u_contrast.value = contrastGain;
+  updateClipUniforms();
+  updateLightBias(lightBias);
+  renderer3.render(scene, camera);
+}
+
+// Shading light direction, fixed relative to the viewer (see scene3d.js's
+// buildGlassBrain, which turns this into a proper world/local direction
+// each frame from the camera's own orientation). s ranges -1 (downward-left)
+// to +1 (downward-right); s=0 (default) reproduces the original
+// camera-aligned "headlamp" light exactly (both the left/right AND down
+// offsets collapse to zero there).
+let lightBias = 0.0;
+function updateLightBias(s) {
+  lightBias = s;
+  if (!glassBrainMesh || !glassBrainMesh.userData.lightCam) return;
+  const mag = Math.abs(s);
+  glassBrainMesh.userData.lightCam
+    .set(s * 0.45, -mag * 0.6, THREE.MathUtils.lerp(1.0, 0.65, mag))
+    .normalize();
   renderer3.render(scene, camera);
 }
 
@@ -1123,9 +1225,7 @@ function collectState() {
       glassBrainAlpha, glassBrainThresh, glassBrainRimPow,
       contrastGain,
       pitch, yaw, roll,
-      showSag: document.getElementById('tog-sag')?.checked ?? true,
-      showCor: document.getElementById('tog-cor')?.checked ?? true,
-      showAxi: document.getElementById('tog-axi')?.checked ?? true,
+      clipPlane, clipFlip, cover, framesVisible,
     },
     probe: {
       cursor: state.get('src.cursor')
@@ -1392,11 +1492,28 @@ function updateRotation(){
 document.getElementById('pitch-slider').addEventListener('input',e=>{pitch=+e.target.value;document.getElementById('pitch-val').textContent=pitch+'°';updateRotation();});
 document.getElementById('yaw-slider').addEventListener('input',e=>{yaw=+e.target.value;document.getElementById('yaw-val').textContent=yaw+'°';updateRotation();});
 document.getElementById('roll-slider').addEventListener('input',e=>{roll=+e.target.value;document.getElementById('roll-val').textContent=roll+'°';updateRotation();});
-['sag','cor','axi'].forEach(k=>{
-  document.getElementById('tog-'+k).addEventListener('change',e=>{
-    planeVisible[k]=e.target.checked;
+document.querySelectorAll('input[name="clip-plane"]').forEach(r=>{
+  r.addEventListener('change', ()=>{
+    clipPlane = r.value;
     updatePlaneMeshes();
   });
+});
+document.getElementById('clip-flip').addEventListener('change', e=>{
+  clipFlip = e.target.checked;
+  updatePlaneMeshes();
+});
+document.getElementById('clip-cover').addEventListener('change', e=>{
+  cover = e.target.checked;
+  updatePlaneMeshes();
+});
+document.getElementById('clip-frames').addEventListener('change', e=>{
+  framesVisible = e.target.checked;
+  updatePlaneMeshes();
+});
+document.getElementById('light-slider').addEventListener('input', e=>{
+  const v = +e.target.value;
+  document.getElementById('light-val').textContent = v === 0 ? 'CENTER' : (v < 0 ? 'LEFT' : 'RIGHT');
+  updateLightBias(v / 100);
 });
 // Button toggles
 // Unified floating panel — shared by FILE / SETTINGS / ABOUT. Only one
