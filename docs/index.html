@@ -948,7 +948,7 @@ function initSliceInteraction(planeKey, getCanvas, tag, redrawFn) {
 // 4.  THREE.JS + TRACKBALL
 // ═══════════════════════════════════════════════════════════
 const threeCanvas=document.getElementById('three-canvas');
-const renderer3=new THREE.WebGLRenderer({canvas:threeCanvas,antialias:true});
+const renderer3=new THREE.WebGLRenderer({canvas:threeCanvas,antialias:false});
 slabRenderer = new SlabRenderer(renderer3);
 // Cap the render resolution rather than following the device's full pixel
 // ratio (2-3x on many tablets/phones): the raymarcher's cost scales with
