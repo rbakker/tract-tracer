@@ -1127,15 +1127,9 @@ function buildGlassBrainLocal(anat) {
   const toggle = document.getElementById('apply-lut-toggle');
   const lutInfo = { map: lutMap, maxIndex: lutMaxIndex, apply: toggle?.checked ?? false };
   glassBrainMesh = buildGlassBrain(anat, vr.texData, scene, renderer3, camera, lutInfo);
-  // Start at reduced raymarch quality and ramp up shortly after (same
-  // mechanism as dragging a slider — see useDraggingStepCount), rather
-  // than the full step count immediately. buildGlassBrain's own internal
-  // "compile now" render (to surface shader errors early) is the very
-  // FIRST time this shader actually executes on the GPU — on a weak
-  // mobile GPU, running the full-quality raymarch on that very first,
-  // unthrottled frame is plausibly enough on its own to trip a driver
-  // watchdog and lose the WebGL context, with no dragging involved at all.
-  useDraggingStepCount();
+  // Stays throttled — see useSafeStepCount's comment on why this must NOT
+  // auto-restore to full quality after a short timer, unlike dragging.
+  useSafeStepCount();
   updateGlassBrainUniforms();
 }
 
@@ -1151,17 +1145,35 @@ function updateGlassBrainUniforms() {
   renderer3.render(scene, camera);
 }
 
-// Raymarch quality throttle while actively dragging a slider that affects
-// the glass brain (opacity/threshold/rim/contrast). Per-pixel cost varies a
-// lot with these — on weak/mobile GPUs, rapid dragging means many
-// back-to-back expensive frames in a row, which is exactly the kind of
-// thing that can trip a driver's watchdog and lose the WebGL context
-// entirely (see the context-loss banner below). Dropping the step count
-// during the drag itself, then restoring full quality shortly after the
-// last input event, costs nothing visible once the hand settles but cuts
-// worst-case per-frame cost sharply while it's actually being dragged.
+// Raymarch quality throttle. Per-pixel cost varies a lot with
+// opacity/threshold/rim/contrast — on weak/mobile GPUs, an expensive
+// frame is exactly the kind of thing that can trip a driver's watchdog
+// and crash the WebGL context (or, it turns out on some GPU/driver
+// combinations, the whole GPU process — see the context-loss banner
+// below). GLASS_STEPS_DRAGGING is a permanent ceiling once anything has
+// loaded, not just a momentary dip: it used to auto-restore to full
+// quality 250ms after the initial glass-brain build, which is fine for
+// slider-dragging (interactions there are close together) but wrong for
+// initial file loading — the anat volume renders safely throttled, then
+// there's a real gap while the tract file is fetched and parsed, almost
+// always longer than 250ms, so quality had already silently crept back up
+// to full by the time streamlines were added and the next render crashed.
+// Full quality is now opt-in only, via the THRESHOLD/OPACITY/etc. sliders
+// explicitly asking for it when the user is done dragging - never
+// automatically re-armed after a quiet moment during loading.
 const GLASS_STEPS_FULL = 150, GLASS_STEPS_DRAGGING = 40;
 let _stepsRestoreTimer = null;
+// Used for the initial build and any other one-off rebuild: sets the safe
+// throttled step count and leaves it there — no automatic restore.
+function useSafeStepCount() {
+  if (!glassBrainMesh) return;
+  clearTimeout(_stepsRestoreTimer);
+  glassBrainMesh.material.uniforms.u_steps.value = GLASS_STEPS_DRAGGING;
+}
+// Used while actively dragging a quality-affecting slider: same throttled
+// value, but restores to full quality a short debounce period after the
+// LAST input event — safe here specifically because slider interactions
+// are close together, unlike the gap between loading files.
 function useDraggingStepCount() {
   if (!glassBrainMesh) return;
   glassBrainMesh.material.uniforms.u_steps.value = GLASS_STEPS_DRAGGING;
