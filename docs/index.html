@@ -161,6 +161,15 @@ input[type=file]{display:none;}
   border-radius:2px;box-shadow:0 2px 10px rgba(0,0,0,0.6);
   pointer-events:none;z-index:9999;display:none;max-width:240px;white-space:pre-wrap;}
 
+#gl-crash-banner{position:fixed;top:0;left:0;right:0;z-index:10000;display:none;
+  background:#4a0f0f;color:#ffdada;font-family:'JetBrains Mono',monospace;
+  font-size:12px;letter-spacing:0.02em;padding:10px 14px;
+  box-shadow:0 2px 10px rgba(0,0,0,0.6);align-items:center;gap:12px;
+  justify-content:space-between;flex-wrap:wrap;}
+#gl-crash-banner button{font-family:inherit;font-size:11px;letter-spacing:0.08em;
+  background:#ffdada;color:#4a0f0f;border:none;border-radius:3px;
+  padding:6px 12px;cursor:pointer;}
+
 /* section headings */
 .cfg-section{margin-top:12px;margin-bottom:6px;color:var(--accent);
   font-size:9px;letter-spacing:0.2em;border-bottom:1px solid var(--border);padding-bottom:4px;}
@@ -250,6 +259,7 @@ input[type=file]{display:none;}
 </head>
 <body>
 <div id="tip"></div>
+<div id="gl-crash-banner"></div>
 <div class="label-badge" id="label-badge-src"><div class="label-badge-coord"></div><div class="label-badge-name"></div><span class="label-badge-copy" title="copy">⧉</span></div>
 <div class="label-badge" id="label-badge-tgt"><div class="label-badge-coord"></div><div class="label-badge-name"></div><span class="label-badge-copy" title="copy">⧉</span></div>
 
@@ -918,6 +928,44 @@ const camera=new THREE.PerspectiveCamera(45,1,0.1,5000);
 camera.position.set(0,0,200);
 
 const controls=new TrackballControls(camera,threeCanvas);
+
+// ── WebGL context-loss diagnostics ──────────────────────────
+// On a lot of mobile/low-end GPUs, a driver watchdog will kill (and
+// silently never restore) a WebGL context if a shader runs too long on a
+// given frame — the raymarcher's per-pixel cost varies a lot with the
+// OPACITY/threshold sliders, so rapidly dragging them is exactly the kind
+// of thing that can trigger this. When it happens, the canvas just goes
+// blank with no error visible anywhere the person can easily get to on a
+// tablet (no console). This surfaces it directly in the page instead.
+// There are exactly two WebGL contexts in this app: this one (the 3D
+// view) and vr's offscreen canvas that every 2D slice is blitted from.
+(function installWebglContextLossDiagnostics() {
+  const banner = document.getElementById('gl-crash-banner');
+  function showBanner(label) {
+    banner.innerHTML = '';
+    const msg = document.createElement('span');
+    msg.textContent = 'Graphics crashed (' + label + ' lost its WebGL context) — reload to recover.';
+    const btn = document.createElement('button');
+    btn.textContent = 'RELOAD';
+    btn.addEventListener('click', () => location.reload());
+    banner.appendChild(msg);
+    banner.appendChild(btn);
+    banner.style.display = 'flex';
+  }
+  function watch(canvas, label) {
+    if (!canvas) return;
+    canvas.addEventListener('webglcontextlost', e => {
+      e.preventDefault(); // allows the browser to attempt auto-restore; harmless either way
+      console.error('WebGL context lost:', label, e);
+      showBanner(label);
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      console.warn('WebGL context restored:', label, '— textures/state were not re-uploaded, a reload is still the safe option.');
+    });
+  }
+  watch(threeCanvas, '3D view');
+  watch(vr._glCanvas, '2D slice renderer');
+})();
 controls._renderFn = () => renderer3.render(scene, camera);
 
 // ═══════════════════════════════════════════════════════════
