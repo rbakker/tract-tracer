@@ -609,6 +609,35 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
 import { ReactiveState } from './js/reactive-state.js';
 
 'use strict';
+
+// Global crash banner setup — installed FIRST, before anything below gets
+// a chance to throw during initial setup (WebGL context creation, texture
+// upload limits, etc. — exactly the kind of thing a weak/cheap mobile GPU
+// can choke on before the app has even finished loading). The WebGL
+// context-loss-specific listeners are added further down once threeCanvas
+// and vr actually exist, but these generic catches are useful from the
+// very first line of app code onward.
+const glCrashBanner = document.getElementById('gl-crash-banner');
+function showCrashBanner(text) {
+  glCrashBanner.innerHTML = '';
+  const msg = document.createElement('span');
+  msg.textContent = text;
+  const btn = document.createElement('button');
+  btn.textContent = 'RELOAD';
+  btn.addEventListener('click', () => location.reload());
+  glCrashBanner.appendChild(msg);
+  glCrashBanner.appendChild(btn);
+  glCrashBanner.style.display = 'flex';
+}
+window.addEventListener('error', e => {
+  console.error('Uncaught error:', e.error || e.message);
+  showCrashBanner('Something crashed: ' + (e.message || (e.error && e.error.message) || 'unknown error') + ' — reload to recover.');
+});
+window.addEventListener('unhandledrejection', e => {
+  console.error('Unhandled promise rejection:', e.reason);
+  showCrashBanner('Something crashed: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason)) + ' — reload to recover.');
+});
+
 // ═══════════════════════════════════════════════════════════
 // 0.  STATE
 // ═══════════════════════════════════════════════════════════
@@ -941,30 +970,19 @@ const controls=new TrackballControls(camera,threeCanvas);
 // silently never restore) a WebGL context if a shader runs too long on a
 // given frame — the raymarcher's per-pixel cost varies a lot with the
 // OPACITY/threshold sliders, so rapidly dragging them is exactly the kind
-// of thing that can trigger this. When it happens, the canvas just goes
-// blank with no error visible anywhere the person can easily get to on a
-// tablet (no console). This surfaces it directly in the page instead.
-// There are exactly two WebGL contexts in this app: this one (the 3D
-// view) and vr's offscreen canvas that every 2D slice is blitted from.
+// of thing that can trigger this. showCrashBanner (defined up top, so it's
+// already active before any of this even runs) already catches uncaught
+// errors generally; this adds the WebGL-specific "context lost" case,
+// which is silent otherwise (no exception is thrown, the canvas just goes
+// blank). There are exactly two WebGL contexts in this app: this one (the
+// 3D view) and vr's offscreen canvas that every 2D slice is blitted from.
 (function installWebglContextLossDiagnostics() {
-  const banner = document.getElementById('gl-crash-banner');
-  function showBanner(label) {
-    banner.innerHTML = '';
-    const msg = document.createElement('span');
-    msg.textContent = 'Graphics crashed (' + label + ' lost its WebGL context) — reload to recover.';
-    const btn = document.createElement('button');
-    btn.textContent = 'RELOAD';
-    btn.addEventListener('click', () => location.reload());
-    banner.appendChild(msg);
-    banner.appendChild(btn);
-    banner.style.display = 'flex';
-  }
   function watch(canvas, label) {
     if (!canvas) return;
     canvas.addEventListener('webglcontextlost', e => {
       e.preventDefault(); // allows the browser to attempt auto-restore; harmless either way
       console.error('WebGL context lost:', label, e);
-      showBanner(label);
+      showCrashBanner('Graphics crashed (' + label + ' lost its WebGL context) — reload to recover.');
     });
     canvas.addEventListener('webglcontextrestored', () => {
       console.warn('WebGL context restored:', label, '— textures/state were not re-uploaded, a reload is still the safe option.');

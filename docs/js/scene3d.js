@@ -742,6 +742,48 @@ void main() {
 export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo) {
   const isColor = (anat.channels || 1) === 3;
   const isLabelMode = !isColor && !!(lutInfo && lutInfo.apply && lutInfo.map);
+
+  // ── Mobile-GPU capability diagnostics ──────────────────────
+  // Two specific, plausible causes of an early/silent crash on weak mobile
+  // GPUs, checked and reported clearly (console + thrown Error, so the
+  // page's global error banner picks it up) rather than letting either
+  // condition proceed into undefined driver behavior:
+  const gl = renderer3.getContext();
+  // 1) A too-large volume for this GPU's 3D texture support. Uploading
+  //    past this limit isn't a clean, catchable GL error on every driver —
+  //    on some it's exactly the kind of thing that can crash outright.
+  const max3D = gl.getParameter(gl.MAX_3D_TEXTURE_SIZE);
+  if (Math.max(...anat.shape) > max3D) {
+    throw new Error(`Glass brain: volume shape ${anat.shape.join('x')} exceeds this GPU's MAX_3D_TEXTURE_SIZE (${max3D}) — cannot upload.`);
+  }
+  // 2) R32F (used below for scalar/non-label volumes) is only a FILTERABLE
+  //    format per the WebGL2/GLES3 spec when OES_texture_float_linear is
+  //    present — plenty of cheap mobile GPUs lack it. Requesting LINEAR
+  //    filtering on an unfilterable format is invalid GL state with
+  //    genuinely undefined behavior, which on a fragile mobile driver is a
+  //    very plausible way to get exactly the kind of early, silent crash
+  //    being chased right now. Not switched to a fallback filter mode yet
+  //    (that needs a matching change to the shader's own corner-sampling
+  //    logic, which currently assumes real hardware LINEAR whenever this
+  //    isn't label mode - see occupancyAndGradient's nearestFiltered
+  //    branch) — for now this only reports the condition clearly so it can
+  //    be confirmed before touching that.
+  const hasFloatLinear = !!gl.getExtension('OES_texture_float_linear');
+  if (!isColor && !isLabelMode && !hasFloatLinear) {
+    console.warn('Glass brain: OES_texture_float_linear is NOT supported on this GPU, but the scalar volume texture is being created with LINEAR filtering anyway (required for the current smoothing scheme) — this is invalid GL state on this device and a likely cause of instability.');
+  }
+  // Logged unconditionally too, since a webgl2 debug_renderer_info string
+  // (actual GPU model, where available) is exactly what's most useful to
+  // have on hand once real DevTools access is sorted out.
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  console.info('Glass brain GPU info:', {
+    renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+    vendor:   dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)   : gl.getParameter(gl.VENDOR),
+    max3DTextureSize: max3D,
+    volumeShape: anat.shape,
+    hasFloatLinear,
+  });
+
   const tex = new THREE.Data3DTexture(texData, ...anat.shape);
   // Colour/DEC volumes are uploaded as normalized RGBA8 (see VolRenderer.upload)
   // — 256 levels/channel is visually plenty and it's 1/4 the memory of float.
