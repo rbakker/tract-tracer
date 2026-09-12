@@ -29,6 +29,10 @@ uniform vec2  u_res;
 uniform float u_probeRadius;
 uniform vec3 u_probeColor;
 uniform float u_isColor;
+// True (1.0) when ANAT modality is forced onto 3-channel (DEC) data:
+// display it as a plain grayscale magnitude scan instead of the RGB
+// direction colour, mirroring the glass brain's identical u_forceGray.
+uniform float u_forceGray;
 uniform float u_contrast;
 uniform sampler2D u_lut;
 uniform float u_lutSize;
@@ -81,7 +85,20 @@ void main(){
     // control here, not a pivot-based stretch).
     vec3 enc = texture(u_vol, tc).rgb;
     vec3 lin = enc * enc;
-    col = clamp(lin * u_contrast, 0.0, 1.0);
+    if (u_forceGray > 0.5) {
+      // ANAT modality selected for direction-encoded data: show the
+      // FA-like magnitude as a plain grayscale scan instead of the RGB
+      // direction colour. Euclidean length of the RGB triple recovers FA
+      // exactly (each channel is FA*|eigenvector_component|, and the
+      // eigenvector is unit length) - unlike a luma weighting, which is
+      // biased against blue (S-I-oriented) tracts. Same reasoning as the
+      // glass brain's sampleVol.
+      float v = clamp(length(lin), 0.0, 1.0);
+      v = gammaContrast(v, 1.0 / u_contrast);
+      col = vec3(v);
+    } else {
+      col = clamp(lin * u_contrast, 0.0, 1.0);
+    }
   } else {
     float rawNorm = texture(u_vol, tc).r;
     if (u_applyLUT > 0.5) {
@@ -141,6 +158,9 @@ export class VolRenderer {
     this._lutTex = null;
     this._lutSize = 0;
     this._applyLUT = false;
+    // ANAT modality forced onto 3-channel (DEC) data — see u_forceGray's
+    // comment in FS_SLICE.
+    this._forceGray = false;
     // Cached plane params per planeKey for click→RAS mapping
     // { cursor_ras, stepU_ras, stepV_ras, W, H }
     // stepU_ras = RAS mm displacement per pixel in U direction
@@ -261,6 +281,7 @@ export class VolRenderer {
   }
 
   setApplyLUT(on) { this._applyLUT = !!on; this._applyVolFilter(); }
+  setForceGray(on) { this._forceGray = !!on; }
   hasLUT() { return !!this._lutTex; }
 
   // Label volumes must be sampled with NEAREST, not LINEAR — interpolating
@@ -363,6 +384,7 @@ export class VolRenderer {
       probeRadius !== null ? probeRadius : (this._probeRadiusPx||0));
     gl.uniform3fv(gl.getUniformLocation(this._prog, 'u_probeColor'), probeColor);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_isColor'), this._channels===3 ? 1 : 0);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_forceGray'), this._forceGray ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_contrast'), this._contrast ?? 1.0);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_applyLUT'), (this._applyLUT && this._lutTex) ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_lutSize'), this._lutSize || 1);

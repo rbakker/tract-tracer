@@ -90,7 +90,12 @@ export class TrackballControls extends EventDispatcher {
           // delta against zs.y (re-synced to ze.y after every use, since
           // staticMoving is on), so an incremental value here is enough -
           // it doesn't need to carry any absolute meaning.
-          zs.y = 0; ze.y = (dist - pinchDist0) / sc.screen.height;
+          // Pinch OUT (fingers spreading, dist growing) should zoom IN.
+          // zoomCamera() makes the eye vector LONGER (zooms out) when
+          // (ze.y - zs.y) is positive - so a growing dist needs a
+          // NEGATIVE delta here, the opposite sign of the raw distance
+          // change.
+          zs.y = 0; ze.y = (pinchDist0 - dist) / sc.screen.height;
           pinchDist0 = dist;
           pe.copy(gms(mx, my));
           sc.update();
@@ -141,6 +146,12 @@ uniform mat4  u_invPV;
 uniform mat4  u_invModel;
 uniform vec3  u_camPos;
 uniform float u_isColor;
+// True (1.0) when Anat modality is forced onto 3-channel (DEC) data:
+// display it as a plain grayscale magnitude scan instead of the RGB
+// direction colour. Never changes u_isColor itself (isosurface/threshold
+// math always needs to know the data is genuinely 3-channel), only which
+// branch the DISPLAYED colour takes below.
+uniform float u_forceGray;
 uniform float u_contrast;
 uniform float u_applyLUT;
 uniform sampler2D u_lut;
@@ -452,7 +463,18 @@ bool findIsosurface(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize, 
   vec3 prevP = ro + tStart * rd;
   bool startInside = occupancyAndGradient(prevP).w >= thresh;
   wasExit = startInside;
-  for (int i = 1; i < 256; i++) {
+  // The compile-time loop bound below must stay comfortably above the
+  // highest u_steps any quality tier can set (see index.html's
+  // GLASS_STEPS_BY_TIER) - GLSL requires a constant loop bound, so
+  // "i >= u_steps" is checked as an early break instead of using u_steps
+  // directly as the bound. If this constant is ever lower than u_steps,
+  // every ray silently stops partway through its intended path (at
+  // exactly bound/u_steps of the way, for every ray, since stepSize is
+  // already computed from the full u_steps) - not a crash, just an
+  // increasingly wrong render the higher u_steps goes past this number,
+  // which is exactly what a too-high ULTRA setting once hit against an
+  // earlier, lower version of this same bound.
+  for (int i = 1; i < 512; i++) {
     if (i >= u_steps) break;
     float t = tStart + float(i) * stepSize;
     if (t > tEnd) break;
@@ -536,7 +558,10 @@ void main() {
   float solidBlend = smoothstep(0.0, 200.0, u_alpha);
 
   if (solidBlend < 1.0) {
-    for (int i = 0; i < 256; i++) {
+    // Same compile-time-bound caveat as findIsosurface's loop above -
+    // must stay comfortably above the highest u_steps any quality tier
+    // uses.
+    for (int i = 0; i < 512; i++) {
       if (i >= u_steps) break;
       float t = tStart + (float(i) + 0.5) * stepSize;
       vec3 p = ro + t * rd;
@@ -576,7 +601,7 @@ void main() {
         // shading. Only affects the displayed colour — NOT intensity, which
         // stays untouched for the threshold/gradient/alpha logic above.
         float scalarDisp = gammaContrast(intensity, 1.0 / u_contrast);
-        col = (u_isColor > 0.5)
+        col = (u_isColor > 0.5 && u_forceGray < 0.5)
           // DEC colours are inherently dim (each channel is FA*|eigenvector|,
           // rarely above ~0.7) — boost and gamma-lift rather than applying the
           // grayscale intensity-based darkening below, which would compound.
@@ -668,7 +693,7 @@ void main() {
         // is NEAREST-filtered — see buildGlassBrain), so this is a direct
         // per-voxel color with no extra interpolation math needed.
         baseColor = labelMode ? lutColor(sampleLabelIndex(hitP))
-                  : (u_isColor > 0.5
+                  : (u_isColor > 0.5 && u_forceGray < 0.5
                       ? pow(clamp(sampleRaw(hitP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8))
                       : vec3(gammaContrast(sampleVol(hitP), 1.0 / u_contrast)));
         shade = 1.0;
@@ -710,7 +735,7 @@ void main() {
           // background and comes out dark. inwardP moves the sample
           // solidly into real tissue instead.
           baseColor = interpolatedLutColor(inwardP);
-        } else if (u_isColor > 0.5) {
+        } else if (u_isColor > 0.5 && u_forceGray < 0.5) {
           // DEC/colour volume: the actual FA-weighted direction colour,
           // same boost as glass mode, at the same inward-nudged point.
           baseColor = pow(clamp(sampleRaw(inwardP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8));
@@ -739,9 +764,9 @@ void main() {
 }`;
 
 
-export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo) {
+export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInfo) {
   const isColor = (anat.channels || 1) === 3;
-  const isLabelMode = !isColor && !!(lutInfo && lutInfo.apply && lutInfo.map);
+  const isLabelMode = !isColor && !!(dispInfo && dispInfo.apply && dispInfo.map);
 
   // ── Mobile-GPU capability diagnostics ──────────────────────
   // Two specific, plausible causes of an early/silent crash on weak mobile
@@ -832,7 +857,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
   // for the same issue).
   let lutTex, lutSize = 1;
   if (isLabelMode) {
-    const { data, size } = buildLutRGBA(lutInfo.map, lutInfo.maxIndex);
+    const { data, size } = buildLutRGBA(dispInfo.map, dispInfo.maxIndex);
     lutTex = new THREE.DataTexture(data, size, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     lutTex.minFilter = THREE.NearestFilter;
     lutTex.magFilter = THREE.NearestFilter;
@@ -870,6 +895,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, lutInfo
       u_invModel:  { value: invModel },
       u_camPos:    { value: new THREE.Vector3() },
       u_isColor:   { value: isColor ? 1 : 0 },
+      u_forceGray: { value: dispInfo.forceGray ? 1 : 0 },
       u_applyLUT:  { value: isLabelMode ? 1 : 0 },
       u_lut:       { value: lutTex },
       u_lutSize:   { value: lutSize },
