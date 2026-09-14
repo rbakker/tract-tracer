@@ -5,28 +5,79 @@
 import * as THREE from 'three';
 import { DOTS_VS, DOTS_FS } from './scene3d.js';
 
+// SLAB_VS does the same screen-space ribbon expansion as scene3d.js's
+// RIBBON_VS (see that file for the derivation), adapted for this
+// renderer's own orthographic camera and re-purposed to also emit
+// vSignedDist for the near/far slab discard test SLAB_FS already does.
+// Width here is a SINGLE CONSTANT (u_widthPx) rather than following the
+// near/far depth taper the 3D view uses: an orthographic slice has no
+// meaningful "camera depth" the way the 3D perspective view does, so
+// depth-based tapering wouldn't mean anything here — see the earlier
+// design discussion on why 2D width stays flat. One consequence: with an
+// orthographic projection, clip.w is always 1, so the perspective-divide
+// compensation below (kept for exact parity with RIBBON_VS's formula) is
+// a no-op in practice, not dead code — same formula, still correct.
 const SLAB_VS = `
-varying vec3  vColor;
-varying float vSignedDist;
-attribute vec3 color;
+attribute vec3 instanceStart;
+attribute vec3 instanceEnd;
+attribute vec3 instanceColor;
+// Per-instance fixed bundle color — mirrors scene3d.js's RIBBON_VS. Always
+// bound (same geometry object is cloned from the 3D mesh — see
+// _ensureLineMeshes — so this attribute is already populated there).
+attribute vec3 instanceBundleColor;
+// position.x = SIDE (-1/+1), position.y = END (0=start, 1=end) — same
+// template-quad convention as scene3d.js's RIBBON_VS.
+uniform vec2  u_resolution;
+uniform float u_widthPx;
 uniform vec3  u_sliceNormal;
 uniform vec3  u_slicePt;
+varying vec3  vColor;
+varying vec3  vBundleColor;
+varying float vSignedDist;
 void main() {
-  vColor = color;
-  vSignedDist = dot(position - u_slicePt, u_sliceNormal);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vColor       = instanceColor;
+  vBundleColor = instanceBundleColor;
+
+  vec4 worldStart = modelMatrix * vec4(instanceStart, 1.0);
+  vec4 worldEnd   = modelMatrix * vec4(instanceEnd,   1.0);
+  vec3 worldPos   = mix(worldStart.xyz, worldEnd.xyz, position.y);
+  vSignedDist = dot(worldPos - u_slicePt, u_sliceNormal);
+
+  vec4 clipStart = projectionMatrix * modelViewMatrix * vec4(instanceStart, 1.0);
+  vec4 clipEnd   = projectionMatrix * modelViewMatrix * vec4(instanceEnd,   1.0);
+
+  vec2 ssStart = (clipStart.xy / clipStart.w) * 0.5 * u_resolution;
+  vec2 ssEnd   = (clipEnd.xy   / clipEnd.w)   * 0.5 * u_resolution;
+  vec2 dirPx   = ssEnd - ssStart;
+  float dirLen = length(dirPx);
+  // Degenerate (zero-length) segment guard — same reasoning as RIBBON_VS.
+  dirPx = (dirLen > 1e-4) ? (dirPx / dirLen) : vec2(1.0, 0.0);
+  vec2 normalPx = vec2(-dirPx.y, dirPx.x);
+
+  float half_ = 0.5 * u_widthPx;
+  // Square-cap join extension, same cheap approach as RIBBON_VS — see its
+  // comment for the join-test-streamlines.tck caveat at sharp angles.
+  vec2 offsetPx = normalPx * position.x * half_
+                + dirPx    * (position.y * 2.0 - 1.0) * half_;
+
+  vec4 clip = mix(clipStart, clipEnd, position.y);
+  clip.xy += (offsetPx / (0.5 * u_resolution)) * clip.w;
+  gl_Position = clip;
 }`;
 
 const SLAB_FS = `
 precision highp float;
 varying vec3  vColor;
+varying vec3  vBundleColor;
 varying float vSignedDist;
 uniform float u_slabHalf;
+// 0 = uniform u_lineColor, 1 = RAS (vColor), 2 = bundle (vBundleColor) —
+// same convention as scene3d.js's LINE_FS.
 uniform int   u_autoColor;
 uniform vec3  u_lineColor;
 void main() {
   float d = vSignedDist;
-  vec3 col = (u_autoColor > 0) ? vColor : u_lineColor;
+  vec3 col = (u_autoColor == 1) ? vColor : ((u_autoColor == 2) ? vBundleColor : u_lineColor);
   #ifdef NEAR_PASS
     if (d < 0.0 || d > u_slabHalf) discard;
   #endif
@@ -79,6 +130,9 @@ export class SlabRenderer {
       u_slabHalf:    { value: 1.0 },
       u_autoColor:   { value: 1 },
       u_lineColor:   { value: new THREE.Vector3(1, 0.4, 0) },
+      // Ribbon-specific — see SLAB_VS.
+      u_resolution:  { value: new THREE.Vector2(1, 1) },
+      u_widthPx:     { value: 2.0 },
     };
   }
 
@@ -99,6 +153,14 @@ export class SlabRenderer {
       vertexShader: SLAB_VS, fragmentShader: SLAB_FS,
       uniforms: this._lineUniforms(), defines: def,
       depthWrite: !!def.NEAR_PASS, depthTest: true, transparent: !!def.FAR_PASS,
+      // Same reasoning as scene3d.js's makeRibbonMaterial: screen-space
+      // ribbon construction makes triangle winding easy to get backwards
+      // for a given camera's handedness without it being obvious by
+      // inspection. This renderer's custom orthographic camera basis
+      // (uDir/vDir/nDir as matrixWorld columns) isn't guaranteed to match
+      // the 3D perspective camera's winding convention, so this needs its
+      // own DoubleSide rather than assuming it inherits the 3D fix.
+      side: THREE.DoubleSide,
     });
     const dotMat = (def) => new THREE.ShaderMaterial({
       vertexShader: DOTS_VS, fragmentShader: DOTS_FS,
@@ -186,10 +248,15 @@ export class SlabRenderer {
     cam.updateProjectionMatrix();
 
     // ── Uniforms ──────────────────────────────────────────
-    // c: null=off, 'RAS'=per-vertex, '#rrggbb'=custom
-    const cv = (s) => s.mode === 'ras'
-      ? { auto: 1, col: new THREE.Color(0xffffff) }
-      : { auto: 0, col: new THREE.Color(s.mode === 'hide' ? 0xffffff : s.rgb) };
+    // s.mode: 'ras' (lines only) = per-vertex direction, 'bundle' = per-
+    // instance/per-point fixed bundle color, 'hide' = off (color value
+    // irrelevant, not drawn — see showLines/showSrc/showTgt below),
+    // else '#rrggbb' custom.
+    const cv = (s) => {
+      if (s.mode === 'ras')    return { auto: 1, col: new THREE.Color(0xffffff) };
+      if (s.mode === 'bundle') return { auto: 2, col: new THREE.Color(0xffffff) };
+      return { auto: 0, col: new THREE.Color(s.mode === 'hide' ? 0xffffff : s.rgb) };
+    };
 
 	const lc = cv(opts.lineStyle);
 	const sc = cv(opts.srcStyle);
@@ -202,6 +269,8 @@ export class SlabRenderer {
       u.u_slabHalf.value  = halfThickMm;
       u.u_autoColor.value = lc.auto;
       u.u_lineColor.value.set(lc.col.r, lc.col.g, lc.col.b);
+      u.u_resolution.value.set(W, H);
+      u.u_widthPx.value = opts.lineWidthPx2D ?? 2.0;
     };
     const setDot = (mat, c) => {
       const u = mat.uniforms;
@@ -216,7 +285,11 @@ export class SlabRenderer {
     setDot(this._dmatSrcNear, sc); setDot(this._dmatSrcFar, sc);
     setDot(this._dmatTgtNear, tc); setDot(this._dmatTgtFar, tc);
 
-	const showLines = opts.lineStyle.mode !== 'hide';
+	// Lines are hidden via WIDTH=0 now, not a color mode (see index.html's
+	// LINE·COLOR radio, which no longer has a 'hide'/None option) — 'hide'
+	// can still appear here harmlessly (cv() falls through to the custom-
+	// color branch for any unrecognized mode), but width is the real gate.
+	const showLines = (opts.lineWidthPx2D ?? 2.0) > 0;
 	const showSrc   = opts.srcStyle.mode  !== 'hide' && this._dotsSrcNear;
 	const showTgt   = opts.tgtStyle.mode  !== 'hide' && this._dotsTgtNear;
 
