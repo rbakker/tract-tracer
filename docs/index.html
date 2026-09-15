@@ -267,6 +267,12 @@ input[type=file]{display:none;}
   z-index:50;box-shadow:0 2px 10px rgba(0,0,0,0.6);
   max-width:min(420px,calc(100% - 32px));overflow:hidden;text-overflow:ellipsis;}
 #mprogress:empty{display:none;}
+#bundle-hover-tooltip{position:absolute;display:none;
+  color:var(--bright);letter-spacing:0.03em;
+  pointer-events:none;white-space:nowrap;background:var(--panel);
+  border:1px solid var(--border);padding:4px 9px;border-radius:2px;
+  font-size:12px;z-index:60;box-shadow:0 2px 10px rgba(0,0,0,0.6);
+  max-width:min(320px,calc(100% - 20px));overflow:hidden;text-overflow:ellipsis;}
 
 /* ── RESIZE SEPARATORS ── */
 .sep{width:3px;flex-shrink:0;background:var(--border);cursor:col-resize;
@@ -331,6 +337,7 @@ input[type=file]{display:none;}
 <!-- MIDDLE: 3D view -->
 <div id="middle">
   <canvas id="three-canvas"></canvas>
+  <div id="bundle-hover-tooltip"></div>
   <!-- Top-left buttons -->
   <div id="top-btns">
     <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
@@ -440,6 +447,11 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="flat"><input type="color" autocomplete="off" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
+<div class="ctl-row" data-tip="Directional sheen strength (Kajiya-Kay tangent shading). A streamline lights up brightest where it runs ORTHOGONAL to the light direction, and goes dark where it points straight at (or away from) it — same as a real cylindrical strand: light traveling along a strand's own axis never faces any point on its surface head-on, since a cylinder's surface normals all point outward, perpendicular to that axis; light hitting the strand from the side illuminates the half facing it normally. 0 = flat color, no directional shading at all; 1 = normal strength; higher exaggerates it.">
+  <label>REFLECTANCE</label>
+  <input type="range" id="reflectance-slider" min="0" max="2" step="0.05" value="1">
+  <span class="slider-val" id="reflectance-val">1.00</span>
+</div>
 <div class="ctl-row" data-tip="NEAR-END dot color: endpoint closest to probe. None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
   <label>NEAR·ENDS</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="hide"> None</label>
@@ -458,6 +470,15 @@ input[type=file]{display:none;}
   <span class="slider-val" id="ends-size-val">6</span>
 </div>
 
+<div id="ao-controls">
+<div class="ctl-row" data-tip="Combines AO's reach (radius, mm), how sharply it falls off within that reach, and its overall darkening strength into one dial — all three individually make the effect stronger, so one slider steps through them together rather than needing three separate tweaks. Radius is scaled to the loaded data's own size; the other two range across N8AO's own full range. 0 = off entirely, and also re-enables the depth-darkening cue below (which AO otherwise replaces — see its own note), rather than needing a separate on/off switch. Its rendering library (self-hosted, not CDN) is only fetched the first time you move this off 0, not before. No measurable performance difference across the range once loaded — these are all post-hoc math on an already-fixed-cost sampling pass; GPU tier maps to one of N8AO's own quality presets (sample count), which is the setting that actually affects performance.">
+  <label>AO·STRENGTH</label>
+  <input type="range" id="ao-strength-slider" min="0" max="1" step="0.02" value="0">
+  <span class="slider-val" id="ao-strength-val">0%</span>
+  <span class="slider-val" id="ao-status"></span>
+</div>
+</div>
+
     <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.\nAll three sliders default to their centre (raw=50) position — the mathematically 'neutral' reference value for each.">VOLUME RENDERING</div>
     <div class="ctl-row" data-tip="How to interpret and display this volume. ANAT: plain grayscale scan (for 3-channel data, shown as the vector-length magnitude — an FA-like scalar). R/A/S: colour-encoded fibre direction, only available for 3-channel data (auto-selected when such data loads). LABEL: each voxel's rounded value is a label index, colored via the loaded LUT — or, if none is loaded, an automatically generated one (maximally-distinct colors, named Label_N). Only available for single-channel data.">
       <label>MODALITY</label>
@@ -469,7 +490,7 @@ input[type=file]{display:none;}
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="seg" id="modality-seg" disabled><span>LABEL</span></label>
       </div>
     </div>
-    <div class="ctl-row" data-tip="Rendering style for the glass brain — three genuinely separate shaders, not a smooth blend between them. GLASS: a real isosurface with a Fresnel rim (using RIM) instead of full opacity — a true thin, transparent shell; streamlines and other geometry show through it. SOLID: the same real isosurface, fully opaque, with proper depth and lighting — CUTOUT (below) replaces OPACITY here, since opacity has no effect on an opaque surface. RIM-LIT: a soft, glowing boundary built up from many semi-transparent samples along each ray, using OPACITY — no real depth, more a haze than a shell. Clip planes and COVER work the same way in SOLID and GLASS.">
+    <div class="ctl-row" data-tip="Rendering style for the glass brain — three genuinely separate shaders, not a smooth blend between them. GLASS: a real isosurface with a Fresnel rim (using RIM) instead of full opacity — a true thin, transparent shell; streamlines and other geometry show through it. SOLID: the same real isosurface, fully opaque, with proper depth and lighting — FOREGROUND (below) replaces OPACITY here, since opacity has no effect on an opaque surface. RIM-LIT: a soft, glowing boundary built up from many semi-transparent samples along each ray, using OPACITY — no real depth, more a haze than a shell. Clip planes and COVER work the same way in SOLID and GLASS.">
       <label>SHADER</label>
       <div class="clip-radio-row">
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="glass" id="render-mode-glass" checked><span>GLASS</span></label>
@@ -477,7 +498,7 @@ input[type=file]{display:none;}
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="translucent" id="render-mode-translucent"><span>RIM-LIT</span></label>
       </div>
     </div>
-    <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from CUTOUT below, so raising CUTOUT to hide a tissue type can never also erode this outer surface.">
+    <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from FOREGROUND below, so narrowing FOREGROUND to hide a tissue type can never also erode this outer surface.">
       <label>BACKGROUND</label>
       <select id="bg-invert-select" class="inline-select" autocomplete="off">
         <option value="below" selected>below</option>
@@ -491,21 +512,27 @@ input[type=file]{display:none;}
       <input type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
       <span class="ctl-val" id="brain-alpha-val">50%</span>
     </div>
-    <div class="ctl-row" id="row-cutout" style="display:none;" data-tip="CUTOUT's ABOVE threshold. Together with the BELOW threshold on the next row, this hides part of the SOLID/GLASS surface once you're behind an active clip plane with COVER - e.g. clearing out white matter to reveal what's inside. See the row below for the exact combined rule.">
-      <label>CUTOUT</label>
-      <span class="inline-select-fixed">above</span>
-      <input type="range" id="brain-thresh-slider" min="0" max="100" value="10" step="1">
-      <span class="ctl-val" id="brain-thresh-val">0.10</span>
+    <div class="ctl-row" id="row-cutout" style="display:none;" data-tip="First half of FOREGROUND's combined rule (see the row below for how the two combine into one) — defines what part of the SOLID/GLASS surface stays visible once you're behind an active clip plane with COVER, e.g. isolating grey matter and hiding white matter to reveal what's inside. Everything that fails the combined rule (both rows together) is hidden. ABOVE (default): value must be >= this threshold to count as foreground. BELOW: value must be <= threshold instead. All comparisons inclusive.">
+      <label>FOREGROUND</label>
+      <select id="cutout-row1-select" class="inline-select" autocomplete="off">
+        <option value="above" selected>above</option>
+        <option value="below">below</option>
+      </select>
+      <input type="range" id="brain-thresh-slider" min="0" max="100" value="0" step="1">
+      <span class="ctl-val" id="brain-thresh-val">0.00</span>
     </div>
-    <div class="ctl-row" id="row-cutout-below" style="display:none;" data-tip="CUTOUT's BELOW threshold. ABOVE < BELOW: hides everything BETWEEN the two thresholds (AND) - e.g. one specific mid-range tissue type, keeping both darker and brighter tissue visible. ABOVE > BELOW: hides everything OUTSIDE the two instead (OR) - isolating just that intensity range and hiding the rest. Equal thresholds: CUTOUT is off.">
+    <div class="ctl-row" id="row-cutout-below" style="display:none;" data-tip="Second half of FOREGROUND's rule, combined with row 1 above. AND BELOW (default): value must ALSO be <= this threshold to count as foreground — with both sliders at their defaults (above 0, and below 1), that's every possible value, so nothing is hidden by default. OR ABOVE: value counts as foreground if it matches row 1 OR is >= this threshold instead (a looser either/or rule — e.g. isolate a tissue band with row1=above/and-below, or exclude a band from the foreground with row1=below/or-above).">
       <label></label>
-      <span class="inline-select-fixed">below</span>
-      <input type="range" id="brain-cutout-below-slider" min="0" max="100" value="10" step="1">
-      <span class="ctl-val" id="brain-cutout-below-val">0.10</span>
+      <select id="cutout-row2-select" class="inline-select" autocomplete="off">
+        <option value="and-below" selected>and below</option>
+        <option value="or-above">or above</option>
+      </select>
+      <input type="range" id="brain-cutout-below-slider" min="0" max="100" value="100" step="1">
+      <span class="ctl-val" id="brain-cutout-below-val">1.00</span>
     </div>
     <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
       <label>RIM</label>
-      <input type="range" id="brain-rim-slider" min="0" max="100" value="50" step="1">
+      <input type="range" id="brain-rim-slider" min="0" max="100" value="33" step="1">
       <span class="ctl-val" id="brain-rim-val">1.00</span>
     </div>
     <div class="ctl-row" data-tip="Shading light direction. CENTER matches the old camera-aligned 'headlamp' light (flatter, but sometimes an easier fixed reference); LEFT/RIGHT nudges it off-axis, which reads as more three-dimensional on a static view.">
@@ -616,7 +643,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-sag-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label sag"><span class="plane-id">SAG</span>trace</span>
+        <span class="slice-label sag"><span class="plane-id">SAG</span>cursor</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-sag-tgt" title="click to copy">—</span>
@@ -628,7 +655,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-cor-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label cor"><span class="plane-id">COR</span>trace</span>
+        <span class="slice-label cor"><span class="plane-id">COR</span>cursor</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-cor-tgt" title="click to copy">—</span>
@@ -640,7 +667,7 @@ input[type=file]{display:none;}
   <div class="slice-row" id="row-axi-tgt">
     <div class="slice-titlebar">
       <div class="slice-title-left">
-        <span class="slice-label axi"><span class="plane-id">AXI</span>trace</span>
+        <span class="slice-label axi"><span class="plane-id">AXI</span>cursor</span>
       </div>
       <div class="slice-title-right">
         <span class="slice-coord-inline" id="coord-axi-tgt" title="click to copy">—</span>
@@ -655,7 +682,11 @@ input[type=file]{display:none;}
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js",
-    "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js"
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js",
+    "three/examples/jsm/postprocessing/Pass.js": "./js/vendor/three/Pass.js",
+    "postprocessing": "./js/vendor/postprocessing/postprocessing.js",
+    "n8ao": "./js/vendor/n8ao/N8AO.js"
   }
 }
 </script>
@@ -670,7 +701,7 @@ import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
-         makeRibbonLines, makeEndpointDots } from './js/scene3d.js';
+         makeRibbonLines, makeEndpointDots, hexToRgbRaw } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
 
 'use strict';
@@ -1279,11 +1310,244 @@ slabRenderer = new SlabRenderer(renderer3);
 renderer3.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer3.setClearColor(0x080b0f);
 const scene=new THREE.Scene();
+// Explicit scene.background (not just the renderer's clear color) matters
+// once N8AOPass exists: it renders its own internal "beauty" pass to an
+// offscreen target that IT clears to transparent black internally (confirmed
+// in the vendored source, not assumed), independently of renderer3's own
+// clear color. Two of this app's own materials use genuine alpha blending
+// (GLASS/shell mode's translucent shell, the faint slice-plane wireframe),
+// so blending against transparent black instead of an opaque background
+// there leaves them with corrupted partial alpha carried through AO's
+// compositing — plausibly the mechanism behind "everything looks brighter
+// with AO on", specifically because those are the two things reported.
+// scene.background gets painted as an OPAQUE fill at the start of ANY
+// render() call regardless of the target's prior clear state, which
+// neutralizes that regardless of what N8AO does internally. Matches
+// setClearColor's color exactly, so the plain (non-AO) render path is
+// visually unaffected — same color, different mechanism.
+scene.background = new THREE.Color(0x080b0f);
 const camera=new THREE.PerspectiveCamera(45,1,0.1,5000);
 camera.position.set(0,0,200);
 window._scene = scene; window._camera = camera; window._renderer3 = renderer3;  // debug access
 
+// ── AO (N8AO, ULTRA tier only) ──────────────────────────────
+// Lazily loaded: n8ao + postprocessing (both self-hosted, see
+// js/vendor/README.md) plus three's own EffectComposer/OutputPass addons
+// are only fetched/parsed the first time AO is actually switched on, so
+// LOW/HIGH-tier sessions — which can never even see the toggle, since
+// the whole AO settings block is hidden outside ULTRA — never pay any
+// part of this cost. Off by default even at ULTRA: real per-frame cost,
+// opt-in rather than automatic.
+let aoEnabled = false;
+let aoComposer = null, aoPass = null, aoLoadPromise = null;
+// The Kajiya-Kay sheen isn't redundant with AO the way the depth-darkening
+// cue is (see applyLineShadingFlags below) — a plain, always-visible
+// strength control (REFLECTANCE, below LINE·COLOR), not tied to AO or
+// ULTRA tier at all. 0 = flat color, 1 = normal strength, >1 exaggerated.
+let reflectance = 1.0;
+
+// Pushes aoEnabled/reflectance onto selMesh's CURRENT material uniforms.
+// Needs calling from three places: after selMesh is (re)built in
+// updateProbe (a fresh material has fresh default uniform values, same
+// reason lightCam/depthTarget get resynced there too), and whenever
+// either flag itself changes via its own UI control.
+function applyLineShadingFlags() {
+  if (!selMesh) return;
+  const u = selMesh.material.uniforms;
+  // u_depthAttenEnabled: OFF whenever AO is on, automatically — not a
+  // separate user choice. The view-axis depth-darkening cue was always a
+  // stand-in for real occlusion; stacking both multiplies their
+  // darkening together (atten * (AO's own darkening)), crushing the far
+  // side of the volume toward black and fighting AO's more precise
+  // per-fragment signal rather than complementing it.
+  u.u_depthAttenEnabled.value = aoEnabled ? 0 : 1;
+  u.u_reflectance.value = reflectance;
+}
+
+// N8AO ships its own quality presets (sample count — the actual
+// performance-relevant AO setting, distinct from and not affected by
+// AO·STRENGTH's radius/falloff/intensity, which are all free post-hoc
+// math regardless of preset). Uses N8AO's own extremes directly: Performance
+// (cheapest) at our LOW, Neural-Medium (the attention-based denoiser —
+// verified in the vendored source to be a fully self-contained preset,
+// configuring every setting its neural path needs consistently by
+// itself, same setQualityMode() call as any other preset, no extra
+// plumbing required) at our ULTRA.
+const TIER_TO_N8AO_QUALITY = { low: 'Performance', high: 'Medium', ultra: 'Neural-Medium' };
+
+async function ensureAOComposer() {
+  if (aoComposer) return aoComposer;
+  if (aoLoadPromise) return aoLoadPromise;
+  aoLoadPromise = (async () => {
+    const [{ EffectComposer }, { OutputPass }, { N8AOPass }] = await Promise.all([
+      import('three/addons/postprocessing/EffectComposer.js'),
+      import('three/addons/postprocessing/OutputPass.js'),
+      import('n8ao'),
+    ]);
+    const composer = new EffectComposer(renderer3);
+    const pass = new N8AOPass(scene, camera, threeCanvas.clientWidth, threeCanvas.clientHeight);
+    composer.addPass(pass);
+    composer.addPass(new OutputPass());
+    // gammaCorrection defaults true in N8AOPass; OutputPass (added right
+    // after it) already handles output color space, so leaving both on
+    // double-corrects. This exact mismatch is what made colors look
+    // visibly different (lighter, more saturated) between N8AO and a
+    // from-scratch attempt during the prototype comparison — caught
+    // there, so it's set correctly from the start here.
+    pass.configuration.gammaCorrection = false;
+    // World-unit radius, NOT screenSpaceRadius mode — keeps AO's reach
+    // consistent with the existing zoom-invariant depth cue
+    // (u_depthTarget/u_depthRadius in RIBBON_VS/LINE_FS), which is
+    // anchored to the loaded data's own geometry rather than the camera;
+    // screenSpaceRadius would make AO the one effect in the app whose
+    // reach changes with zoom while the others deliberately don't.
+    pass.configuration.screenSpaceRadius = false;
+    aoComposer = composer;
+    aoPass = pass;
+    pass.setQualityMode(TIER_TO_N8AO_QUALITY[qualityTier] || 'Medium');
+    applyAOParamsToPass();
+    return composer;
+  })();
+  return aoLoadPromise;
+}
+
+function render3D() {
+  if (aoEnabled && aoComposer) {
+    // None of this app's own hand-written shaders (scene3d.js: LINE_FS,
+    // GLASS_ONLY_FS, SOLID_ONLY_FS, DOTS_FS, ...) include three's
+    // `colorspace_fragment` chunk — confirmed by grep, not assumed — so
+    // this app has NEVER applied an output gamma/colorspace transfer
+    // anywhere; every gl_FragColor a custom shader here writes has
+    // always BEEN the final displayed value. OutputPass (the AO
+    // composer's final pass) is the first thing in this app to ever
+    // apply one, since it reads renderer.outputColorSpace directly
+    // regardless of what any individual material does — its default
+    // (SRGBColorSpace) introduces an encode this app's whole
+    // custom-shader visual design was never built around, and an sRGB
+    // encode boosts darker input values (the glass brain, the faint
+    // slice-plane wireframe — previously dark and intentionally low-
+    // contrast against the background) far more aggressively than
+    // brighter ones, which matches exactly what got reported as "way
+    // brighter" while the background looked about the same.
+    // LinearSRGBColorSpace (not NoColorSpace, tried first and confirmed
+    // wrong: NoColorSpace has no entry in ColorManagement's `spaces[]`
+    // registry at all, so anything that looks up
+    // `spaces[colorSpace].outputColorSpaceConfig` on it — as
+    // WebGLRenderer/OutputPass do internally — crashes on undefined,
+    // exactly the error this produced) has transfer: LinearTransfer,
+    // verified in three's own ColorManagement.js, giving the same
+    // "OutputPass skips its encode" result via a value that actually
+    // exists in the registry. Scoped to ONLY this branch, restored
+    // immediately after — the plain render path has always run with the
+    // renderer's default (SRGBColorSpace) and has always looked correct,
+    // so it's left completely untouched rather than risking a regression
+    // there for a setting that, per the above, never actually mattered
+    // to it anyway.
+    const savedColorSpace = renderer3.outputColorSpace;
+    renderer3.outputColorSpace = THREE.LinearSRGBColorSpace;
+    aoComposer.render();
+    renderer3.outputColorSpace = savedColorSpace;
+  } else {
+    renderer3.render(scene, camera);
+  }
+}
+
 const controls=new TrackballControls(camera,threeCanvas);
+
+// ── Bundle-name hover tooltip (3D endpoint dots only — the "easy" case;
+// ribbon lines use a custom vertex shader raycasting can't see through
+// correctly — same class of issue that broke SSAOPass's MeshNormalMaterial
+// override earlier — and the 2D panels have no live scene to raycast at
+// all once they've been read back to a flat canvas). Debounced: the
+// hit-test itself (a THREE.Raycaster pass against however many dots are
+// currently rendered) only runs after the mouse has been still for
+// 250ms, not on every mousemove, specifically to avoid adding GPU/CPU
+// load on every pointer movement. Once shown, the tooltip stays up
+// indefinitely as long as the mouse doesn't move at all — no separate
+// auto-hide timer — but if it DOES move, the tooltip is kept for at
+// least 1000ms from when it first appeared before being hidden/
+// re-evaluated, so a quick pass-through doesn't cause visible flicker.
+// Uses a genuine floating tooltip that follows the mouse, not the fixed-
+// position status labels the 2D panels use for cursor coordinates — that
+// status relates to a fixed probe/cursor position, this relates to
+// wherever the mouse currently is, a different kind of thing entirely.
+const bundleTooltipEl = document.getElementById('bundle-hover-tooltip');
+const _raycaster = new THREE.Raycaster();
+const _ndc = new THREE.Vector2();
+let _hoverDebounceTimer = null;
+let _tooltipShownAt = 0;
+let _tooltipVisible = false;
+let _lastPointerEvent = null;
+
+function hideBundleTooltip() {
+  bundleTooltipEl.style.display = 'none';
+  _tooltipVisible = false;
+}
+
+function showBundleTooltip(name, clientX, clientY) {
+  bundleTooltipEl.textContent = name;
+  bundleTooltipEl.style.display = 'block';
+  const rect = threeCanvas.getBoundingClientRect();
+  bundleTooltipEl.style.left = (clientX - rect.left + 14) + 'px';
+  bundleTooltipEl.style.top  = (clientY - rect.top + 14) + 'px';
+  _tooltipShownAt = performance.now();
+  _tooltipVisible = true;
+}
+
+function armBundleHoverDebounce() {
+  clearTimeout(_hoverDebounceTimer);
+  _hoverDebounceTimer = setTimeout(doBundleHoverHitTest, 250);
+}
+
+function doBundleHoverHitTest() {
+  if (!isBundle || !bundleNames || !_lastPointerEvent) return;
+  const dotsObjs = [srcDots, tgtDots].filter(Boolean);
+  if (!dotsObjs.length) return;
+
+  const rect = threeCanvas.getBoundingClientRect();
+  _ndc.x = ((_lastPointerEvent.clientX - rect.left) / rect.width) * 2 - 1;
+  _ndc.y = -((_lastPointerEvent.clientY - rect.top) / rect.height) * 2 + 1;
+  _raycaster.setFromCamera(_ndc, camera);
+
+  // World-space hover radius, recomputed from the CURRENT camera distance
+  // every hit-test — Points.raycast()'s threshold is a fixed world-space
+  // value (verified directly in three's own Points.js source), but these
+  // dots are drawn at a constant SCREEN-space size (gl_PointSize), so a
+  // fixed world-space threshold would give an inconsistent hit radius
+  // depending on zoom level. Approximates using distance-to-orbit-target
+  // as a stand-in for "how far away is whatever's under the cursor" —
+  // not exact per-dot (a dot much nearer or farther than the orbit
+  // target would get a slightly wrong effective radius), but cheap and
+  // reasonable given most dots sit reasonably close to that distance.
+  const distToTarget = camera.position.distanceTo(controls.target);
+  const vFovRad = camera.fov * Math.PI / 180;
+  const canvasHeightPx = threeCanvas.clientHeight || 1;
+  const worldUnitsPerPixel = (2 * distToTarget * Math.tan(vFovRad / 2)) / canvasHeightPx;
+  _raycaster.params.Points.threshold = worldUnitsPerPixel * Math.max(endsPx, 8);
+
+  const hits = _raycaster.intersectObjects(dotsObjs, false);
+  if (!hits.length) return;
+  const hit = hits[0];
+  const bundleIdArr = hit.object.userData.bundleId;
+  const bId = bundleIdArr ? bundleIdArr[hit.index] : -1;
+  if (bId < 0 || !bundleNames[bId]) return;
+  showBundleTooltip(bundleNames[bId], _lastPointerEvent.clientX, _lastPointerEvent.clientY);
+}
+
+threeCanvas.addEventListener('mousemove', e => {
+  _lastPointerEvent = e;
+  if (_tooltipVisible) {
+    const elapsed = performance.now() - _tooltipShownAt;
+    if (elapsed < 1000) return; // minimum display time not yet reached — keep showing, don't re-debounce yet
+    hideBundleTooltip();
+  }
+  armBundleHoverDebounce();
+});
+threeCanvas.addEventListener('mouseleave', () => {
+  clearTimeout(_hoverDebounceTimer);
+  hideBundleTooltip();
+  _lastPointerEvent = null;
+});
 
 // ── WebGL context-loss diagnostics ──────────────────────────
 // On a lot of mobile/low-end GPUs, a driver watchdog will kill (and
@@ -1311,7 +1575,7 @@ const controls=new TrackballControls(camera,threeCanvas);
   watch(threeCanvas, '3D view');
   watch(vr._glCanvas, '2D slice renderer');
 })();
-controls._renderFn = () => renderer3.render(scene, camera);
+controls._renderFn = () => render3D();
 
 // ═══════════════════════════════════════════════════════════
 // 5.  TRACTOGRAM 3D
@@ -1353,7 +1617,7 @@ function updatePlaneMeshes() {
     }
   }
   updateClipUniforms();
-  renderer3.render(scene,camera);
+  render3D();
 }
 
 // Keeps the glass-brain shader's clip-plane uniforms (u_clipDir/u_clipNormal/
@@ -1453,6 +1717,21 @@ function rimFromSlider(raw) {
   return Math.max(t / (1 - t), 0.02); // floor avoids the degenerate pow(x,0) case
 }
 
+// RIM's own slider (u_rimPow) needs the OPPOSITE direction from
+// rimFromSlider above: a HIGHER Fresnel exponent actually makes the lit
+// band NARROWER (raising a [0,1] fresnel term to a higher power shrinks
+// how much of it stays close to 1), so "slider right = bigger, stronger
+// rim" — the intuitive expectation the word RIM itself sets up — means
+// raw and rimPow need to move in opposite directions. Same Möbius shape
+// and the same raw=50 -> 1.0 neutral point as rimFromSlider, just fed
+// (1-t) instead of t. Deliberately a SEPARATE function rather than
+// changing rimFromSlider itself, which GLASS mode's OPACITY multiplier
+// (glassOpacityMult) also uses, unchanged and in its original direction.
+function rimPowFromSlider(raw) {
+  const t = Math.min(1 - raw/100, 0.995);
+  return Math.max(t / (1 - t), 0.02);
+}
+
 let glassBrainMesh = null;
 let currentAnat = null;
 // 'translucent' | 'solid' — the SHADER control (UI label; internal attribute name stays 'render-mode'). Two genuinely separate
@@ -1467,13 +1746,36 @@ let glassBrainAlpha  = opacityFromSlider(50);
 // single-sample multiplier isn't the same kind of quantity as u_alpha's
 // accumulated-density curve above.
 let glassOpacityMult = rimFromSlider(50);
-let glassBrainThresh = linearFromSlider(10); // 0.10 - u_thresh is shared with RIM-LIT's own accumulation cutoff, not just CUTOUT/SOLID, so this default matters well beyond SOLID mode
+// glassBrainThresh removed — u_thresh (RIM-LIT's own accumulation cutoff,
+// not cutout's threshold anymore) is now tied directly to backgroundThresh
+// instead of being its own independent value with no UI control — see
+// scene3d.js's u_thresh declaration comment for why that's safe now
+// (the original reason for keeping them independent was protecting the
+// outer surface from CUTOUT specifically, which no longer touches
+// u_thresh at all).
+// CUTOUT — fully decoupled from u_thresh/backgroundThresh (see above).
+// Two independent thresholds (t1/t2) plus two EXPLICIT operator choices,
+// rather than inferring AND/OR from which threshold is numerically larger
+// (the old scheme's actual source of confusion). Defaults (above 0, and
+// below 1) mean "every value stays visible" — cutout off by construction,
+// not by coincidentally-equal sliders. See isCutZone's comment in
+// scene3d.js for the exact rule and why it's strictly more expressive
+// than the old two-threshold system.
+let cutoutT1 = linearFromSlider(0); // 0.0
+let cutoutRow1Above = true;
+let cutoutRow2AndBelow = true;
 // BACKGROUND: was a fixed shader constant, now adjustable — see
 // occupancyAndGradient's and classifyThresh's comments in scene3d.js.
 let backgroundThresh = linearFromSlider(10); // 0.10, per-request default (was 0.03)
 let bgInvert = false;     // BACKGROUND's below/above selector
-let cutoutBelowThresh = linearFromSlider(10); // CUTOUT's BELOW threshold - equal to glassBrainThresh (the ABOVE threshold) by default, i.e. CUTOUT off
-let glassBrainRimPow = rimFromSlider(50);
+let cutoutBelowThresh = linearFromSlider(100); // 1.0 — cutout row 2's threshold, see the cutoutT1 comment above for the full picture
+// Default raw=33 (not the curve's own neutral raw=50) gives rimPow≈2.0 —
+// found by hand that raw=50's neutral rimPow=1.0 read as a bit too much
+// (too broad/prominent a glow across the surface); rimPow=2 is narrower
+// and more subtle. solve t/(1-t)=2 for t (t=2/3) and invert
+// rimPowFromSlider's own 1-raw/100 substitution to get raw≈33.3, rounded
+// to the nearest integer step.
+let glassBrainRimPow = rimPowFromSlider(33);
 
 function buildGlassBrainLocal(anat) {
   currentAnat = anat;
@@ -1510,17 +1812,29 @@ function updateGlassBrainUniforms() {
   }
   const u = glassBrainMesh.material.uniforms;
   u.u_alpha.value  = glassBrainAlpha;
-  u.u_thresh.value = glassBrainThresh;
+  u.u_thresh.value = backgroundThresh;
   u.u_background.value = backgroundThresh;
   u.u_bgInvert.value = bgInvert ? 1 : 0;
+  u.u_cutoutT1.value = cutoutT1;
   u.u_cutoutBelowThresh.value = cutoutBelowThresh;
+  u.u_cutoutRow1Above.value = cutoutRow1Above ? 1 : 0;
+  u.u_cutoutRow2AndBelow.value = cutoutRow2AndBelow ? 1 : 0;
   u.u_rimPow.value = glassBrainRimPow;
   u.u_glassAlphaMult.value = glassOpacityMult;
   u.u_contrast.value = contrastGain;
   u.u_shellMode.value = renderMode === 'glass' ? 1 : 0;
+  // OPACITY=0 in GLASS/RIM-LIT mode should be genuinely, completely off —
+  // not just alpha-blended down to near-invisible (which, until the RIM
+  // curve's floor got fixed below, never actually reached exactly zero
+  // anyway — see rimPowFromSlider). Skipping the render outright is also
+  // a small real perf win: one less full raymarch pass per frame for zero
+  // visual contribution. SOLID mode ignores OPACITY entirely (its slider
+  // is disabled in that mode, see the render-mode radio's own listener),
+  // so this only applies outside it.
+  glassBrainMesh.visible = !(renderMode !== 'solid' && glassBrainAlpha <= 0);
   updateClipUniforms();
   updateLightBias(lightBias);
-  renderer3.render(scene, camera);
+  render3D();
 }
 
 // Raymarch step count per quality tier — a static ceiling, always applied,
@@ -1543,9 +1857,123 @@ function setQualityTier(tier) {
   qualityTier = tier;
   GLASS_STEPS_FULL = GLASS_STEPS_BY_TIER[tier];
   applyGlassSteps();
-  if (glassBrainMesh) renderer3.render(scene, camera);
+  if (glassBrainMesh) render3D();
   if (gridIdx) updateProbe(); // re-applies the new MAX_RENDER_POINTS budget to the current selection immediately
+  applyAOQualityMode();
 }
+
+// Re-applies the GPU-tier -> N8AO quality-preset mapping to an ALREADY-
+// loaded AO pass — a no-op if AO has never been touched (aoPass is null
+// until the AO·STRENGTH slider first moves off 0), so switching GPU tier
+// before ever using AO doesn't force-load it.
+function applyAOQualityMode() {
+  if (!aoPass) return;
+  aoPass.setQualityMode(TIER_TO_N8AO_QUALITY[qualityTier] || 'Medium');
+}
+
+// radius/falloff/intensity ALL individually make AO stronger when
+// increased (confirmed by hand: falloff=0.5/intensity=4 read as
+// noticeably stronger than N8AO's own defaults 0.2/3), so one 0..1
+// AO·STRENGTH dial linearly steps through all three together rather than
+// needing three separate tweaks. Each parameter's endpoints reuse the
+// SAME bounds the old individual sliders had — falloff and intensity
+// span N8AO's own full sensible range regardless of dataset; radius's
+// bounds come from aoRadiusMinMm/MaxMm (rescaled from sceneRadius, see
+// rescaleAORadiusBounds), so AO·STRENGTH's physical reach still scales
+// with whatever's actually loaded, same as before, just no longer a
+// separate dial for it. No performance difference across this range:
+// falloff and intensity are pure math on an already-computed per-pixel
+// AO value (one extra ratio in the sampling loop, one pow() in the
+// final composite); radius only changes WHERE the sampling kernel's
+// fixed sample count is placed in screen space, not how many samples are
+// taken — the actual performance-relevant knob (sample count / N8AO's
+// own quality preset) isn't exposed as a control at all here and stays
+// at N8AO's own default.
+let aoRadiusMinMm = 0.2, aoRadiusMaxMm = 50;
+
+function applyAOParamsToPass() {
+  if (!aoPass) return;
+  const s = +document.getElementById('ao-strength-slider').value; // 0..1
+  aoPass.configuration.aoRadius = aoRadiusMinMm + (aoRadiusMaxMm - aoRadiusMinMm) * s;
+  aoPass.configuration.distanceFalloff = 0.05 + 0.95 * s;
+  aoPass.configuration.intensity = 0.5 + 5.5 * s;
+}
+
+// AO radius is in world-mm (screenSpaceRadius is off, see
+// ensureAOComposer), so its sensible range scales with whatever's
+// actually loaded — same reasoning as the probe RADIUS slider's own
+// diameter-based rescale. Only updates the bounds, not the AO·STRENGTH
+// slider's own value — reloading different data changes what "100%"
+// physically means in mm, but doesn't silently change the dial position
+// a user already chose.
+// Correcting an earlier misreading here: found by hand that radius only
+// has visible effect within roughly 0-10mm (on a dataset with sceneRadius
+// around 100mm) — NOT that small values were wasted, but that everything
+// from ~10mm up to whatever the old max was (tens of mm) looked
+// identical, i.e. the useful range sits at the LOW end and saturates
+// quickly above it (makes sense: once radius comfortably exceeds typical
+// inter-fiber spacing, there's nothing further away left to newly
+// discover as an occluder, so more radius stops changing the result).
+// The earlier fix raised the MINIMUM, which was backwards — this instead
+// caps the MAXIMUM close to where the effect actually saturated, so the
+// slider's whole travel stays inside the range that does something,
+// expressed as a fraction of sceneRadius so it still generalizes rather
+// than hardcoding an absolute 10mm.
+function rescaleAORadiusBounds() {
+  const r = sceneRadius || 100;
+  aoRadiusMinMm = Math.max(0.02, r * 0.0005);
+  aoRadiusMaxMm = Math.max(0.5, r * 0.10);
+  applyAOParamsToPass();
+}
+
+document.getElementById('ao-strength-slider').addEventListener('input', async e => {
+  const s = +e.target.value;
+  document.getElementById('ao-strength-val').textContent = Math.round(s * 100) + '%';
+  const statusEl = document.getElementById('ao-status');
+  if (s <= 0) {
+    // 0 means genuinely off, not just "weak" — and restores the
+    // depth-darkening cue AO otherwise replaces, via applyLineShadingFlags.
+    aoEnabled = false;
+    applyLineShadingFlags();
+    render3D();
+    return;
+  }
+  if (!aoComposer) {
+    // First time the slider has ever moved off 0 — lazy-load n8ao +
+    // postprocessing (self-hosted, see js/vendor/README.md) now, not
+    // before. Not disabling the slider itself while this is in flight —
+    // it's mid-drag when this usually fires, and disabling a range input
+    // mid-gesture is liable to interrupt the drag in some browsers.
+    statusEl.textContent = 'loading…';
+    try {
+      await ensureAOComposer();
+      statusEl.textContent = '';
+    } catch (err) {
+      // Non-fatal — the rest of the app keeps working fine without AO, so
+      // this snaps back to 0 and reports inline rather than using
+      // showCrashBanner's "reload to recover" framing, which would
+      // overstate a failure that doesn't actually affect anything else.
+      console.error('AO failed to load:', err);
+      statusEl.textContent = 'load failed — see console';
+      e.target.value = 0;
+      document.getElementById('ao-strength-val').textContent = '0%';
+      aoEnabled = false;
+      applyLineShadingFlags();
+      render3D();
+      return;
+    }
+  }
+  aoEnabled = true;
+  applyAOParamsToPass();
+  applyLineShadingFlags(); // couples the depth-darkening cue's on/off to AO's — see its own comment
+  render3D();
+});
+document.getElementById('reflectance-slider').addEventListener('input', e => {
+  reflectance = +e.target.value;
+  document.getElementById('reflectance-val').textContent = reflectance.toFixed(2);
+  applyLineShadingFlags();
+  render3D();
+});
 
 // Shading light direction, fixed relative to the viewer (see scene3d.js's
 // buildGlassBrain, which turns this into a proper world/local direction
@@ -1572,7 +2000,7 @@ function updateLightBias(s) {
   if (selMesh && selMesh.userData.lightCam) {
     selMesh.userData.lightCam.set(x, y, z).normalize();
   }
-  renderer3.render(scene, camera);
+  render3D();
 }
 
 // Rendering the probe's selection is what's actually expensive at scale —
@@ -1728,6 +2156,7 @@ function updateProbe(){
     // does need a resync here, same as lightCam above.
     selMesh.userData.depthTarget = controls.target;
     selMesh.userData.sceneRadius = sceneRadius || 1;
+    applyLineShadingFlags(); // fresh material -> fresh default uniforms, resync AO/lighting state onto it
     _lastCursor=[cx,cy,cz];
     _lastProbedEnds=renderProbedEnds;
     ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, renderProbedEnds, [cx,cy,cz], endsPx, renderer3.getPixelRatio(), _lastBundleInfo));
@@ -1766,8 +2195,12 @@ function updateScene3d() {
       u.u_autoColor.value = 2;
     } else {
       u.u_autoColor.value = 0;
-      const c = new THREE.Color(lineStyle.rgb);
-      u.u_lineColor.value.set(c.r, c.g, c.b);
+      // Raw conversion (not new THREE.Color, which auto-linearizes) — see
+      // hexToRgbRaw's own comment in scene3d.js for why every hex color
+      // feeding a shader in this app needs to go through this specific
+      // function, not THREE's own color-management path.
+      const [r, g, b] = hexToRgbRaw(lineStyle.rgb);
+      u.u_lineColor.value.set(r, g, b);
     }
     selMesh.renderOrder = 0;
     scene.add(selMesh);
@@ -1784,8 +2217,8 @@ function updateScene3d() {
       u.u_autoColor.value = 1;
     } else {
       u.u_autoColor.value = 0;
-      const c = new THREE.Color(colorVal.rgb);
-      u.u_dotColor.value.set(c.r, c.g, c.b);
+      const [r, g, b] = hexToRgbRaw(colorVal.rgb);
+      u.u_dotColor.value.set(r, g, b);
     }
   };
 
@@ -1800,7 +2233,7 @@ function updateScene3d() {
     scene.add(tgtDots);
   }
 
-  renderer3.render(scene, camera);
+  render3D();
 }
 
 
@@ -1842,9 +2275,10 @@ function saveTck(){
 function collectState() {
   return {
     settings: {
-      radius, probeEndsOnly, slabMultiplier, endsPx, lineWidthPx,
+      radius, probeEndsOnly, slabMultiplier, endsPx, lineWidthPx, reflectance,
       lineStyle, srcStyle, tgtStyle,
-      glassBrainAlpha, glassBrainThresh, glassBrainRimPow,
+      glassBrainAlpha, glassBrainRimPow,
+      cutoutT1, cutoutBelowThresh, cutoutRow1Above, cutoutRow2AndBelow,
       contrastGain,
       pitch, yaw, roll,
       renderMode, qualityTier, clipPlane, clipFlip, cover, framesVisible,
@@ -1880,6 +2314,7 @@ function tick(){return new Promise(r=>setTimeout(r,20));}
 function initCamera(cx, cy, cz, volRadius=0, boxRadius=0) {
   const radius = Math.max(volRadius,boxRadius);
   sceneRadius = radius; // single source of truth — see its declaration above
+  rescaleAORadiusBounds();
 	
   controls.target.set(cx, cy, cz);
   camera.position.set(cx + radius*2.5, cy, cz);
@@ -1953,11 +2388,13 @@ let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeade
 // the probe, and slicing all work on it unmodified. streamlineBundleId is
 // the one new parallel piece: per-streamline index into bundlePaletteRGB.
 // null/false for a normal single-file load.
-let isBundle=false, streamlineBundleId=null, bundlePaletteRGB=null, _lastBundleInfo=null;
-function hexToRgb01(hex) {
-  const c = new THREE.Color(hex);
-  return [c.r, c.g, c.b];
-}
+let isBundle=false, streamlineBundleId=null, bundlePaletteRGB=null, bundleNames=null, _lastBundleInfo=null;
+
+// Real bundle-palette hex colors now go through the same raw conversion
+// as DEFAULT_BUNDLE_RGB (imported from scene3d.js as hexToRgbRaw) —
+// this used to be its own new THREE.Color(hex)-based helper here, which
+// silently linearized real bundle colors while the fallback constant
+// stayed raw, an internal inconsistency on top of the flat/bundle one.
 let loadedAnatRaw=null, loadedAnatShape=null, lutMap=null, lutMaxIndex=0;
 // Whether the current lutMap came from autoGenerateLut (regenerate on next
 // anat load) vs a real file the user dropped (keep it — it's presumably
@@ -2168,7 +2605,7 @@ async function loadTrck(f){
   }
   trckHeader=parsed.header;
   allStreamlines=parsed.streamlines; streamlineLookup=parsed.streamlineLookup;
-  isBundle=false; streamlineBundleId=null; bundlePaletteRGB=null;
+  isBundle=false; streamlineBundleId=null; bundlePaletteRGB=null; bundleNames=null;
   await finishTrckLoad(dTrckP);
 }
 
@@ -2222,7 +2659,12 @@ async function loadTrckBundle(descriptor){
   { let pi = 0; for (let si = 0; si < allStreamlines.length; si++) { const np = allStreamlines[si].length/3; for (let k=0;k<np;k++) streamlineLookup[pi++] = si; } }
 
   streamlineBundleId = Int32Array.from(bundleIdArr);
-  bundlePaletteRGB = entries.map(e => hexToRgb01(e.color));
+  bundlePaletteRGB = entries.map(e => hexToRgbRaw(e.color));
+  // entries[i].name should already come pre-resolved with the right
+  // fallback (bundle-io.js's {file,color,name} shape) — this local
+  // fallback is just cheap insurance in case a name ever comes through
+  // empty, not a bet that bundle-io.js DOESN'T already handle it.
+  bundleNames = entries.map(e => e.name);
   isBundle = true;
   trckHeader = { indexJson: descriptor.manifest, files: perFileHeaders };
 
@@ -2344,7 +2786,7 @@ function resizeAll() {
   camera.aspect=mc.clientWidth/mc.clientHeight;
   camera.updateProjectionMatrix();
   controls.handleResize();
-  renderer3.render(scene,camera);
+  render3D();
   positionLabelBadge('src'); positionLabelBadge('tgt');
 }
 new ResizeObserver(resizeAll).observe(document.body);
@@ -2364,12 +2806,16 @@ wireSlider('pitch-slider','pitch-val', v=>v, v=>v+'°', v=>{pitch=v; updateRotat
 wireSlider('yaw-slider','yaw-val', v=>v, v=>v+'°', v=>{yaw=v; updateRotation();});
 wireSlider('roll-slider','roll-val', v=>v, v=>v+'°', v=>{roll=v; updateRotation();});
 document.getElementById('quality-' + qualityTier).checked = true; // reflect the auto-detected default
+// AO's own quality-mode mapping needs no init-time call here — it only
+// ever applies once aoPass actually exists (see applyAOQualityMode), and
+// ensureAOComposer already reads the current qualityTier when it first loads.
+rescaleAORadiusBounds(); // sensible bounds even before any data is loaded (sceneRadius falls back to 100)
 document.querySelectorAll('input[name="quality-tier"]').forEach(r=>{
   r.addEventListener('change', ()=> setQualityTier(r.value));
 });
 function applyRenderModeUI() {
   document.getElementById('brain-alpha-slider').disabled = (renderMode === 'solid'); // OPACITY has real effect in both GLASS and RIM-LIT now
-  // CUTOUT (its two rows: ABOVE threshold + BELOW threshold) replaces
+  // FOREGROUND (its two rows) replaces
   // OPACITY's row AND extends into RIM's row in SOLID mode - RIM has no
   // effect on an opaque surface, same reasoning as OPACITY. GLASS and
   // RIM-LIT both keep the plain OPACITY + RIM rows as-is, even though
@@ -2644,14 +3090,31 @@ document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
   document.getElementById('brain-alpha-val').textContent=raw+'%';
   updateGlassBrainUniforms();
 });
-wireSlider('brain-thresh-slider','brain-thresh-val', linearFromSlider, v=>v.toFixed(2), v=>{glassBrainThresh=v; updateGlassBrainUniforms();});
+wireSlider('brain-thresh-slider','brain-thresh-val', linearFromSlider, v=>v.toFixed(2), v=>{cutoutT1=v; updateGlassBrainUniforms();});
 wireSlider('background-slider','background-val', linearFromSlider, v=>v.toFixed(2), v=>{backgroundThresh=v; updateGlassBrainUniforms();});
 document.getElementById('bg-invert-select').addEventListener('change',e=>{
   bgInvert = e.target.value === 'above';
   updateGlassBrainUniforms();
 });
 wireSlider('brain-cutout-below-slider','brain-cutout-below-val', linearFromSlider, v=>v.toFixed(2), v=>{cutoutBelowThresh=v; updateGlassBrainUniforms();});
-wireSlider('brain-rim-slider','brain-rim-val', rimFromSlider, v=>v.toFixed(2), v=>{glassBrainRimPow=v; updateGlassBrainUniforms();});
+document.getElementById('cutout-row1-select').addEventListener('change', e => {
+  cutoutRow1Above = e.target.value === 'above';
+  updateGlassBrainUniforms();
+});
+document.getElementById('cutout-row2-select').addEventListener('change', e => {
+  cutoutRow2AndBelow = e.target.value === 'and-below';
+  updateGlassBrainUniforms();
+});
+// Displays 1/rimPow rather than rimPow itself — purely a label change,
+// the callback still receives and stores the actual rimPow value (v)
+// fed to the shader, unchanged. Without this, the NUMBER shown would
+// decrease as the slider moves right even though rimPowFromSlider
+// already makes the VISUAL effect correctly grow stronger that
+// direction (a lower exponent = broader rim) — the displayed digits and
+// the on-screen effect moving in opposite directions is exactly the
+// kind of mismatch worth avoiding, and reciprocating only the label
+// fixes it without touching the underlying (already correct) curve.
+wireSlider('brain-rim-slider','brain-rim-val', rimPowFromSlider, v=>(1/v).toFixed(2), v=>{glassBrainRimPow=v; updateGlassBrainUniforms();});
 wireSlider('contrast-slider','contrast-val', contrastGainFromSlider, v=>v.toFixed(2)+'×', v=>{
   contrastGain=v;
   vr.setContrast(contrastGain);
@@ -2742,6 +3205,19 @@ function applyColorDefaultsForLoad() {
     setColorRadioDefault('src-color',   'flat');
     setColorRadioDefault('tgt-color',   'flat');
   }
+  // Bundle loads default to thinner lines and smaller endpoint dots —
+  // several simultaneously-visible bundles read as cleaner at a lighter
+  // weight than the single-tractogram default. Same pattern as the color
+  // radios just above: sets the JS variable + slider DOM/label only,
+  // relying on the caller's own post-load refresh (updateProbe/
+  // rebuildDots) to actually apply it, same as those don't call
+  // updateScene3d() themselves either.
+  lineWidthPx = isBundle ? 1.5 : 2.0;
+  endsPx      = isBundle ? 2.5 : 6.0;
+  const lw = document.getElementById('line-width-slider');
+  if (lw) { lw.value = lineWidthPx; document.getElementById('line-width-val').textContent = lineWidthPx.toFixed(1) + ' px'; }
+  const es = document.getElementById('ends-size');
+  if (es) { es.value = endsPx; document.getElementById('ends-size-val').textContent = endsPx.toFixed(1) + ' px'; }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2808,14 +3284,25 @@ document.body.addEventListener('drop',async e=>{
   };
   set('ends-size',           endsPx,           ['ends-size-val',   endsPx.toFixed(1) + ' px']);
   set('line-width-slider',   lineWidthPx,      ['line-width-val',  lineWidthPx.toFixed(1) + ' px']);
+  set('reflectance-slider',  reflectance,      ['reflectance-val', reflectance.toFixed(2)]);
+  // No dedicated JS variable for AO strength (read live from the slider's
+  // own DOM value each time — see applyAOParamsToPass), but it still
+  // needs registering here like every other slider, or the browser's own
+  // form-autofill can silently restore the THUMB to wherever it was last
+  // left while the static "0%" label text (a plain span, not part of
+  // form autofill) stays exactly as written in the HTML — exactly the
+  // slider-says-one-thing/label-says-another mismatch this whole
+  // mechanism exists to prevent, just missed for this one control.
+  set('ao-strength-slider',  0,                ['ao-strength-val', '0%']);
   set('pitch-slider',        0,                ['pitch-val',       '0°']);
   set('yaw-slider',          0,                ['yaw-val',         '0°']);
   set('roll-slider',         0,                ['roll-val',        '0°']);
   set('radius-slider',       radius,           ['radius-val',      radius.toFixed(2)+' mm']);
   set('slab-slider',         slabMultiplier,   ['slab-val',        slabMultiplier.toFixed(1)+'×']);
   set('brain-alpha-slider',  50,               ['brain-alpha-val', '50%']);
-  set('brain-thresh-slider', 50,               ['brain-thresh-val',glassBrainThresh.toFixed(2)]);
-  set('brain-rim-slider',    50,               ['brain-rim-val',   glassBrainRimPow.toFixed(2)]);
+  set('brain-thresh-slider', 0,                 ['brain-thresh-val', cutoutT1.toFixed(2)]);
+  set('brain-cutout-below-slider', 100,          ['brain-cutout-below-val', cutoutBelowThresh.toFixed(2)]);
+  set('brain-rim-slider',    33,               ['brain-rim-val',   (1/glassBrainRimPow).toFixed(2)]);
   set('contrast-slider',     50,               ['contrast-val',    contrastGain.toFixed(2)+'×']);
 })();
 

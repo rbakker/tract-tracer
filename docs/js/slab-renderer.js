@@ -3,7 +3,7 @@
 // Draw order: far lines → near lines → dots (src+tgt always on top).
 
 import * as THREE from 'three';
-import { DOTS_VS, DOTS_FS } from './scene3d.js';
+import { DOTS_VS, DOTS_FS, hexToRgbRaw } from './scene3d.js';
 
 // SLAB_VS does the same screen-space ribbon expansion as scene3d.js's
 // RIBBON_VS (see that file for the derivation), adapted for this
@@ -118,7 +118,28 @@ export class SlabRenderer {
       minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat, type: THREE.UnsignedByteType, depthBuffer: true,
     });
-    this._rt.texture.colorSpace = THREE.SRGBColorSpace;
+    // Deliberately NOT setting texture.colorSpace = SRGBColorSpace here
+    // (as this used to) — traced directly through three's own
+    // WebGLTextures.js getInternalFormat(): that setting makes three
+    // allocate this render target's GPU texture as SRGB8_ALPHA8 instead
+    // of plain RGBA8, which triggers REAL hardware-level automatic
+    // linear->sRGB encoding on every fragment write into it (a WebGL2/
+    // GLES3 built-in behavior for SRGB8_ALPHA8 targets, independent of
+    // anything the shader source does) — completely unlike the 3D
+    // canvas path, which has no such encoding. readRenderTargetPixels is
+    // a raw gl.readPixels() wrapper with no compensating decode
+    // (confirmed in three's own WebGLRenderer.js), so that encode was
+    // one-way and uncompensated: it happened to roughly cancel out
+    // THREE.Color's own sRGB->linear auto-conversion for custom/flat
+    // colors (making those look right), while corrupting already-raw
+    // values like bundle colors a second time (making those look
+    // wrong — the "red becomes orange" bug). Leaving this unset keeps
+    // texture.colorSpace at Texture's own default (NoColorSpace, which
+    // maps to LinearTransfer, i.e. plain RGBA8 — verified in three's own
+    // Texture.js/ColorManagement.js) — no hardware encoding at all,
+    // matching the 3D canvas path exactly, since every color reaching
+    // either pipeline now goes through the same raw hexToRgbRaw
+    // conversion (see cv() below) with nothing left to compensate for.
     this._rtW = W; this._rtH = H;
     this._pixels = new Uint8Array(W * H * 4);
   }
@@ -251,11 +272,15 @@ export class SlabRenderer {
     // s.mode: 'ras' (lines only) = per-vertex direction, 'bundle' = per-
     // instance/per-point fixed bundle color, 'hide' = off (color value
     // irrelevant, not drawn — see showLines/showSrc/showTgt below),
-    // else '#rrggbb' custom.
+    // else '#rrggbb' custom. col is always a raw [r,g,b] array now (via
+    // hexToRgbRaw, imported from scene3d.js) rather than a THREE.Color —
+    // the 'ras'/'bundle' placeholder value is genuinely never read (see
+    // SLAB_FS's u_autoColor branching), so [1,1,1] there is just a
+    // harmless placeholder, not a real color needing conversion.
     const cv = (s) => {
-      if (s.mode === 'ras')    return { auto: 1, col: new THREE.Color(0xffffff) };
-      if (s.mode === 'bundle') return { auto: 2, col: new THREE.Color(0xffffff) };
-      return { auto: 0, col: new THREE.Color(s.mode === 'hide' ? 0xffffff : s.rgb) };
+      if (s.mode === 'ras')    return { auto: 1, col: [1, 1, 1] };
+      if (s.mode === 'bundle') return { auto: 2, col: [1, 1, 1] };
+      return { auto: 0, col: s.mode === 'hide' ? [1, 1, 1] : hexToRgbRaw(s.rgb) };
     };
 
 	const lc = cv(opts.lineStyle);
@@ -268,7 +293,7 @@ export class SlabRenderer {
       u.u_slicePt.value.set(cursor[0], cursor[1], cursor[2]);
       u.u_slabHalf.value  = halfThickMm;
       u.u_autoColor.value = lc.auto;
-      u.u_lineColor.value.set(lc.col.r, lc.col.g, lc.col.b);
+      u.u_lineColor.value.set(lc.col[0], lc.col[1], lc.col[2]);
       u.u_resolution.value.set(W, H);
       u.u_widthPx.value = opts.lineWidthPx2D ?? 2.0;
     };
@@ -278,7 +303,7 @@ export class SlabRenderer {
       u.u_slicePt.value.set(cursor[0], cursor[1], cursor[2]);
       u.u_slabHalf.value  = halfThickMm;
       u.u_autoColor.value = c.auto;
-      u.u_dotColor.value.set(c.col.r, c.col.g, c.col.b);
+      u.u_dotColor.value.set(c.col[0], c.col[1], c.col[2]);
       u.u_pointSize.value = opts.endsPx ?? 6;
     };
     setLine(this._matNear); setLine(this._matFar);

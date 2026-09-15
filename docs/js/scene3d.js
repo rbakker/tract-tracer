@@ -138,8 +138,21 @@ uniform sampler3D u_vol;
 uniform vec3  u_size;
 uniform vec3  u_voxMm;
 uniform float u_alpha;
-uniform float u_thresh; // CUTOUT's ABOVE threshold (u_cutoutBelowThresh below is the BELOW threshold) - see isCutZone's comment for the two-threshold rule
-uniform float u_cutoutBelowThresh; // CUTOUT's BELOW threshold - see isCutZone's comment
+uniform float u_thresh; // RIM-LIT's accumulation cutoff — tied to BACKGROUND's own threshold from index.html (not an independent value; see backgroundThresh there), now that it's no longer cutout's threshold and the original reason for keeping it separate from BACKGROUND (protecting the outer surface from an aggressive CUTOUT) no longer applies to this role at all
+// CUTOUT is a fully independent two-row system now, decoupled from
+// u_thresh (which stays u_thresh's own thing — RIM-LIT's accumulation
+// cutoff — since it's the ONLY UI-adjustable value driving that, via a
+// slider that's only ever visible in SOLID mode; repurposing that same
+// slider for cutout's own default of 0 would have silently changed
+// RIM-LIT's default look for anyone who never opens SOLID mode at all).
+// u_cutoutT1/u_cutoutT2 are cutout's own two thresholds; u_cutoutRow1Above
+// and u_cutoutRow2AndBelow are explicit operator choices (not inferred
+// from which threshold is numerically larger, the old scheme's actual
+// source of confusion) — see isCutZone's comment for the exact rule.
+uniform float u_cutoutT1;
+uniform float u_cutoutBelowThresh; // cutout's second threshold (t2) — name kept from before decoupling, still cutout-only, never shared elsewhere
+uniform int   u_cutoutRow1Above;
+uniform int   u_cutoutRow2AndBelow;
 // BACKGROUND: adjustable replacement for what used to be a fixed
 // "is there any real signal here" constant — see occupancyAndGradient's
 // and classifyThresh's comments for how this is used.
@@ -536,23 +549,32 @@ bool findIsosurface(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize, 
   }
   return false;
 }
-// CUTOUT's two-threshold rule: which occupancy values fall on the side it
-// hides, given aboveThresh (u_thresh, the ABOVE row's slider) and
-// belowThresh (u_cutoutBelowThresh, the BELOW row's slider). aboveThresh <
-// belowThresh cuts the MIDDLE band between them (AND of "above
-// aboveThresh" and "below belowThresh") - e.g. hiding one specific
-// mid-range tissue type while keeping both darker and brighter tissue
-// visible. aboveThresh > belowThresh instead cuts everything OUTSIDE that
-// (now-reversed) band, keeping only the middle visible (OR) - e.g.
-// isolating a specific intensity range and hiding everything else. Equal
-// thresholds: the AND formula alone already reduces to "never true" at
-// exact equality (a single point has zero measure), which is
-// indistinguishable from CUTOUT being off in practice - no separate
-// branch needed for that case.
-bool isCutZone(float occ, float aboveThresh, float belowThresh) {
-  if (aboveThresh < belowThresh) return occ >= aboveThresh && occ <= belowThresh;
-  if (aboveThresh > belowThresh) return occ <= belowThresh || occ >= aboveThresh;
-  return false;
+// CUTOUT's rule, redesigned around two EXPLICIT operator choices instead
+// of inferring AND/OR from which threshold happens to be numerically
+// larger (the old scheme's actual source of confusion — the only way to
+// turn cutout off was setting both sliders to precisely the same value,
+// a coincidence rather than a discoverable default). Row 1 picks a
+// direction (>= t1, or <= t1); row 2 picks how it COMBINES with a second
+// bound, AND-ing or OR-ing. The combined expression describes what STAYS
+// VISIBLE, not what's cut — cutout removes whatever fails it. With the
+// defaults (row1 "above" t1=0, row2 "and below" t2=1), the combined
+// condition is "occ>=0 AND occ<=1", true for every possible occ value —
+// i.e. cutout is off by construction at those defaults, not by
+// coincidence. All comparisons inclusive.
+//
+// This is strictly more expressive than the old two-threshold system,
+// not just a relabeling — the four (row1 x row2) combinations reproduce
+// BOTH of the old system's modes (isolate a band: row1=above + row2=
+// "and below" is exactly today's default; exclude a band: row1=below +
+// row2="or above") PLUS two new one-sided half-space cuts the old system
+// had no way to express at all (row1=above + row2="or above" collapses
+// to a single effective threshold at min(t1,t2); row1=below + row2=
+// "and below" collapses to a single threshold at min(t1,t2) the other
+// direction).
+bool isCutZone(float occ, float t1, float t2, bool row1Above, bool row2AndBelow) {
+  bool cond1 = row1Above ? (occ >= t1) : (occ <= t1);
+  bool keep  = row2AndBelow ? (cond1 && occ <= t2) : (cond1 || occ >= t2);
+  return !keep;
 }
 // CUTOUT's own boundary search - structurally identical to findIsosurface
 // above (march forward, bisection-refine where the classification flips),
@@ -563,20 +585,20 @@ bool isCutZone(float occ, float aboveThresh, float belowThresh) {
 // find where it exits" and "material starts on the keep side, find where
 // IT ends" without needing to know which case it's in ahead of time.
 bool findCutoutBoundary(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize,
-                         float aboveThresh, float belowThresh, out vec3 hitP) {
+                         float t1, float t2, bool row1Above, bool row2AndBelow, out vec3 hitP) {
   vec3 prevP = ro + tStart * rd;
-  bool startCut = isCutZone(occupancyAndGradient(prevP).w, aboveThresh, belowThresh);
+  bool startCut = isCutZone(occupancyAndGradient(prevP).w, t1, t2, row1Above, row2AndBelow);
   for (int i = 1; i < 512; i++) {
     if (i >= u_steps) break;
     float t = tStart + float(i) * stepSize;
     if (t > tEnd) break;
     vec3 p = ro + t * rd;
-    bool nowCut = isCutZone(occupancyAndGradient(p).w, aboveThresh, belowThresh);
+    bool nowCut = isCutZone(occupancyAndGradient(p).w, t1, t2, row1Above, row2AndBelow);
     if (nowCut != startCut) {
       vec3 a = prevP, b = p; // a stays on the startCut side, b on the other
       for (int k = 0; k < 6; k++) {
         vec3 mid = (a + b) * 0.5;
-        bool midCut = isCutZone(occupancyAndGradient(mid).w, aboveThresh, belowThresh);
+        bool midCut = isCutZone(occupancyAndGradient(mid).w, t1, t2, row1Above, row2AndBelow);
         if (midCut == startCut) a = mid; else b = mid;
       }
       hitP = (a + b) * 0.5;
@@ -893,13 +915,15 @@ ${CLIP_SETUP_GLSL}
     // this cap decision would then compare a raw value against a threshold
     // meant to be read in flipped terms.
     float capOcc = occupancyAndGradient(ro + tStart * rd).w;
-    // CUTOUT is now a two-threshold system (u_thresh = ABOVE, u_cutoutBelowThresh
-    // = BELOW) - see isCutZone's comment for the exact AND/OR/off rule this
-    // implements. Note this needs no change to findOuterBoundaryBackward,
+    // CUTOUT is now a two-threshold system (u_cutoutT1/u_cutoutBelowThresh,
+    // combined via u_cutoutRow1Above/u_cutoutRow2AndBelow — u_thresh is no
+    // longer involved at all, see its own declaration comment) - see
+    // isCutZone's comment for the exact rule this implements. Note this
+    // needs no change to findOuterBoundaryBackward,
     // and CUTOUT's own search (findCutoutBoundary) is already bidirectional
     // the same way findIsosurface is - only this caller-side branching needs
     // to know which side capOcc falls on.
-    bool onCutSide = isCutZone(capOcc, u_thresh, u_cutoutBelowThresh);
+    bool onCutSide = isCutZone(capOcc, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0);
     bool hasCapData = u_fillIn > 0.5 && (labelMode || !onCutSide);
     if (hasCapData) {
       hitP = ro + tStart * rd; isCap = true; haveHit = true;
@@ -935,14 +959,14 @@ ${CLIP_SETUP_GLSL}
       // assumption is checked explicitly first — if it fails, this ray
       // is left as no-hit (discard/see-through) rather than risking a
       // wrong detection.
-      haveHit = findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_thresh, u_cutoutBelowThresh, hitP);
+      haveHit = findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0, hitP);
       if (!haveHit) {
         bool farIsBackground = (u_sliceMode < 0.5) || (occupancyAndGradient(ro + tEnd * rd).w < classifyThresh);
         if (farIsBackground) {
           haveHit = findOuterBoundaryBackward(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
         }
       }
-    } else if (findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_thresh, u_cutoutBelowThresh, hitP)) {
+    } else if (findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0, hitP)) {
       // COVER off, but the material right at the cut is already on the
       // KEEP side - unchanged "look inside" behavior: find where THIS
       // material itself ends (its own exit boundary).
@@ -1219,8 +1243,11 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
                        (anat.shape[1] * anat.vox_mm[1])**2 +
                        (anat.shape[2] * anat.vox_mm[2])**2) },
       u_alpha:     { value: 5.0 },
-      u_thresh:    { value: 0.15 }, // CUTOUT's ABOVE threshold
-      u_cutoutBelowThresh: { value: 0.15 }, // CUTOUT's BELOW threshold - equal to u_thresh by default (CUTOUT off)
+      u_thresh:    { value: 0.15 }, // RIM-LIT's accumulation cutoff only now — see its declaration comment
+      u_cutoutT1:  { value: 0.0 },  // cutout row 1's own threshold, decoupled from u_thresh
+      u_cutoutBelowThresh: { value: 1.0 }, // cutout row 2's threshold — [0,1] combined via AND by default = every value = cutout off
+      u_cutoutRow1Above:    { value: 1 }, // 1 = "above" (>=), 0 = "below" (<=)
+      u_cutoutRow2AndBelow: { value: 1 }, // 1 = "and below" (AND), 0 = "or above" (OR)
       u_background: { value: 0.03 },
       u_bgInvert: { value: 0 },
       u_sliceMode: { value: 0 },
@@ -1426,6 +1453,17 @@ uniform float u_specPower;
 uniform vec3  u_camFwd;
 uniform vec3  u_depthTarget;
 uniform float u_depthRadius;
+// Both default enabled (see sharedLineUniforms) — AO switches
+// u_depthAttenEnabled off automatically (the view-axis depth darkening
+// was always a placeholder for real occlusion; stacking both multiplies
+// their darkening together and fights AO's more precise signal rather
+// than complementing it). u_reflectance is a plain user strength control
+// (REFLECTANCE, always visible, not tied to AO/ULTRA at all) — unlike
+// the depth cue, the sheen isn't redundant with AO (AO only ever reads
+// the depth buffer, no lighting-direction awareness at all), so it's
+// left as an independent dial rather than coupled to anything.
+uniform int   u_depthAttenEnabled;
+uniform float u_reflectance; // 0 = flat base color, 1 = normal strength, >1 exaggerated
 void main() {
   vec3 base = (u_autoColor == 1) ? vColor : ((u_autoColor == 2) ? vBundleColor : u_lineColor);
   vec3 T = normalize(vTangent);
@@ -1435,6 +1473,12 @@ void main() {
   // TANGENT (sin, via the Pythagorean identity from the cosine dot
   // product), not to a surface normal — this is what makes it well-
   // defined on a strand/line with no well-formed normal of its own.
+  // Brightest at T PERPENDICULAR to L (sin=1), darkest at T PARALLEL/
+  // ANTI-PARALLEL to L (sin=0) — same as a real cylindrical strand: light
+  // travelling along the strand's own axis never faces any point on its
+  // surface head-on (a cylinder's normals all point outward, perpendicular
+  // to the axis, so N·L is ~0 all the way around), while light from the
+  // side lights up the whole half-circumference facing it.
   float TdotL    = dot(T, L);
   float diffuse  = sqrt(clamp(1.0 - TdotL * TdotL, 0.0, 1.0));
   // Blinn-Phong's half vector H = normalize(L + V) is ill-conditioned
@@ -1456,21 +1500,39 @@ void main() {
   vec3  H             = (Hlen > 1e-4) ? (Hraw / Hlen) : T;
   float TdotH         = dot(T, H);
   float spec          = pow(sqrt(clamp(1.0 - TdotH * TdotH, 0.0, 1.0)), u_specPower) * stability;
-  vec3 lit = base * (u_ambient + u_diffuseStrength * diffuse) + vec3(u_specStrength * spec);
+  vec3 litFull = base * (u_ambient + u_diffuseStrength * diffuse) + vec3(u_specStrength * spec);
+  // mix() rather than a plain multiply so reflectance=0 lands EXACTLY on
+  // flat base color (not on base*ambient, which would still be dimmed) —
+  // "0 = off" means genuinely off, not "off but still shaded a bit".
+  // >1 extrapolates past litFull for an exaggerated look; WebGL clamps
+  // the final gl_FragColor to [0,1] on write, so this saturates toward
+  // white in bright spots rather than doing anything undefined.
+  vec3 lit = mix(base, litFull, u_reflectance);
   // Depth cue, take 3 — near/far planes stay fixed (zoom-invariant) while
   // the camera is OUTSIDE the sphere-approximated volume, same as before.
-  // But once the camera crosses the near plane (camDepth > -u_depthRadius,
+  // But once the camera crosses the near plane (camDepth > -fogRadius,
   // i.e. it has physically entered the brain), the near plane now tracks
   // the camera exactly, and the far plane shifts by the same amount —
-  // keeping the window WIDTH constant at 2*u_depthRadius rather than
+  // keeping the window WIDTH constant at 2*fogRadius rather than
   // collapsing fragments right next to the lens toward the "far" end of a
   // window that never moved. max(...) means this reduces to exactly the
   // original fixed-window formula whenever the camera hasn't entered yet.
+  // fogRadius is HALF of u_depthRadius — a local scale-down used only
+  // here, not touching the shared uniform (RIBBON_VS's width-by-depth
+  // taper below still uses the full u_depthRadius, unchanged) — pulls the
+  // whole fog window twice as close to the brain's centre, so the
+  // "endpoint dots stay bright while the connecting line body darkens"
+  // look (dots have no depth-based darkening at all — see DOTS_FS) shows
+  // up across more of a typical view instead of only in the deep
+  // background.
+  float fogRadius = u_depthRadius * 0.5;
   float camDepth  = dot(cameraPosition - u_depthTarget, u_camFwd);
-  float nearDepth = max(-u_depthRadius, camDepth);
-  float farDepth  = nearDepth + 2.0 * u_depthRadius;
+  float nearDepth = max(-fogRadius, camDepth);
+  float farDepth  = nearDepth + 2.0 * fogRadius;
   float depth = dot(vWorldPos - u_depthTarget, u_camFwd);
-  float atten = clamp(1.0 - (depth - nearDepth) / max(farDepth - nearDepth, 1e-4), 0.0, 1.0);
+  float atten = (u_depthAttenEnabled > 0)
+    ? clamp(1.0 - (depth - nearDepth) / max(farDepth - nearDepth, 1e-4), 0.0, 1.0)
+    : 1.0;
   gl_FragColor = vec4(lit * atten, 1.0);
 }`;
 
@@ -1539,6 +1601,10 @@ function sharedLineUniforms() {
     u_camFwd:          { value: new THREE.Vector3(0, 0, 1) },
     u_depthTarget:     { value: new THREE.Vector3(0, 0, 0) },
     u_depthRadius:     { value: 1.0 },
+    // Both toggleable from index.html — see LINE_FS's comment for why
+    // they're independent controls rather than one "extras" switch.
+    u_depthAttenEnabled: { value: 1 },
+    u_reflectance:       { value: 1.0 },
   };
 }
 
@@ -1657,9 +1723,31 @@ export function makeRibbonMaterial() {
 // — idPerStreamline[i] indexes into palette for tracts[i]. When omitted
 // (a normal, non-bundle load), instanceBundleColor is filled with
 // DEFAULT_BUNDLE_RGB throughout, so selecting "Bundle" on a non-bundle
-// load reads as the same default reddish color the picker starts at,
-// rather than needing a special case downstream.
-export const DEFAULT_BUNDLE_RGB = [1.0, 0.216, 0.0]; // #ff3700, matches the LINE·COLOR picker's own default
+// load reads as a reasonable default color out of the box — NOT because
+// bundle color is meant to track the flat-color picker generally (real
+// bundles have their own independent palette, automatic or specified;
+// this is only about what an otherwise-empty default should look like).
+export const DEFAULT_BUNDLE_RGB = [1.0, 0.216, 0.0]; // #ff3700 as RAW sRGB-style [0,1] — see hexToRgbRaw for why this must NOT go through THREE.Color
+
+// Canonical hex -> [0,1] conversion for every color that ends up in a
+// shader uniform or vertex attribute in this app (line/dot custom colors,
+// bundle palette entries, DEFAULT_BUNDLE_RGB above). Deliberately raw —
+// NOT new THREE.Color(hex), which auto-converts sRGB->linear internally
+// (verified directly in three's own Color.js: setHex() always calls
+// ColorManagement.colorSpaceToWorking()). None of this app's own shaders
+// (LINE_FS, DOTS_FS, SLAB_FS, the raymarcher, ...) ever re-encode on
+// output — confirmed earlier, none include three's colorspace_fragment
+// chunk — so every raw value written IS the final displayed value, and
+// every hex color feeding one of them needs to skip THREE.Color's
+// conversion or it'll silently drift from every other color source that
+// does. This exact inconsistency (DEFAULT_BUNDLE_RGB already raw, but
+// custom line/dot colors and real bundle-palette colors going through
+// THREE.Color) is what made bundle-mode and flat-mode colors diverge
+// even when both represented "the same" nominal color.
+export function hexToRgbRaw(hex) {
+  const n = typeof hex === 'string' ? parseInt(hex.replace(/^#/, ''), 16) : hex;
+  return [ ((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255 ];
+}
 
 export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bundleInfo = null) {
   let segCount = 0;
@@ -1818,15 +1906,34 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRa
   const n = tracts.length;
   const srcPos = new Float32Array(n * 6), srcCol = new Float32Array(n * 6);
   const tgtPos = new Float32Array(n * 6), tgtCol = new Float32Array(n * 6);
+  // Parallel to srcPos/tgtPos but one int per POINT (not *3) — which
+  // bundle each dot belongs to, for hover/click lookups later (see
+  // index.html's bundle-name tooltip). -1 = no bundle info available.
+  // si/ti (below) are their own counters, separate from the loop index i
+  // (the "both probed" case adds twice to src per streamline, so point
+  // index in the geometry is NOT the same as streamline index i) — bId
+  // needs computing from i and then written out at the SAME si/ti
+  // position the matching position/color just went to.
+  const srcBundleId = new Int32Array(n * 2), tgtBundleId = new Int32Array(n * 2);
   let si = 0, ti = 0;
 
   const [cx, cy, cz] = cursor || [0, 0, 0];
 
   const NEUTRAL_RGB = [1, 1, 1];
+  // A bit brighter than the matching line color, not a separate palette —
+  // same per-streamline bundle entry makeRibbonLines uses for that same
+  // streamline, just scaled up. Discovered by accident (dots have no
+  // depth-based darkening at all, unlike the connecting line body — see
+  // LINE_FS's fog — so a dot already stood out against its own
+  // increasingly-darkened line; this leans into that glowing-endpoint
+  // look on purpose instead of leaving it as a side effect).
+  const BUNDLE_DOT_INTENSITY = 1.3;
   const bundleCol = (i) => {
     if (!bundleInfo || !bundleInfo.idPerStreamline) return NEUTRAL_RGB;
-    return bundleInfo.palette[bundleInfo.idPerStreamline[i]] || NEUTRAL_RGB;
+    const c = bundleInfo.palette[bundleInfo.idPerStreamline[i]] || NEUTRAL_RGB;
+    return [c[0] * BUNDLE_DOT_INTENSITY, c[1] * BUNDLE_DOT_INTENSITY, c[2] * BUNDLE_DOT_INTENSITY];
   };
+  const bundleId = (i) => (bundleInfo && bundleInfo.idPerStreamline) ? bundleInfo.idPerStreamline[i] : -1;
 
   for (let i = 0; i < n; i++) {
     const t = tracts[i];
@@ -1840,14 +1947,15 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRa
     // now that RAS is gone from this path.
     const sCol = bundleCol(i);
     const eCol = sCol;
+    const bId = bundleId(i);
 
     const addSrc = (px, py, pz, c) => {
       srcPos[si*3]=px; srcPos[si*3+1]=py; srcPos[si*3+2]=pz;
-      srcCol[si*3]=c[0]; srcCol[si*3+1]=c[1]; srcCol[si*3+2]=c[2]; si++;
+      srcCol[si*3]=c[0]; srcCol[si*3+1]=c[1]; srcCol[si*3+2]=c[2]; srcBundleId[si]=bId; si++;
     };
     const addTgt = (px, py, pz, c) => {
       tgtPos[ti*3]=px; tgtPos[ti*3+1]=py; tgtPos[ti*3+2]=pz;
-      tgtCol[ti*3]=c[0]; tgtCol[ti*3+1]=c[1]; tgtCol[ti*3+2]=c[2]; ti++;
+      tgtCol[ti*3]=c[0]; tgtCol[ti*3+1]=c[1]; tgtCol[ti*3+2]=c[2]; tgtBundleId[ti]=bId; ti++;
     };
 
     if (probedEnds) {
@@ -1863,15 +1971,23 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRa
     }
   }
 
-  const makePoints = (pos, col, count) => {
+  const makePoints = (pos, col, bundleIdArr, count) => {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, count*3), 3));
     geo.setAttribute('color',    new THREE.BufferAttribute(col.slice(0, count*3), 3));
-    return new THREE.Points(geo, makeDotsMaterial3d(endsPx * pixelRatio));
+    const mesh = new THREE.Points(geo, makeDotsMaterial3d(endsPx * pixelRatio));
+    // Index-aligned with the geometry's points (point i's bundle is
+    // bundleId[i]) — for hover/click lookups (see index.html's
+    // bundle-name tooltip), which need to go from a raycast hit's
+    // .index back to a bundle, and the baked-in color alone isn't a
+    // safe way to reverse that (fragile float matching, breaks if two
+    // bundles' colors are close).
+    mesh.userData.bundleId = bundleIdArr.slice(0, count);
+    return mesh;
   };
 
   return {
-    src: makePoints(srcPos, srcCol, si),
-    tgt: makePoints(tgtPos, tgtCol, ti),
+    src: makePoints(srcPos, srcCol, srcBundleId, si),
+    tgt: makePoints(tgtPos, tgtCol, tgtBundleId, ti),
   };
 }

@@ -20,6 +20,18 @@ function extOf(name) {
   return i === -1 ? '' : name.toLowerCase().slice(i);
 }
 
+// Fallback bundle display name when a manifest doesn't specify one (or
+// there's no manifest at all): filename without its directory path or
+// .tck/.trk extension. Lives here (not index.html, where it used to be)
+// since this is where the actual filename strings are — index.html only
+// ever sees entries[i].file as a File OBJECT, not a string, so calling
+// this there on the wrong thing would have silently produced
+// "[object File]" the one time the fallback branch actually fired.
+export function stripPathExt(filename) {
+  const base = String(filename).split(/[\\/]/).pop();
+  return base.replace(/\.(tck|trk)$/i, '');
+}
+
 // Golden-angle hue rotation, same technique as index.html's
 // autoGenerateLut — duplicated here (rather than imported) since
 // index.html isn't itself an importable module. Worth consolidating into
@@ -122,7 +134,7 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
     const colors = autoBundlePalette(tractFiles.length);
     return {
       manifest: null,
-      entries: tractFiles.map((f, i) => ({ file: f, color: colors[i], name: null })),
+      entries: tractFiles.map((f, i) => ({ file: f, color: colors[i], name: stripPathExt(f.name) })),
     };
   }
   const text = await manifestFile.text();
@@ -134,7 +146,11 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
   const entries = manifest.bundles.map((b, i) => {
     const f = byName.get(b.file);
     if (!f) missing.push(b.file);
-    return { file: f, color: b.color || autoColors[i], name: b.name };
+    // f.name would throw mid-map if f is missing — fall back to b.file
+    // itself (already a plain string) rather than assuming f exists;
+    // the missing-file throw below still fires either way, this just
+    // avoids a raw TypeError pre-empting that nicer, user-facing message.
+    return { file: f, color: b.color || autoColors[i], name: b.name || stripPathExt(f ? f.name : b.file) };
   });
   if (missing.length) throw `index.json references file(s) not present in the drop: ${missing.join(', ')}`;
   return { manifest, entries };
