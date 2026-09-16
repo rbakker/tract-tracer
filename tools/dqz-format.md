@@ -6,7 +6,7 @@ tractography output has by construction — points along a streamline are
 laid down at a roughly constant step size — while keeping reconstruction
 error small, predictable, and mathematically bounded per streamline.
 
-Reference implementation: [`tck_quantize.py`](https://github.com/PLACEHOLDER/tractogram-observer/blob/main/tools/tck_quantize.py)
+Reference implementation: [`tck_quantize.py`](https://github.com/rbakker/tract-tracer/blob/main/tools/tck_quantize.py)
 
 ## How it works
 
@@ -80,10 +80,10 @@ points along one axis, in millimeters, are `0.00`, `10.04`, and `20.11`,
 and `Q` happens to be `0.10` for this streamline:
 
 | point | value | value / Q | rounded (grid units) |
-|---|---|---|---|
-| P0 | 0.00 | 0.0 | 0 |
-| P1 | 10.04 | 100.4 | 100 |
-| P2 | 20.11 | 201.1 | 201 |
+| ----- | ----- | --------- | -------------------- |
+| P0    | 0.00  | 0.0       | 0                    |
+| P1    | 10.04 | 100.4     | 100                  |
+| P2    | 20.11 | 201.1     | 201                  |
 
 The stored differences are `100 − 0 = 100` and `201 − 100 = 101` — both
 comfortably within a signed byte. Decoding sums them back up:
