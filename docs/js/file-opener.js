@@ -23,7 +23,7 @@
 import { unzipSync } from 'fflate';
 import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME } from './bundle-io.js';
 
-const TRACT_EXTS = ['.tck', '.trk'];
+const TRACT_EXTS = ['.tck', '.dqz', '.trk'];
 const LUT_EXTS    = ['.txt', '.lut'];
 
 function extOf(name) {

@@ -89,8 +89,9 @@ function headerToRaw(header) {
 
 /**
  * Parse a full .tck file into streamlines + metadata.
- * @param {ArrayBuffer} buf
- * @returns {{tracts: Array, streamlineLookup: Int32Array, header: Object}}
+ * @param {File} file
+ * @param {number} [maxNumTracts=0] - Maximum number of tracts to extract, 0 to extract all.
+ * @returns {{streamlines: Array, streamlineLookup: Int32Array, header: Object}}
  */
 export async function parseTck(file, maxNumTracts = 0) {
   const buf = await file.arrayBuffer();
@@ -138,12 +139,165 @@ export async function parseTck(file, maxNumTracts = 0) {
     if (!isFinite(x) || !isFinite(y) || !isFinite(z)) {
       pushStreamline(iPrev, i);
       iPrev = i + 1;
+      if (maxNumTracts && streamlines.length >= maxNumTracts) {
+        return { streamlines, streamlineLookup: new Int32Array(lookup), header };
+      }
     }
   }
 
   pushStreamline(iPrev, nPoints);
 
   return { streamlines, streamlineLookup: new Int32Array(lookup), header };
+}
+
+
+// -- .dqz parser (quantized-delta compressed .tck) ---------------
+// See tck_quantize.py / dqz-format.md for the full format spec and the
+// reference Python implementation this mirrors byte-for-byte — cross-
+// checked directly against it (including every degenerate edge case:
+// empty, single-point, and coincident-point streamlines) rather than
+// just against the written spec, since a subtle byte-offset mistake
+// here would silently corrupt geometry rather than throw.
+
+const DQZ_MAGIC = 'TCKDQZ01';
+
+/**
+ * Parse the JSON header of a .dqz file (quantized-delta compressed
+ * .tck — see tck_quantize.py / dqz-format.md).
+ * @param {ArrayBuffer} buf
+ * @returns {Object} A .tck-style header object — source_header's own
+ *   fields (the original file's genuine custom metadata, if any) are
+ *   merged in directly, and datatype/count/file are regenerated to
+ *   describe the DECOMPRESSED data, matching what parseTckHeader would
+ *   produce for an equivalent, uncompressed .tck. Format-specific
+ *   fields that only a .dqz-aware caller needs (divisor, where the
+ *   per-streamline records start) live under header._dqz rather than
+ *   mixed into the plain .tck-shaped fields above.
+ */
+export function parseDqzHeader(buf) {
+  const magic = String.fromCharCode(...new Uint8Array(buf, 0, 8));
+  if (magic !== DQZ_MAGIC) throw 'Not a .dqz file (bad magic)';
+
+  const dv = new DataView(buf);
+  const headerLen = dv.getUint32(8, true);
+  const headerText = new TextDecoder('utf-8').decode(new Uint8Array(buf, 12, headerLen));
+  const dqzHeader = JSON.parse(headerText);
+
+  const header = {
+    ...(dqzHeader.source_header || {}),
+    datatype: 'Float32LE',
+    count: String(dqzHeader.n_streamlines),
+    // no real byte-offset concept for this format; same "placeholder,
+    // fixed up elsewhere" convention ensureTckHeader/writeTck already use
+    file: '. 0',
+  };
+
+  header._dqz = {
+    divisor: dqzHeader.divisor,
+    n_streamlines: dqzHeader.n_streamlines,
+    dataOffset: 12 + headerLen,
+  };
+
+  return header;
+}
+
+/**
+ * Parse a full .dqz file into streamlines + metadata, decoding the
+ * quantized-delta encoding back into ordinary float coordinates.
+ * Same return shape as parseTck.
+ * @param {File} file
+ * @param {number} [maxNumTracts=0] - Maximum number of streamlines to
+ *   decode, 0 for all. A .dqz file's per-streamline records are self-
+ *   describing (each starts with its own point count), so once the
+ *   kept streamlines are read nothing after them needs to be touched
+ *   at all — unlike parseTck's own maxNumTracts, which is accepted but
+ *   never actually used to limit anything, this one really does.
+ * @returns {{tracts: Array, streamlineLookup: Int32Array, header: Object}}
+ */
+export async function parseDqz(file, maxNumTracts = 0) {
+  const buf = await file.arrayBuffer();
+  const header = parseDqzHeader(buf);
+  const { dataOffset, n_streamlines } = header._dqz;
+
+  const numTracts = maxNumTracts ? Math.min(maxNumTracts, n_streamlines) : n_streamlines;
+
+  const dv = new DataView(buf);
+
+  // First pass: walk just the records being kept, reading each one's
+  // n_points (4 bytes) and remembering where its payload starts, so the
+  // shared output buffer can be sized once instead of growing
+  // streamline by streamline (same two-pass pattern parseTrk uses).
+  const pointCounts = new Array(numTracts);
+  const recordOffsets = new Array(numTracts);
+  let off = dataOffset;
+  let totalPoints = 0;
+
+  for (let tr = 0; tr < numTracts; tr++) {
+    const n = dv.getUint32(off, true);
+    recordOffsets[tr] = off;
+    pointCounts[tr] = n;
+    totalPoints += n;
+
+    off += 4;
+    if (n === 0) continue;
+    off += 12 + 4; // start (3 x float32) + Q (float32)
+    if (n >= 2) off += (n - 1) * 3; // deltas, 1 byte each
+  }
+
+  // Second pass: dequantize directly into one shared buffer, and build
+  // per-streamline views into it — same memory layout parseTck/parseTrk
+  // use, zero extra copies once the shared buffer is filled. Unlike
+  // those two, values here are COMPUTED (cumulative sum of quantized
+  // deltas, scaled by Q), not read directly off disk, since the raw
+  // bytes are quantized deltas, not coordinates — see
+  // dequantize_streamline in tck_quantize.py for the reference this
+  // mirrors exactly.
+  const dataArray = new Float32Array(totalPoints * 3);
+  const lookup = new Int32Array(totalPoints);
+  const streamlines = new Array(numTracts);
+
+  let p = 0;  // running index into dataArray, in FLOATS
+  let pi = 0; // running index into lookup
+
+  for (let tr = 0; tr < numTracts; tr++) {
+    const n = pointCounts[tr];
+    const streamlineStartFloat = p;
+
+    if (n === 0) {
+      streamlines[tr] = new Float32Array(dataArray.buffer, dataArray.byteOffset + streamlineStartFloat * 4, 0);
+      continue;
+    }
+
+    let roff = recordOffsets[tr] + 4; // skip n_points, already known
+    const sx = dv.getFloat32(roff, true);
+    const sy = dv.getFloat32(roff + 4, true);
+    const sz = dv.getFloat32(roff + 8, true);
+    roff += 12;
+    const Q = dv.getFloat32(roff, true);
+    roff += 4;
+
+    dataArray[p++] = sx; dataArray[p++] = sy; dataArray[p++] = sz;
+    lookup[pi++] = tr;
+
+    // Cumulative sum of quantized-integer deltas — exact integer
+    // arithmetic, no accumulated rounding (see tck_quantize.py's module
+    // docstring for why the encoding side guarantees this).
+    let ix = 0, iy = 0, iz = 0;
+    for (let i = 1; i < n; i++) {
+      const dx = dv.getInt8(roff);     roff += 1;
+      const dy = dv.getInt8(roff);     roff += 1;
+      const dz = dv.getInt8(roff);     roff += 1;
+      ix += dx; iy += dy; iz += dz;
+      dataArray[p++] = sx + ix * Q;
+      dataArray[p++] = sy + iy * Q;
+      dataArray[p++] = sz + iz * Q;
+      lookup[pi++] = tr;
+    }
+
+    streamlines[tr] = new Float32Array(dataArray.buffer, dataArray.byteOffset + streamlineStartFloat * 4, n * 3);
+  }
+
+  return { streamlines, streamlineLookup: lookup, header };
 }
 
 
@@ -441,117 +595,6 @@ console.log(streamlines,lookup)
   };
 }
 
-/*
-export async function parseTrk(file, space = 'vox_mm', maxNumTracts = 0) {
-  // 1. Read the header bytes up-front
-  const headerBlob = file.slice(0, 1024);
-  const headerBuffer = await headerBlob.arrayBuffer();
-  const header = parseHeader(headerBuffer);
-  
-  const numScalars = header.n_scalars;
-  const numProperties = header.n_properties;
-  const floatsPerPoint = 3 + numScalars;
-  let numTracts = header.n_count;
-  if (maxNumTracts) numTracts = Math.min(maxNumTracts, numTracts);
-
-  const starts = new Int32Array(numTracts);
-  const ends = new Int32Array(numTracts);
-
-  const LE = header.little_endian;
-  const CHUNK_SIZE = 64 * 1024 * 1024; // 64 MB dynamic processing windows
-
-  // --- PASS 1: Read structural metadata ---
-  for (let tr = 0; tr < numTracts; tr++) {
-    if (filePos + 4 > file.size) { numTracts = tr; break; }
-
-    if (chunkBuf === null || filePos + 4 > chunkStartPos + chunkBuf.byteLength) {
-      chunkStartPos = filePos;
-      chunkBlob = file.slice(chunkStartPos, Math.min(file.size, chunkStartPos + CHUNK_SIZE));
-      chunkBuf = await chunkBlob.arrayBuffer();
-      view = new DataView(chunkBuf);
-    }
-
-    let viewOffset = filePos - chunkStartPos;
-    const n = view.getUint32(viewOffset, LE);
-    const bytesForTractData = (n * floatsPerPoint * 4) + (numProperties * 4);
-
-    starts[tr] = totalPoints;
-    ends[tr] = totalPoints + n;
-
-    totalPoints += n;
-    filePos += 4 + bytesForTractData;
-  }
-
-  // --- Process Matrix Based on Space Option ---
-  const vox2ras = header.vox_to_ras;
-  const vs = header.voxel_size;
-  let r0, r1, r2;
-
-  if (space === 'vox') {
-    r0 = [...vox2ras[0]]; r1 = [...vox2ras[1]]; r2 = [...vox2ras[2]];
-  } else if (space === 'vox_mm') {
-    r0 = [vox2ras[0][0]/vs[0], vox2ras[0][1]/vs[1], vox2ras[0][2]/vs[2], vox2ras[0][3]];
-    r1 = [vox2ras[1][0]/vs[0], vox2ras[1][1]/vs[1], vox2ras[1][2]/vs[2], vox2ras[1][3]];
-    r2 = [vox2ras[2][0]/vs[0], vox2ras[2][1]/vs[1], vox2ras[2][2]/vs[2], vox2ras[2][3]];
-  } else if (space === 'ras') {
-    r0 = [1, 0, 0, 0]; r1 = [0, 1, 0, 0]; r2 = [0, 0, 1, 0];
-  }
-
-  // --- PASS 2: Populate coordinate buffers ---
-  for (let tr = 0; tr < numTracts; tr++) {
-    const n = ends[tr] - starts[tr];
-    const bytesForTractData = (n * floatsPerPoint * 4) + (numProperties * 4);
-    const totalTractBytes = 4 + bytesForTractData;
-
-    // SIMPLIFIED & ROBUST: Check if this entire streamline fits in the cached window
-    if (chunkBuf === null || filePos + totalTractBytes > chunkStartPos + chunkBuf.byteLength) {
-      chunkStartPos = filePos;
-    
-      // Dynamically scale up the window if a huge streamline demands more than 64MB
-      const currentReadSize = Math.max(CHUNK_SIZE, totalTractBytes);
-      chunkBlob = file.slice(chunkStartPos, Math.min(file.size, chunkStartPos + currentReadSize));
-      chunkBuf = await chunkBlob.arrayBuffer();
-      view = new DataView(chunkBuf);
-    }
-
-    let byteOffset = (filePos - chunkStartPos) + 4; // Step past the 4-byte integer
-
-    for (let i = 0; i < n; i++) {
-      const step = byteOffset + 4 * (i * floatsPerPoint);
-      const x = view.getFloat32(step, LE);
-      const y = view.getFloat32(step + 4, LE);
-      const z = view.getFloat32(step + 8, LE);
-
-      point2streamline[p] = tr;
-
-      pointsX[p] = r0[0] * x + r0[1] * y + r0[2] * z + r0[3];
-      pointsY[p] = r1[0] * x + r1[1] * y + r1[2] * z + r1[3];
-      pointsZ[p] = r2[0] * x + r2[1] * y + r2[2] * z + r2[3];
-      p++;
-    }
-
-    filePos += totalTractBytes;
-
-    // Memory Safeguard: If we had to expand the buffer beyond 64MB for a monster track,
-    // kill the buffer reference immediately so the next iteration doesn't get trapped by it.
-    if (totalTractBytes > CHUNK_SIZE) {
-      chunkBuf = null;
-    }
-  }
-
-  return {
-    header,
-    streamlines: { 
-      starts: numTracts === starts.length ? starts : starts.subarray(0, numTracts), 
-      ends: numTracts === ends.length ? ends : ends.subarray(0, numTracts) 
-    },
-    pointsX,
-    pointsY,
-    pointsZ,
-    point2streamline
-  };
-}
-*/
 
 /**
  * Convert a TrackVis .trk header into a minimal, valid MRtrix .tck header.

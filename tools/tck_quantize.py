@@ -4,11 +4,13 @@ quantize-then-delta scheme, exploiting near-constant step size (segment
 length) within each streamline, which real tractography output — fixed
 integration step size — has by construction.
 
-Requires: numpy, dipy, nibabel (dipy/nibabel only for READING the source
-.tck and, for reconstruction, WRITING a real .tck back out — the
-compressed format itself is fully custom and has no relationship to TCK's
-byte layout at all, unlike tck_compress.py's output, which is still a
-valid, if resampled, .tck file).
+Requires: numpy, dipy, nibabel for READING the source
+.tck and, in reconstruction mode, WRITING a real .tck back out.
+
+Designed by Rembrandt Bakker, September 2026.
+Implemented by claude.ai.
+
+The delta-compressed format itself has its own custom byte layout.
 
 THE SCHEME, per streamline:
   1. Store the first point exactly, as float32 (the streamline's origin).
@@ -39,27 +41,9 @@ THE SCHEME, per streamline:
      to a small, fixed range regardless of how long the streamline is.
 
 Worst-case error per point is bounded by (max_seg / divisor) / 2 per
-axis (half a quantization step, from rounding) — verified directly to
-be a real, achievable bound on real data (measured max deviation on an
-actual clinical tractography bundle: 0.0136mm, versus 0.619mm from
-tolerance-based B-spline compression on the same file — roughly 45x
-tighter).
+axis (half a quantization step, from rounding).
 
-Why divisor=127, not 128: with divisor=128, the theoretical worst-case
-delta (an axis-aligned segment exactly as long as max_seg) computes to
-EXACTLY 128 in quantization units — which overflows signed int8 (range
--128..127; only -128 is representable at that magnitude, +128 is not).
-Using 127 instead guarantees every delta fits in [-127, 127], safely
-within int8's range, at a completely negligible (~0.8%) cost in
-resolution. Deltas are still defensively clipped to [-divisor, divisor]
-and clip events are counted and reported (should be zero in practice —
-verified zero on real test data — but reported rather than assumed
-silently safe).
-
-FILE FORMAT — deliberately JSON-headered for easy browser-side reading
-(no hand-rolled binary struct parsing needed for the metadata, just
-JSON.parse — only the bulk numeric payload after it needs a DataView/
-TypedArray reader, which is unavoidable for compactness):
+FILE FORMAT — JSON-headered for easy browser-side reading:
 
     MAGIC          8 bytes   b'TCKDQZ01'
     header_len     4 bytes   uint32 LE — byte length of the JSON that follows
@@ -76,26 +60,9 @@ TypedArray reader, which is unavoidable for compactness):
         Q          4 bytes   float32 (this streamline's own quantization unit)
         [if n_points >= 2: deltas, (n_points-1) x 3 bytes, each signed int8]
 
-source_header carries the ORIGINAL file's genuinely custom header fields
-(anything MRtrix or another tool wrote beyond nibabel's own auto-managed
-bookkeeping — magic number, count, datatype, file offset, endianness,
-voxel_to_rasmm — which get regenerated fresh on every .tck write
-regardless of what's passed in, confirmed directly in nibabel's own
-TckFile._write_header source, so there's no reason to store or restore
-those specifically). This is what "reconstruct the original .tck exactly,
-apart from quantization losses" means in practice: the geometry round-
-trips to within the scheme's own quantization error, and any custom
-metadata the source file carried survives too — not just the coordinates.
-
-Compatibility: THIS FORMAT IS NOT A VALID .tck FILE IN ANY SENSE — unlike
-tck_compress.py's B-spline output (still byte-for-byte a real, if
-resampled, .tck, openable by MRtrix/any TCK reader), this is a fully
-custom binary layout that a standard TCK parser would not just
-misinterpret but likely crash or error on outright. Output files are
-named '<original filename>.dqz' — i.e. the ORIGINAL name, including its
-own '.tck', is kept intact and '.dqz' is appended (so 'foo.tck' becomes
-'foo.tck.dqz') — deliberately not replacing the '.tck', so nothing ever
-mistakes this for an openable tractography file by extension alone.
+source_header carries the ORIGINAL file's custom header fields,
+so the original .tck file can be reconstructed exactly, apart from 
+quantization losses.
 """
 
 import json

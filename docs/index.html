@@ -369,8 +369,8 @@ input[type=file]{display:none;}
     <div class="dz-row">
       <div class="drop-zone" id="dz-trck" onclick="document.getElementById('fi-trck').click()">
         <div class="tag">TRACTOGRAM</div>
-        <div class="name">.tck / .trk</div>
-        <input type="file" id="fi-trck" accept=".tck,.trk">
+        <div class="name">.tck / .dqz / .trk</div>
+        <input type="file" id="fi-trck" accept=".tck,.dqz,.trk">
       </div>
       <div class="dz-right">
         <p id="dz-trck-status">drop or click</p>
@@ -694,7 +694,7 @@ input[type=file]{display:none;}
 import * as THREE from 'three';
 import { parseNifti, parseMif } from './js/volume-io.js';
 import { parseLUT } from './js/lut-io.js';
-import { parseTck, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
+import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
@@ -2599,7 +2599,7 @@ async function loadTrck(f){
   setProgress(`parsing .${ext}…`); await tick();
   let parsed;
   try {
-	  parsed=(ext=='.tck'?await parseTck(f):await parseTrk(f))
+	  parsed=( ext=='.tck' ? await parseTck(f) : ( ext=='.dqz' ? await parseDqz(f) : await parseTrk(f) ) )
   } catch(e){
 	  alert(`${ext.toUpperCase()} error: `+e);if(dTrckP){dTrckP.textContent='drop or click';dTrckP.className=''}setProgress('');return;
   }
@@ -2737,7 +2737,6 @@ async function finishTrckLoad(dTrckP){
 }
 
 function checkShowHud(){
-console.log('checkShowHud',state.get('anat.file'))
   // Welcome/stats-HUD visibility used to key off anatomy alone — fine
   // when a tractogram was never viewable without one, but it now can be,
   // so "something is loaded" is anat.file OR trck.file, not just the
