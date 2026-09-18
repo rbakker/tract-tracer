@@ -9,11 +9,12 @@
 // lives in file-opener.js, one level up — see the note near
 // detectBundleDrop below for why.
 
-export const MANIFEST_TYPE = 'tractogram.observer.bundles';
+export const MANIFEST_TYPE = 'tractogram.observer';
 export const MANIFEST_VERSION = 1;
 export const MANIFEST_FILENAME = 'index.json';
 
-const TRACT_EXTS = ['.tck', '.trk'];
+const TRACT_EXTS = ['.tck', '.dqz', '.trk'];
+const VOLUME_TYPES = ['anat', 'label', 'mask'];
 
 function extOf(name) {
   const i = name.toLowerCase().lastIndexOf('.');
@@ -29,7 +30,7 @@ function extOf(name) {
 // "[object File]" the one time the fallback branch actually fired.
 export function stripPathExt(filename) {
   const base = String(filename).split(/[\\/]/).pop();
-  return base.replace(/\.(tck|trk)$/i, '');
+  return base.replace(/\.(tck|tck\.dqz|dqz|trk)$/i, '');
 }
 
 // Golden-angle hue rotation, same technique as index.html's
@@ -78,27 +79,45 @@ function normalizeManifestColor(c) {
 
 // Validates and normalizes a parsed index.json object. Throws a short,
 // user-facing string on anything unrecognized rather than failing silently
-// — a bundle set with a malformed manifest should be a loud error, not a
-// fallback to auto-colors (that fallback is only for *missing* manifests).
+// — a manifest with a malformed section should be a loud error, not a
+// fallback to auto-colors/auto-detection (that fallback is only for
+// *missing* manifests). "bundles" and "volumes" are each optional (a
+// manifest can describe just tractogram bundles, just anatomy/label/mask
+// volumes, or both) but at least one of the two must be present and
+// non-empty — an index.json with neither is pointless.
 export function parseManifest(obj) {
   if (!obj || typeof obj !== 'object') throw 'index.json is not a JSON object';
-  if (obj.type !== MANIFEST_TYPE) throw `index.json "type" must be "${MANIFEST_TYPE}"`;
+  if (typeof obj.type !== 'string' || !obj.type.startsWith(MANIFEST_TYPE)) throw `index.json "type" must start with "${MANIFEST_TYPE}"`;
   if (typeof obj.version !== 'number') throw 'index.json missing numeric "version"';
   if (obj.version > MANIFEST_VERSION) throw `index.json version ${obj.version} is newer than this app supports (max ${MANIFEST_VERSION})`;
-  if (!Array.isArray(obj.bundles) || obj.bundles.length === 0) throw 'index.json "bundles" must be a non-empty array';
-  return {
-    type: obj.type,
-    version: obj.version,
-    bundles: obj.bundles.map((b, i) => {
-      if (!b || typeof b.file !== 'string') throw `index.json bundles[${i}] missing "file"`;
-      let color = null;
-      if (b.color != null) {
-        color = normalizeManifestColor(b.color);
-        if (color === null) throw `index.json bundles[${i}].color must be a "#rrggbb" string or a [r,g,b] array`;
-      }
-      return { file: b.file, color, name: typeof b.name === 'string' ? b.name : null };
-    }),
-  };
+  if (obj.bundles != null && !Array.isArray(obj.bundles)) throw 'index.json "bundles" must be an array';
+  if (obj.volumes != null && !Array.isArray(obj.volumes)) throw 'index.json "volumes" must be an array';
+
+  const bundles = (obj.bundles || []).map((b, i) => {
+    if (!b || typeof b.file !== 'string') throw `index.json bundles[${i}] missing "file"`;
+    let color = null;
+    if (b.color != null) {
+      color = normalizeManifestColor(b.color);
+      if (color === null) throw `index.json bundles[${i}].color must be a "#rrggbb" string or a [r,g,b] array`;
+    }
+    return { file: b.file, color, name: typeof b.name === 'string' ? b.name : null };
+  });
+
+  // "labels" (optional) names another file in the same drop — a LUT to
+  // associate with THIS volume specifically, resolved (and checked for
+  // presence) by resolveManifestVolumes below, not here — parseManifest
+  // only validates shape, the same division of labor as "bundles".
+  const volumes = (obj.volumes || []).map((v, i) => {
+    if (!v || typeof v.file !== 'string') throw `index.json volumes[${i}] missing "file"`;
+    const type = v.type == null ? 'anat' : v.type;
+    if (!VOLUME_TYPES.includes(type)) throw `index.json volumes[${i}].type must be one of ${VOLUME_TYPES.join(', ')}`;
+    if (v.labels != null && typeof v.labels !== 'string') throw `index.json volumes[${i}].labels must be a filename string`;
+    return { file: v.file, type, name: typeof v.name === 'string' ? v.name : null, labels: v.labels || null };
+  });
+
+  if (bundles.length === 0 && volumes.length === 0) throw 'index.json must specify at least one of "bundles" or "volumes"';
+
+  return { type: obj.type, version: obj.version, bundles, volumes };
 }
 
 // Given a raw drop's file list (plain array, already stripped of
@@ -154,4 +173,30 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
   });
   if (missing.length) throw `index.json references file(s) not present in the drop: ${missing.join(', ')}`;
   return { manifest, entries };
+}
+
+// Resolves manifest.volumes (if any) against the files actually present
+// in the drop — mirrors resolveBundleColors' shape/behavior: throws a
+// short, user-facing string listing any referenced file (volume or its
+// "labels" LUT) that isn't present, rather than silently dropping it.
+// "files" is the drop's full flat file list (not just tractogram files —
+// volumes/LUTs are elsewhere in the same drop/zip). Returns [] if the
+// manifest has no "volumes" section at all.
+export function resolveManifestVolumes(manifest, files) {
+  const volumes = manifest && manifest.volumes;
+  if (!volumes || !volumes.length) return [];
+  const byName = new Map(files.map(f => [f.name, f]));
+  const missing = [];
+  const resolved = volumes.map(v => {
+    const file = byName.get(v.file);
+    if (!file) missing.push(v.file);
+    let lutFile = null;
+    if (v.labels) {
+      lutFile = byName.get(v.labels) || null;
+      if (!lutFile) missing.push(v.labels);
+    }
+    return { file, type: v.type, name: v.name || (file ? stripPathExt(file.name) : v.file), lutFile };
+  });
+  if (missing.length) throw `index.json references file(s) not present in the drop: ${missing.join(', ')}`;
+  return resolved;
 }

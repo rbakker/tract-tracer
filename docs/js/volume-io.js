@@ -380,3 +380,280 @@ export async function parseMif(file, volIndex = 0) {
 
   return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels };
 }
+
+
+// ── webm.js (appended) ───────────────────────────────────────────────────
+// Loader for the .webm + .webm.json sidecar format produced by
+// nifti_to_webm.py. The exporter writes frames front-to-back along the
+// coronal (Y) axis, with row0=superior and col0=anatomical Right, and
+// records the *already-flipped* affine (Ab) in the sidecar to match - so
+// this loader uses Ab as-is with no further axis juggling.
+//
+// Frame decode uses HTMLVideoElement rather than WebCodecs: native VP9
+// <video> playback has far broader browser support than the WebCodecs
+// VideoDecoder API (see conversation notes - Safari's WebCodecs parity
+// only landed in Safari 26, whereas VP9 video playback itself has been
+// supported since iOS 14 / macOS Big Sur). This avoids a WebM demuxer
+// dependency entirely.
+//
+// Frames are captured via EXPLICIT PER-FRAME SEEKING (video.currentTime +
+// 'seeked'), not continuous playback. This went through several
+// iterations before landing here:
+//  - High playbackRate (16x) + rVFC counting: browsers drop frames at
+//    high rates to stay in sync with real elapsed time, producing
+//    volumes with real data only in the first N frames and zeros beyond.
+//  - Real-time playbackRate (1x) + rVFC counting: assumed safe (ample
+//    decode headroom), but proven wrong by direct comparison - frames
+//    captured this way contained duplicates, while the same file's
+//    frames extracted server-side via ffmpeg were all distinct. That
+//    isolates the bug to the browser's playback/compositor timing
+//    itself, not the encoded data.
+// Explicit seeking sidesteps both failure modes - each frame is
+// deterministically requested on demand, nothing depends on catching a
+// frame mid-composite. It was briefly abandoned for being catastrophically
+// slow (minutes, due to sparse VP9 keyframes forcing long redecodes per
+// seek), but that's fixed server-side via nifti_to_webm.py's explicit
+// "-g 30" keyframe interval, which bounds every seek to ~30 predicted-
+// frame decodes - a WebM exported without a comparably dense keyframe
+// interval will make this slow again.
+//
+// CAVEATS - read before trusting this in production:
+//  - Frame->timestamp mapping uses video.duration/shape[1], assuming
+//    the WebM was encoded at a constant frame rate (ffmpeg's default).
+//    A variable-frame-rate export would break this mapping - worth
+//    confirming your export pipeline always uses CFR.
+//  - Deliberately does NOT wait on requestVideoFrameCallback after
+//    'seeked' fires. An earlier version did, as an extra safety check -
+//    but rVFC is specified around actively playing/presenting video, and
+//    on a PAUSED video (exactly this loader's state - currentTime is set
+//    but .play() is never called) it's inconsistent across browsers and
+//    in several never fires at all. That produced a silent, unguarded
+//    infinite hang with no console output, which persisted across
+//    multiple unrelated fixes before being traced to this specific line.
+//    'seeked' firing already guarantees the frame is ready per spec - no
+//    further confirmation needed or safe to wait on.
+//  - Seeking performance depends on the WebM's GOP structure (keyframe
+//    spacing) - VP9's predictive frames require decoding forward from
+//    the nearest preceding keyframe, so sparse keyframes can make this
+//    slower than a real-time play-through would have been, in exchange
+//    for correctness. Worth profiling against your actual export
+//    settings if load time becomes a concern.
+//  - The <video> element must not be `display:none` - some browsers
+//    throttle or fully pause decode for display:none media. Use
+//    `position:absolute; left:-99999px` (or just don't attach it to the
+//    DOM at all, which works in current Chrome/Firefox) instead.
+//  - This reads back through <canvas> 2D `getImageData`, which is a real
+//    per-frame CPU cost for large volumes (hundreds of frames) - fine as
+//    a one-time load cost, not something to call repeatedly.
+//  - For non-categorical scalar data, pixel values are de-quantized back
+//    from 8-bit using the sidecar's mn/mx (linear inverse of the
+//    exporter's own quantization) - this is lossy by construction (that's
+//    the whole point of the video codec's compression) and only
+//    approximates the original continuous values.
+//  - Categorical (label) data is read back as the raw 0-255 pixel value
+//    directly, matching how nifti_to_webm.py writes it (no windowing) -
+//    do NOT apply mn/mx de-quantization to categorical data.
+//  - For 3-channel (DEC/colour) volumes, pixel values are just /255, no
+//    mn/mx windowing - matches how the exporter writes them and how
+//    parseNifti's isVectorRGB / isPackedRGB branches already expect data.
+
+export async function parseWebm(fileCombo) {
+  const { video: videoFile, sidecar: sidecarFile, name } = fileCombo;
+  if (!sidecarFile) {
+    throw new Error(`No .webm.json sidecar found for ${name} - cannot load without metadata.`);
+  }
+  const meta = JSON.parse(await sidecarFile.text());
+  const { shape, channels, vox_mm, Ab, mn, mx, categorical } = meta;
+  const [nx, ny, nz] = shape;
+
+  const videoURL = URL.createObjectURL(videoFile);
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.src = videoURL;
+  // Deliberately NOT display:none - see CAVEATS above.
+  video.style.position = 'absolute';
+  video.style.left = '-99999px';
+  document.body.appendChild(video);
+
+  try {
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = resolve;
+      video.onerror = () => reject(new Error('Failed to load .webm video'));
+    });
+
+    if (video.videoWidth !== nx || video.videoHeight !== nz) {
+      console.warn(
+        `WebM frame size ${video.videoWidth}x${video.videoHeight} does not ` +
+        `match sidecar shape (expected ${nx}x${nz} from nx,nz)`
+      );
+    }
+
+    // Some ffmpeg-muxed WebM files report video.duration as Infinity (or
+    // NaN) right after loadedmetadata - the container's exact Segment
+    // Duration wasn't written, only an index the browser can resolve on
+    // demand. Left unfixed, every per-frame seek target below would be
+    // Infinity/NaN, and depending on the browser that can silently hang
+    // forever waiting for 'seeked' rather than erroring - exactly the
+    // "stalled with no visible progress" symptom this guards against.
+    // Standard fix: force a seek to a huge timestamp first, which makes
+    // the browser actually resolve the real duration from the file.
+    if (!isFinite(video.duration)) {
+      console.warn(`video.duration was ${video.duration} - resolving via seek hack`);
+      await new Promise(resolve => {
+        const onDurationChange = () => {
+          if (isFinite(video.duration)) {
+            video.removeEventListener('durationchange', onDurationChange);
+            resolve();
+          }
+        };
+        video.addEventListener('durationchange', onDurationChange);
+        video.currentTime = 1e10; // absurdly large - browser clamps and resolves real duration
+        // Safety net: don't hang forever if durationchange never fires either.
+        setTimeout(resolve, 3000);
+      });
+      video.currentTime = 0;
+      if (!isFinite(video.duration)) {
+        throw new Error(
+          `Could not resolve a finite video.duration for ${name} - the ` +
+          `WebM file may be malformed or missing a seek index.`
+        );
+      }
+      console.log(`Resolved duration: ${video.duration}s`);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const n = nx * ny * nz;
+    const data = channels === 3 ? new Float32Array(n * 3) : new Float32Array(n);
+    let mnOut = Infinity, mxOut = -Infinity;
+    let framesRead = 0;
+
+    function captureFrame(f) {
+      // f is the explicit frame index we just sought to (== new/flipped Y
+      // index, see exporter) - passed in directly since capture is driven
+      // by an explicit seek loop, not implicit sequential playback order.
+      if (f >= ny) return;
+      ctx.drawImage(video, 0, 0);
+      const { data: px } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      for (let row = 0; row < nz; row++) {      // row == new/flipped Z index
+        for (let col = 0; col < nx; col++) {    // col == new/flipped X index
+          const pi = (row * nx + col) * 4;
+          const idx = col + f * nx + row * nx * ny; // x' + y'*nx + z'*nx*ny
+
+          if (channels === 3) {
+            const r = px[pi] / 255, g = px[pi + 1] / 255, b = px[pi + 2] / 255;
+            data[idx * 3 + 0] = r; data[idx * 3 + 1] = g; data[idx * 3 + 2] = b;
+            if (r < mnOut) mnOut = r; if (r > mxOut) mxOut = r;
+            if (g < mnOut) mnOut = g; if (g > mxOut) mxOut = g;
+            if (b < mnOut) mnOut = b; if (b > mxOut) mxOut = b;
+          } else {
+            const u8 = px[pi]; // R===G===B for a grayscale-sourced video
+            const val = categorical ? u8 : (mn + (u8 / 255) * (mx - mn));
+            data[idx] = val;
+            if (val < mnOut) mnOut = val; if (val > mxOut) mxOut = val;
+          }
+        }
+      }
+      framesRead++;
+    }
+
+    // Explicit per-frame seeking, NOT continuous playback. Two earlier
+    // approaches were tried and both had real, confirmed problems:
+    //   1. Playback at playbackRate=16 + rVFC counting: the browser drops
+    //      frames at high rates to keep the presentation timeline in sync
+    //      with real elapsed time, producing a volume with real data only
+    //      in the first N frames and zeros beyond.
+    //   2. Playback at playbackRate=1 (real-time) + rVFC counting: this
+    //      was assumed safe (huge real-time decode headroom for a tiny
+    //      video), but was PROVEN WRONG by direct comparison - frames
+    //      captured this way contained duplicates (some frame slots
+    //      getting the previous frame's content again), while the same
+    //      video's frames extracted server-side via ffmpeg were all
+    //      distinct. That comparison isolates the bug specifically to
+    //      the browser's sequential-playback capture/compositor timing,
+    //      not the encoded file - i.e. a race between rVFC firing and
+    //      the canvas actually reflecting the newly-presented frame, or
+    //      the browser simply not presenting every frame even at 1x.
+    // Explicit seeking sidesteps both failure modes entirely - each frame
+    // is deterministically requested on demand, nothing depends on
+    // catching a frame mid-composite. This was ALSO tried and abandoned
+    // earlier for being catastrophically slow (minutes), but that was
+    // because nifti_to_webm.py never set an explicit keyframe interval,
+    // forcing every seek to redecode from a distant keyframe - fixed
+    // server-side via "-g 30" in encode_webm, which bounds every seek to
+    // at most ~30 predicted-frame decodes. With that fix, seeking should
+    // be both correct AND fast.
+    //
+    // Frame -> timestamp mapping uses video.duration/ny rather than a
+    // stored fps value (the sidecar doesn't carry one) - self-consistent
+    // with the actual encoded video as long as it's constant frame rate
+    // (ffmpeg's default, and unaffected by -fps_mode passthrough, which
+    // only prevents ffmpeg from ALTERING the frame sequence, not from
+    // encoding it at a constant rate to begin with).
+    const frameDuration = video.duration / ny;
+
+    async function seekAndCapture(f) {
+      const t = Math.min((f + 0.5) * frameDuration, video.duration - frameDuration / 4);
+      await new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error(
+            `Seek to frame ${f} (t=${t.toFixed(3)}s) did not fire 'seeked' ` +
+            `within 5s - video decode appears stuck.`
+          ));
+        }, 5000);
+        const onSeeked = () => {
+          clearTimeout(timeoutId);
+          video.removeEventListener('seeked', onSeeked);
+          resolve();
+        };
+        video.addEventListener('seeked', onSeeked);
+        video.onerror = () => { clearTimeout(timeoutId); reject(new Error('Video decode error during seek')); };
+        video.currentTime = t;
+      });
+      // NOTE: deliberately NOT waiting on requestVideoFrameCallback here
+      // after 'seeked' fires. An earlier version did, as an extra safety
+      // check - but rVFC is specified around actively playing/presenting
+      // video, and its behavior on a PAUSED video (which is exactly what
+      // this is - currentTime is set but .play() is never called) is
+      // inconsistent across browsers; in several it simply never fires.
+      // That produced a silent, UNGUARDED infinite hang (no timeout
+      // wrapped that second wait), which is what was actually happening
+      // both before and after the -g 30 keyframe-interval fix - that fix
+      // was addressing a real but ultimately unconfirmed theory (no
+      // timeout ever fired to support it), not this bug. Per spec,
+      // 'seeked' firing already guarantees the frame at that timestamp
+      // is ready to read via drawImage - no further confirmation needed.
+      captureFrame(f);
+    }
+
+    for (let f = 0; f < ny; f++) {
+      await seekAndCapture(f);
+    }
+
+    if (framesRead !== ny) {
+      console.warn(`Expected ${ny} frames from sidecar shape, captured ${framesRead}`);
+    }
+
+    // Ab in the sidecar already describes this exact (flipped) voxel
+    // arrangement - no further axis adjustment needed, unlike parseNifti's
+    // raw-file-order Ab.
+    const invAb = invertAffine(Ab);
+    const decomp = decomposeAffineKSP(Ab, vox_mm);
+
+    console.log('WebM volume', nx + '×' + ny + '×' + nz,
+      channels === 3 ? 'colour (RGB)' : 'scalar', 'Ab', Ab);
+
+    return {
+      shape: [nx, ny, nz], vox_mm, Ab, invAb, decomp,
+      data, mn: mnOut, mx: mxOut, channels,
+    };
+  } finally {
+    document.body.removeChild(video);
+    URL.revokeObjectURL(videoURL);
+  }
+}

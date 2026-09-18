@@ -146,6 +146,16 @@ offset  size      contents
 - `divisor` — the quantization divisor used for every streamline in this
   file (127 unless a smaller value was explicitly requested).
 - `n_streamlines` — how many per-streamline records follow.
+- `uuid` — a randomly generated identifier (e.g. UUIDv4) for this specific
+  file. Optional, but strongly recommended: it is what lets a *child* data
+  file (see [Per-vertex and per-streamline data files](#per-vertex-and-per-streamline-data-files-dqz-children)
+  below) verify it was generated against this exact `.dqz`, and what lets a
+  viewer auto-apply per-vertex or per-streamline data dropped in alongside
+  it. `uuid` is not derived from the file's contents — copying a `.dqz`
+  file preserves its `uuid` unchanged — it only distinguishes one encode
+  from another. `parent` is a reserved header key used exclusively by
+  child data files to reference this field; a plain geometry `.dqz` never
+  has a `parent` field itself.
 - `source_header` — the custom fields carried by the original `.tck`
   file's own header, if any (anything beyond the handful of fields every
   `.tck` file needs regardless of content, which are not meaningful to
@@ -178,3 +188,130 @@ A compressed file is named after the original, with `.dqz` appended —
 is deliberately kept intact rather than replaced: `.dqz` files share
 none of TCK's byte layout, so a name that could be mistaken for a
 regular `.tck` risks something trying to open it as one.
+
+Child data files (below) also use the `.dqz` extension, with no further
+extension layered on. They are told apart from geometry files, and from
+each other, by header inspection rather than by filename — see
+[Per-vertex and per-streamline data files](#per-vertex-and-per-streamline-data-files-dqz-children).
+
+## Per-vertex and per-streamline data files (`.dqz` children)
+
+A `.dqz` geometry file stores only streamline positions. Colors, scalar
+measurements (CSD amplitude, FA, curvature, …), and categorical labels
+(tissue type, bundle membership, …) are stored separately, in one or more
+*child* files, each carrying exactly one named field.
+
+A child file references its parent by `uuid` (see above), so a viewer that
+already has the parent loaded can recognize a dropped-in child, match it,
+and apply it automatically — show the field's name/description, and, for
+categorical data, render a legend — with no explicit pairing step from the
+user. A parent's `uuid` is optional; a child cannot be verified against a
+parent that doesn't have one. A child whose `parent` doesn't match any
+currently loaded `.dqz`'s `uuid` should be rejected, or held as
+"unmatched," by a decoder — never silently applied to the wrong geometry.
+
+### File naming
+
+Child files use the same `.dqz` extension as their parent — there is no
+third extension layered on. The stem is entirely up to whoever generates
+the file, e.g. `Left_CST.tck.csd_amplitude.dqz` or
+`whole_brain.tck.bundle.dqz`. A decoder identifies a child by its magic
+and header, not by its filename.
+
+### File layout
+
+```
+offset  size      contents
+0       8 bytes   magic: "DQZDATA1"
+8       4 bytes   header_len (uint32, little-endian)
+12      header_len bytes   UTF-8 JSON header (see below)
+...     data records, back to back, no padding (see below)
+```
+
+### JSON header
+
+```json
+{
+  "parent": "3f9c2e1a-7b4d-4e2f-9a1c-8d6b0f2e5c77",
+  "n_streamlines": 5735,
+  "name": "csd_amplitude",
+  "description": "CSD peak amplitude sampled along each streamline",
+  "kind": "scaled",
+  "scope": "per_vertex",
+  "dtype": "uint8",
+  "value_min": 0.0,
+  "value_max": 0.842,
+  "legend": null
+}
+```
+
+- `parent` — the `uuid` of the `.dqz` geometry file this data belongs to.
+  The one reserved header key across the whole `.dqz` family: a plain
+  geometry `.dqz` never has a `parent` field, and any file that does is a
+  child, regardless of its name.
+- `n_streamlines` — must match the parent's count; a cheap first
+  consistency check before comparing `parent` against a loaded file's
+  `uuid`.
+- `name` — short field identifier, e.g. `"csd_amplitude"`,
+  `"tissue_label"`, `"bundle"`. Free text, for display only.
+- `description` — optional, free text, for display only.
+- `kind` — one of:
+  - `"raw"` — the stored value *is* the value, no transform. The natural
+    fit for `float32`, or for integer data that's already meaningfully
+    scaled (counts, indices).
+  - `"scaled"` — the stored integer is a linear quantization of a
+    continuous value: `value = value_min + (code / max_code) ×
+    (value_max − value_min)`, where `max_code` is `255` for `uint8`,
+    `65535` for `uint16`, and so on. `value_min`/`value_max` are
+    required. Not meaningful with `dtype: "float32"` — there's no byte
+    budget to save by scaling a value already stored at full width.
+  - `"categorical"` — the stored integer is a code, not a measurement;
+    interpolating or averaging it is meaningless. `value_min`/`value_max`
+    are not required and are typically omitted.
+- `scope` — one of:
+  - `"per_vertex"` — one value per streamline point, e.g. FA sampled
+    along the tract, or a tissue-type label per point.
+  - `"per_streamline"` — one value for the whole streamline, e.g. a
+    bundle label or a cluster ID, for a whole-brain tractogram segmented
+    into bundles after tracking. (Bundles tracked and stored as separate
+    `.tck`/`.dqz` files to begin with need no child file for this — the
+    bundle membership is already the file.)
+- `dtype` — `"uint8"`, `"int8"`, `"uint16"`, `"int16"`, or `"float32"`.
+  Fixed for the whole file.
+- `legend` — optional array of `{value, name, color}` entries (`color` as
+  `[r, g, b]`, 0–255), mainly for `kind: "categorical"`. Partial or
+  entirely absent legends are fine — a decoder falls back to the raw
+  code for any value with no matching entry.
+
+### Data records
+
+The record shape depends on `scope`:
+
+**`scope: "per_vertex"`** — one variable-length record per streamline,
+mirroring the parent's own per-streamline records:
+
+```
+size                    contents
+4 bytes                 n_points (uint32)
+                        — if n_points == 0, record ends here; must match
+                          the parent streamline's own n_points otherwise
+n_points × elem_size    values, one per vertex, in the file's dtype
+```
+
+**`scope: "per_streamline"`** — a single flat array, one value per
+streamline, in streamline order, no per-record framing:
+
+```
+size                        contents
+n_streamlines × elem_size   values, one per streamline, in the file's dtype
+```
+
+`elem_size` is 1 for `uint8`/`int8`, 2 for `uint16`/`int16`, 4 for
+`float32`.
+
+### Bundle labels from whole-brain tractography
+
+A whole-brain tractogram classified into bundles after tracking is exactly
+a `kind: "categorical"`, `scope: "per_streamline"` child: one byte (or
+wider, past 255 bundles) per streamline, plus a `legend` mapping each code
+to a bundle name and display color.

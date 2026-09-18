@@ -1190,7 +1190,6 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   tex.generateMipmaps = false;
   tex.unpackAlignment = 1;
   tex.needsUpdate    = true;
-
   const Ab  = anat.Ab;
   // hx,hy,hz bridges two different index conventions: the raymarcher's own
   // local coordinate space (below, and throughout occupancyAt/sampleVol)

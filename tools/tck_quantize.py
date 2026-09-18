@@ -172,10 +172,7 @@ def _derive_output_path(in_path, out_path):
         import warnings
         warnings.warn(
             f"output path '{out_path}' doesn't follow the '<original>.tck.dqz' "
-            "convention. This format has NO relationship to TCK's byte layout at "
-            "all, so a misleading name risks something trying to open it as a "
-            ".tck and failing badly. Keeping the name as given, but consider "
-            "renaming it.",
+            "recommendation. DQZ is a compression layer on top of tck.",
             stacklevel=2,
         )
     return out_path
@@ -196,9 +193,7 @@ def compress_tractogram(in_path, out_path=None, divisor=127,
     from a real .tck using this).
 
     debug: if True, ALSO reconstructs the just-written .dqz back into a
-    real, loadable '<out_path>.debug.tck' (via reconstruct_tck — the
-    same function a real "give me my .tck back" workflow would use, not
-    a separate debug-only code path) and computes actual per-point
+    real, loadable '<out_path>.debug.tck' and computes actual per-point
     reconstruction error, folding max/mean into the returned result.
 
     Returns a dict: streamline count, original point count, raw vs.

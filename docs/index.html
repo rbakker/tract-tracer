@@ -73,28 +73,70 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .top-btn.icon-only svg{display:block;width:14px;height:14px;}
 .top-btn .icon{font-size:16px;letter-spacing:0;margin-right:4px;vertical-align:-1px;}
 
-/* ── SETTINGS OVERLAY ── */
-#app-panel{position:fixed;
+/* ── FLOATING PANELS (FILE / SETTINGS / ABOUT) ──
+   Each is now its own independent .app-panel div (see
+   js/floating-panel.js). On a fresh open (never dragged this session)
+   a panel snaps to the shared default dock slot next to the top-left
+   buttons, and opening another undocked panel there replaces it — the
+   old "shared modal" behavior. Once the user drags a panel by its
+   titlebar it becomes "pinned": it keeps its own position, stays open
+   independently of the other panels, and never auto-closes on an
+   outside click — so SETTINGS and FILE can be dragged to different
+   corners and both stay up at once. */
+.app-panel{position:fixed;
   z-index:200;width:340px;max-height:calc(100vh - 80px);
   background:rgba(8,11,15,0.95);border:2px solid var(--border);
   backdrop-filter:blur(6px);display:none;pointer-events:all;
   flex-direction:column;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,0.55);}
-#app-panel.open{display:flex;}
-#app-panel.dragging{box-shadow:0 10px 34px rgba(0,0,0,0.7);}
-#app-panel-titlebar{flex:none;padding:6px 8px 6px 12px;cursor:grab;user-select:none;
+.app-panel.open{display:flex;}
+.app-panel.dragging{box-shadow:0 10px 34px rgba(0,0,0,0.7);}
+.app-panel-titlebar{flex:none;padding:6px 8px 6px 12px;cursor:grab;user-select:none;
   background:rgba(255,255,255,0.04);border-bottom:1px solid var(--border);
   color:var(--dim);font-size:10px;letter-spacing:0.16em;
   display:flex;align-items:center;gap:8px;}
-#app-panel-titlebar:active{cursor:grabbing;}
-#app-panel-titlebar .grip{opacity:0.5;letter-spacing:0;}
-#app-panel-title{flex:1;}
-#app-panel-close{flex:none;background:none;border:none;color:var(--dim);
+.app-panel-titlebar:active{cursor:grabbing;}
+.app-panel-titlebar .grip{opacity:0.5;letter-spacing:0;}
+.app-panel-title{flex:1;}
+.app-panel-close{flex:none;background:none;border:none;color:var(--dim);
   font-size:16px;cursor:pointer;font-family:'JetBrains Mono',monospace;
   line-height:1;padding:2px 4px;}
-#app-panel-close:hover{color:var(--accent);}
-#app-panel-body{overflow-y:auto;overflow-x:hidden;padding:14px 16px;flex:1 1 auto;}
-.panel-content{display:none;}
-.panel-content.active{display:block;}
+.app-panel-close:hover{color:var(--accent);}
+.app-panel-body{overflow-y:auto;overflow-x:hidden;padding:14px 16px;flex:1 1 auto;}
+.panel-content{display:block;}
+
+/* ── DATA TREE (FILE panel) ── */
+#file-load-row{margin-bottom:12px;}
+#load-btn-main{width:100%;background:rgba(74,170,255,0.08);border:1px solid var(--accent);
+  color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px;
+  letter-spacing:0.12em;padding:9px 0;cursor:pointer;transition:background 0.15s,color 0.15s;}
+#load-btn-main:hover{background:var(--accent);color:#04070a;}
+.data-tree{border:1px solid var(--border);margin-bottom:14px;min-height:36px;}
+.dt-empty{color:var(--dim);font-size:10px;letter-spacing:0.06em;padding:10px 12px;}
+.dt-row{display:flex;align-items:center;gap:6px;padding:5px 8px;
+  border-bottom:1px solid var(--border);}
+.dt-row:last-child{border-bottom:none;}
+.dt-row:hover{background:rgba(255,255,255,0.03);}
+.dt-caret{width:14px;flex:none;text-align:center;color:var(--dim);cursor:pointer;
+  font-size:13px;line-height:1;user-select:none;
+  font-family:-apple-system,'Segoe UI',sans-serif;}
+.dt-caret-empty{cursor:default;visibility:hidden;}
+.dt-check{flex:none;accent-color:var(--accent2);cursor:pointer;}
+.dt-radio{flex:none;accent-color:var(--accent);cursor:pointer;}
+.dt-check:disabled,.dt-radio:disabled{opacity:0.3;cursor:default;}
+.dt-swatch{width:9px;height:9px;padding:0;border-radius:2px;flex:none;
+  border:1px solid rgba(255,255,255,0.25);background:none;cursor:pointer;
+  -webkit-appearance:none;appearance:none;transition:transform 0.1s,border-color 0.1s;}
+.dt-swatch::-webkit-color-swatch-wrapper{padding:0;}
+.dt-swatch::-webkit-color-swatch{border:none;border-radius:1px;}
+.dt-swatch::-moz-color-swatch{border:none;border-radius:1px;}
+.dt-swatch:hover{border-color:var(--accent);transform:scale(1.25);}
+.dt-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--bright);font-size:10px;letter-spacing:0.03em;}
+.dt-sub .dt-label{color:var(--text);}
+.dt-menu-btn{flex:none;background:none;border:none;color:var(--dim);font-size:12px;
+  cursor:pointer;padding:0 3px;font-family:inherit;}
+.dt-menu-btn:hover{color:var(--accent);}
+.dt-menu-btn:disabled{opacity:0.25;cursor:default;}
 
 /* ── DROP ZONES (FILE panel content) ── */
 .dz-row{display:flex;align-items:stretch;border:1px solid var(--border);margin-bottom:10px;}
@@ -111,19 +153,13 @@ a.accent-link,button.accent-link{color:var(--accent);font-family:'JetBrains Mono
   font-size:10px;letter-spacing:0.08em;background:none;border:none;padding:0;
   cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
 a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
-#hdr-panel{position:fixed;top:80px;left:12px;z-index:300;width:430px;
-  max-height:70vh;overflow-y:auto;background:rgba(8,11,15,0.97);
-  border:2px solid var(--accent);backdrop-filter:blur(6px);
-  padding:14px 16px;display:none;pointer-events:all;}
-#hdr-panel.open{display:block;}
-#hdr-panel pre{color:var(--text);font-size:9px;line-height:1.7;
-  white-space:pre-wrap;word-break:break-all;user-select:text;margin-top:8px;}
-#hdr-panel-head{display:flex;justify-content:space-between;align-items:center;
-  border-bottom:1px solid var(--border);padding-bottom:6px;}
-#hdr-panel-title{color:var(--accent);font-size:9px;letter-spacing:0.18em;}
-#hdr-panel-close{background:none;border:none;color:var(--dim);font-size:16px;
-  cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:1;padding:0;}
-#hdr-panel-close:hover{color:var(--accent);}
+/* HEADER panel (show header / show indices / show state) now reuses
+   the same .app-panel/FloatingPanel machinery as FILE/SETTINGS/ABOUT —
+   draggable, pins on drag — just wider, accent-bordered, and default-
+   positioned near the top-left corner instead of under the top-btn row. */
+#hdr-panel{width:430px;max-height:70vh;border-color:var(--accent);}
+#hdr-panel-pre{color:var(--text);font-size:9px;line-height:1.7;
+  white-space:pre-wrap;word-break:break-all;user-select:text;margin:0;}
 /* about.html ships as an unstyled fragment (text + logos) — give it
    sensible defaults here so it reads well without needing its own CSS. */
 #about-panel-content{color:var(--text);font-size:11px;line-height:1.7;}
@@ -346,47 +382,31 @@ input[type=file]{display:none;}
     <button class="top-btn" id="about-btn"><span class="icon">ⓘ</span>ABOUT</button>
   </div>
 
-  <!-- Unified floating panel — shared by FILE / SETTINGS / ABOUT -->
-  <div id="app-panel">
-    <div id="app-panel-titlebar">
-      <span class="grip">⠿</span><span id="app-panel-title">FILE</span>
-      <button id="app-panel-close" title="close">×</button>
+  <!-- Floating panel: FILE -->
+  <div id="panel-file" class="app-panel">
+    <div class="app-panel-titlebar">
+      <span class="grip">⠿</span><span class="app-panel-title">FILE</span>
+      <button class="app-panel-close" title="close">×</button>
     </div>
-    <div id="app-panel-body">
+    <div class="app-panel-body">
 
     <div id="panel-content-file" class="panel-content">
-    <div class="dz-row">
-      <div class="drop-zone" id="dz-anat" onclick="document.getElementById('fi-anat').click()">
-        <div class="tag">ANATOMY</div>
-        <div class="name">.nii / .nii.gz / .mif </div>
-        <input type="file" id="fi-anat" accept=".nii,.gz,.mif">
-      </div>
-      <div class="dz-right">
-        <p id="dz-anat-status">drop or click</p>
-        <button class="accent-link disabled" id="btn-anat-hdr">show header</button>
-      </div>
+    <!-- Single LOAD… button — routes through the exact same
+         dispatchOpenedFiles()/MultiFileOpener pipeline as dropping
+         file(s) anywhere on the page: it inspects filename/extension to
+         decide anatomy vs tractogram vs LUT vs bundle vs zip, rather
+         than the old per-type drop zones. -->
+    <div id="file-load-row">
+      <button id="load-btn-main"><span class="icon">⊞</span>LOAD…</button>
+      <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.txt,.lut,.json,.zip">
     </div>
-    <div class="dz-row">
-      <div class="drop-zone" id="dz-trck" onclick="document.getElementById('fi-trck').click()">
-        <div class="tag">TRACTOGRAM</div>
-        <div class="name">.tck / .dqz / .trk</div>
-        <input type="file" id="fi-trck" accept=".tck,.dqz,.trk">
-      </div>
-      <div class="dz-right">
-        <p id="dz-trck-status">drop or click</p>
-        <button class="accent-link disabled" id="btn-trck-hdr">show header</button>
-      </div>
-    </div>
-    <div class="dz-row">
-      <div class="drop-zone" id="dz-lut" onclick="document.getElementById('fi-lut').click()">
-        <div class="tag">COLORMAP (LUT)</div>
-        <div class="name">FreeSurfer / ITK-SNAP .txt</div>
-        <input type="file" id="fi-lut" accept=".txt,.lut">
-      </div>
-      <div class="dz-right">
-        <p id="dz-lut-status">drop or click</p>
-      </div>
-    </div>
+
+    <!-- Collapsible tree of what's currently loaded, grouped by file
+         type, each row with an on/off checkbox and a stub hamburger
+         menu (real per-type menu design TBD — see js/loaded-data.js). -->
+    <div id="data-tree-root" class="data-tree"></div>
+
+    <div class="cfg-section">EXPORT / SESSION</div>
     <div class="dz-row">
       <div class="drop-zone" id="dz-save">
         <div class="tag">SAVE SELECTION</div>
@@ -407,6 +427,16 @@ input[type=file]{display:none;}
       </div>
     </div>
     </div><!-- /panel-content-file -->
+    </div><!-- /app-panel-body -->
+  </div><!-- /panel-file -->
+
+  <!-- Floating panel: SETTINGS -->
+  <div id="panel-settings" class="app-panel">
+    <div class="app-panel-titlebar">
+      <span class="grip">⠿</span><span class="app-panel-title">SETTINGS</span>
+      <button class="app-panel-close" title="close">×</button>
+    </div>
+    <div class="app-panel-body">
 
     <div id="panel-content-settings" class="panel-content">
     <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
@@ -600,21 +630,34 @@ input[type=file]{display:none;}
     </div>
     <button id="rot-reset">RESET PLANES</button>
     </div><!-- /panel-content-settings -->
+    </div><!-- /app-panel-body -->
+  </div><!-- /panel-settings -->
 
+  <!-- Floating panel: ABOUT -->
+  <div id="panel-about" class="app-panel">
+    <div class="app-panel-titlebar">
+      <span class="grip">⠿</span><span class="app-panel-title">ABOUT</span>
+      <button class="app-panel-close" title="close">×</button>
+    </div>
+    <div class="app-panel-body">
     <div id="panel-content-about" class="panel-content">
       <div id="about-panel-content"></div>
     </div><!-- /panel-content-about -->
-
     </div><!-- /app-panel-body -->
-  </div><!-- /app-panel -->
+  </div><!-- /panel-about -->
 
-  <!-- Header / indices panel (separate, triggered from within FILE content) -->
-  <div id="hdr-panel">
-    <div id="hdr-panel-head">
-      <span id="hdr-panel-title">HEADER</span>
-      <button id="hdr-panel-close">×</button>
+  <!-- Floating panel: HEADER / INDICES / STATE viewer — a 4th
+       FloatingPanel instance (see js/floating-panel.js), opened
+       programmatically rather than from a top-bar button, defaulting
+       near the top-left corner (same spot this panel always used). -->
+  <div id="hdr-panel" class="app-panel">
+    <div class="app-panel-titlebar">
+      <span class="grip">⠿</span><span id="hdr-panel-title" class="app-panel-title">HEADER</span>
+      <button class="app-panel-close" title="close">×</button>
     </div>
-    <pre id="hdr-panel-pre"></pre>
+    <div class="app-panel-body">
+      <pre id="hdr-panel-pre"></pre>
+    </div>
   </div>
 
   <!-- Welcome screen (shown when no data loaded) -->
@@ -692,10 +735,13 @@ input[type=file]{display:none;}
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { parseNifti, parseMif } from './js/volume-io.js';
+import { parseNifti, parseMif, parseWebm } from './js/volume-io.js';
 import { parseLUT } from './js/lut-io.js';
 import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
+import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME } from './js/bundle-io.js';
+import { LoadedDataStore, AnatomyItem, TractogramItem, LutItem, DataTreeView } from './js/loaded-data.js';
+import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
@@ -2112,6 +2158,22 @@ function updateProbe(){
       probedEnds[i] = (s && e) ? 2 : s ? 0 : 1;
     });
   }
+  // Per-bundle visibility from the FILE panel's data tree: drop any
+  // streamline whose bundle is currently toggled off, before the
+  // thinning/rendering step below. Must stay index-aligned with
+  // probedEnds (built in lock-step with ids above) when present.
+  if (isBundle && streamlineBundleId && hiddenBundleIndices.size) {
+    if (probedEnds) {
+      const keptIds = [], keptEnds = [];
+      ids.forEach((id, idx) => {
+        if (!hiddenBundleIndices.has(streamlineBundleId[id])) { keptIds.push(id); keptEnds.push(probedEnds[idx]); }
+      });
+      ids = keptIds;
+      probedEnds = Uint8Array.from(keptEnds);
+    } else {
+      ids = ids.filter(id => !hiddenBundleIndices.has(streamlineBundleId[id]));
+    }
+  }
   setStreamlines=ids.map(i=>allStreamlines[i]);
 
   // Thin down to a point budget for actual rendering — see
@@ -2290,9 +2352,9 @@ function collectState() {
 	  cursor: state.get('tgt.cursor')
 	},
     files: {
-      anatomy:    document.getElementById('dz-anat-status')?.textContent ?? '',
-      tractogram: document.getElementById('dz-trck-status')?.textContent ?? '',
-      colormap:   document.getElementById('dz-lut-status')?.textContent ?? '',
+      anatomy:    state.get('anat.file') ?? '',
+      tractogram: state.get('trck.file') ?? '',
+      colormap:   lutMap ? (lutIsAutoGenerated ? 'auto-generated LUT' : 'loaded LUT') : '',
       modality,
     }
   };
@@ -2325,6 +2387,16 @@ function initCamera(cx, cy, cz, volRadius=0, boxRadius=0) {
   controls.update();
 }
 
+// Anatomy candidates from the most recent load. Length 1 in the common
+// case (a single file dropped/picked, or a zip/multi-file drop that only
+// contained one anatomy file) — length >1 only when a zip or multi-file
+// drop delivered several anatomy files together, in which case they're
+// all listed in the FILE panel with a radio selector (see
+// registerAnatGroupItems) and only anatGroup[anatActiveIndex] is
+// actually loaded into the renderer at a time. A later single-file
+// load always replaces this array outright (see dispatchOpenedFiles).
+let anatGroup = [], anatActiveIndex = 0;
+
 async function loadAnat(f){
   const dzAnatP = document.getElementById('dz-anat-status');
   if (dzAnatP) { dzAnatP.textContent = 'loading…'; dzAnatP.className = 'is-loading'; }
@@ -2333,6 +2405,7 @@ async function loadAnat(f){
   let anat;
   if (ext == '.nii' || ext == '.nii.gz')  anat=await parseNifti(f);
   else if (ext == '.mif') anat=await parseMif(f);
+  else if (ext == '.webm') anat=await parseWebm(f);
   else {
       setProgress('Error.'); await tick();
 	  throw(`Unsupported format ${ext}`);
@@ -2374,10 +2447,11 @@ async function loadAnat(f){
   const volRadius = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
   initCamera(...probeCenter,volRadius);
   updateProbeRadiusRange(false); // rescale RADIUS slider to this anatomy's size; don't disturb current value/mode
-  document.getElementById('btn-anat-hdr').classList.remove('disabled');
+  anatHeaderReady = true;
   checkShowHud();
   resizeAll();
   state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter });
+  registerAnatGroupItems();
   setProgress('');
   //updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
 }
@@ -2389,6 +2463,11 @@ let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeade
 // the one new parallel piece: per-streamline index into bundlePaletteRGB.
 // null/false for a normal single-file load.
 let isBundle=false, streamlineBundleId=null, bundlePaletteRGB=null, bundleNames=null, _lastBundleInfo=null;
+// Per-bundle on/off from the FILE panel's data tree — a set of hidden
+// bundle indices (into bundlePaletteRGB/streamlineBundleId), consulted
+// by updateProbe() when building the selection. Cleared on every fresh
+// tractogram load (see registerTrckItem).
+const hiddenBundleIndices = new Set();
 
 // Real bundle-palette hex colors now go through the same raw conversion
 // as DEFAULT_BUNDLE_RGB (imported from scene3d.js as hexToRgbRaw) —
@@ -2509,7 +2588,7 @@ function setModality(newModality) {
   if (currentAnat) buildGlassBrainLocal(currentAnat);
 }
 
-async function loadLUT(f) {
+async function loadLUT(f, { autoApply = true } = {}) {
   const dzLutP = document.getElementById('dz-lut-status');
   if (dzLutP) { dzLutP.textContent = 'loading…'; dzLutP.className = 'is-loading'; }
   try {
@@ -2519,10 +2598,15 @@ async function loadLUT(f) {
     if (dzLutP) { dzLutP.textContent = '✓ '+map.size.toLocaleString()+' labels'; dzLutP.className = ''; }
     // Dropping a real LUT auto-activates SEGMENTATION display (matching
     // the old toggle's behavior) — but only when the current data is
-    // actually scalar; MODALITY-SEG stays disabled for 3-channel (DEC)
-    // data, which has no use for label indices (see anat load above).
+    // actually scalar (MODALITY-SEG stays disabled for 3-channel/DEC
+    // data) AND autoApply is allowed. autoApply is false for a LUT that
+    // arrived loose in a multi-file/zip drop with no manifest claim on
+    // it (see dispatchOpenedFiles) — auto-applying it to whichever
+    // anatomy happens to be active would otherwise produce "weird color
+    // patterns" on a plain (non-label) volume.
     const isColorData = currentAnat && (currentAnat.channels || 1) === 3;
-    if (!isColorData) setModality('seg');
+    if (autoApply && !isColorData) setModality('seg');
+    registerLutItem(f.name);
   } catch(e) {
     alert('LUT error: '+e);
     console.error(e.stack || e);
@@ -2609,7 +2693,7 @@ async function loadTrck(f){
   await finishTrckLoad(dTrckP);
 }
 
-// Loads several .tck/.trk files (dropped together, or unpacked from a
+// Loads several .tck/.dqz/.trk files (dropped together, or unpacked from a
 // .zip) as one colored bundle set. descriptor: the { manifest, entries }
 // shape resolveBundleColors returns — entries[i] = { file, color, name }.
 // Streamlines from every file are concatenated into the SAME allStreamlines
@@ -2626,19 +2710,19 @@ async function loadTrckBundle(descriptor){
   const perFileHeaders = [];
   const perFileBundleId = [];
   for (let bi = 0; bi < entries.length; bi++) {
-    const { file } = entries[bi];
-    let [ , ext ] = splitExt(file.name); ext = ext.toLowerCase();
-    setProgress(`parsing ${file.name}…`); await tick();
+    const f = entries[bi].file;
+    let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
+    setProgress(`parsing ${f.name}…`); await tick();
     let parsed;
     try {
-      parsed = (ext === '.tck' ? await parseTck(file) : await parseTrk(file));
+	  parsed=( ext=='.tck' ? await parseTck(f) : ( ext=='.dqz' ? await parseDqz(f) : await parseTrk(f) ) )
     } catch(e) {
-      alert(`${ext.toUpperCase()} error in "${file.name}": `+e);
+      alert(`${ext.toUpperCase()} error in "${f.name}": `+e);
       if (dTrckP) { dTrckP.textContent='drop or click'; dTrckP.className=''; }
       setProgress(''); return;
     }
     perFileStreamlines.push(parsed.streamlines);
-    perFileHeaders.push({ name: file.name, header: parsed.header });
+    perFileHeaders.push({ name: f.name, header: parsed.header });
     perFileBundleId.push(bi);
   }
 
@@ -2729,11 +2813,12 @@ async function finishTrckLoad(dTrckP){
     state.update({ 'src.cursor': cursorPt, 'tgt.cursor': cursorPt });
   }
   document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines'+(isBundle?' · '+bundlePaletteRGB.length+' bundles':'');
-  document.getElementById('btn-trck-hdr').classList.remove('disabled');
+  trckHeaderReady = true;
   setProgress(''); checkShowHud(); controls.update();
   probeEndsOnly = document.querySelector('input[name="probe-select"]:checked')?.value === 'ends';
   applyColorDefaultsForLoad();
   updateProbe(); updateLabelHud('src'); updateLabelHud('tgt');
+  registerTrckItem(trckFileName);
 }
 
 function checkShowHud(){
@@ -2863,26 +2948,12 @@ document.getElementById('light-slider').addEventListener('input', e=>{
   updateLightBias(v / 100);
 });
 // Button toggles
-// Unified floating panel — shared by FILE / SETTINGS / ABOUT. Only one
-// physical panel div exists; clicking a button switches which content
-// section is visible inside it and updates the titlebar text, rather
-// than opening a separate div per button.
-const PANEL_TITLES = { file: 'FILE', settings: 'SETTINGS', about: 'ABOUT' };
+// Three independent floating panels — FILE / SETTINGS / ABOUT — each
+// its own .app-panel div now (see js/floating-panel.js). They share a
+// PanelDockGroup: while "undocked" (never dragged) they replace each
+// other and auto-close on an outside click, same as the old shared
+// panel; once dragged, a panel is "pinned" and stays open on its own.
 let aboutLoaded = false;
-
-async function openPanel(name) {
-  const panel = document.getElementById('app-panel');
-  const wasOpen = panel.classList.contains('open');
-  const wasShowing = panel.dataset.active === name;
-  if (wasOpen && wasShowing) { panel.classList.remove('open'); return; }
-  document.querySelectorAll('.panel-content').forEach(el => el.classList.remove('active'));
-  document.getElementById('panel-content-' + name).classList.add('active');
-  document.getElementById('app-panel-title').textContent = PANEL_TITLES[name];
-  panel.dataset.active = name;
-  if (!wasOpen) positionAppPanel(); // only reset position on a fresh open, not when switching content while already open
-  panel.classList.add('open');
-  if (name === 'about') await loadAboutContent();
-}
 async function loadAboutContent() {
   if (aboutLoaded) return;
   const content = document.getElementById('about-panel-content');
@@ -2894,9 +2965,41 @@ async function loadAboutContent() {
     content.textContent = 'Could not load about.html.';
   }
 }
-document.getElementById('load-btn').addEventListener('click',     e => { e.stopPropagation(); openPanel('file'); });
-document.getElementById('settings-btn').addEventListener('click', e => { e.stopPropagation(); openPanel('settings'); });
-document.getElementById('about-btn').addEventListener('click',    e => { e.stopPropagation(); openPanel('about'); });
+
+const panelGroup = new PanelDockGroup();
+const filePanel = new FloatingPanel({
+  panelEl: document.getElementById('panel-file'),
+  anchorEl: document.getElementById('fullscreen-btn'),
+  triggerBtn: document.getElementById('load-btn'),
+  group: panelGroup,
+});
+const settingsPanel = new FloatingPanel({
+  panelEl: document.getElementById('panel-settings'),
+  anchorEl: document.getElementById('fullscreen-btn'),
+  triggerBtn: document.getElementById('settings-btn'),
+  group: panelGroup,
+});
+const aboutPanel = new FloatingPanel({
+  panelEl: document.getElementById('panel-about'),
+  anchorEl: document.getElementById('fullscreen-btn'),
+  triggerBtn: document.getElementById('about-btn'),
+  group: panelGroup,
+  onOpen: () => loadAboutContent(),
+});
+
+// HEADER / INDICES / STATE viewer — a 4th FloatingPanel instance, but
+// deliberately its OWN dock group (not panelGroup above): it's opened
+// from inside the FILE panel (hamburger / show-indices / show-state),
+// so it must never close FILE (or SETTINGS/ABOUT) out from under the
+// user the way opening another undocked panel in the same group would.
+// Defaults to roughly its old fixed spot, near the top-left corner
+// rather than under the top-btn row.
+const headerPanelGroup = new PanelDockGroup();
+const headerPanel = new FloatingPanel({
+  panelEl: document.getElementById('hdr-panel'),
+  defaultPos: { left: 12, top: 80 },
+  group: headerPanelGroup,
+});
 
 // Fullscreen toggle — F11 does this on a laptop, but on a tablet the
 // browser chrome (address bar etc.) just scrolls out of the way, taking
@@ -2937,84 +3040,24 @@ document.getElementById('about-btn').addEventListener('click',    e => { e.stopP
   refresh();
 })();
 
-// Draggable panel window — grab the titlebar to move it out of the way
-// of the 3D view while tuning glass-brain settings, since the panel sits
-// right on top of it otherwise. Always resets to the default position
-// (aligned with the FULLSCREEN button — the leftmost of the top-left
-// buttons, which stays clear of the 2D slice panels — the more
-// commonly-adjusted settings) on a fresh open; dragging is a one-off,
-// per-session adjustment, not remembered across reopens.
-function clampPanelPos(panel, left, top) {
-  const margin = 60; // keep at least this much of the panel reachable/visible
-  const maxLeft = window.innerWidth  - margin;
-  const maxTop  = window.innerHeight - margin;
-  return [
-    Math.min(Math.max(left, margin - panel.offsetWidth), maxLeft),
-    Math.min(Math.max(top, 0), maxTop),
-  ];
-}
-let panelWasDragged = false;
-function positionAppPanel() {
-  const panel = document.getElementById('app-panel');
-  const r = document.getElementById('fullscreen-btn').getBoundingClientRect();
-  const [l, t] = clampPanelPos(panel, r.left, r.bottom + 6);
-  panel.style.left = l + 'px';
-  panel.style.top  = t + 'px';
-  panelWasDragged = false; // fresh open at the default spot — not dragged (yet)
-}
-(function initAppPanelDrag() {
-  const panel  = document.getElementById('app-panel');
-  const handle = document.getElementById('app-panel-titlebar');
-  let dragging = false, startX, startY, startLeft, startTop, moved;
-  // Pointer Events (not mouse-only) so this also works with touch — a
-  // PointerEvent carries the same clientX/clientY/button fields as a
-  // MouseEvent, so this is otherwise identical to the old mouse handlers.
-  handle.style.touchAction = 'none'; // don't let the browser scroll/zoom the page while dragging
-  handle.addEventListener('pointerdown', e => {
-    if (e.target.closest('#app-panel-close')) return; // let the close button handle its own click
-    dragging = true;
-    moved = false;
-    startX = e.clientX; startY = e.clientY;
-    const r = panel.getBoundingClientRect();
-    startLeft = r.left; startTop = r.top;
-    panel.classList.add('dragging');
-    handle.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-  handle.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
-    const [l, t] = clampPanelPos(panel, startLeft + dx, startTop + dy);
-    panel.style.left = l + 'px';
-    panel.style.top  = t + 'px';
-  });
-  handle.addEventListener('pointerup', () => {
-    if (dragging && moved) panelWasDragged = true;
-    dragging = false;
-    panel.classList.remove('dragging');
-  });
-})();
-document.getElementById('app-panel-close').addEventListener('click', e => {
-  e.stopPropagation();
-  document.getElementById('app-panel').classList.remove('open');
-});
 document.getElementById('dz-save').addEventListener('click', () => saveTck());
 document.getElementById('dz-state').addEventListener('click', () => saveState());
 
 function showHeaderPanel(title, text) {
   document.getElementById('hdr-panel-title').textContent = title;
   document.getElementById('hdr-panel-pre').textContent = text;
-  document.getElementById('hdr-panel').classList.add('open');
+  headerPanel.open();
 }
-document.getElementById('hdr-panel-close').addEventListener('click', e => {
-  e.stopPropagation();
-  document.getElementById('hdr-panel').classList.remove('open');
-});
-document.getElementById('hdr-panel').addEventListener('click', e => e.stopPropagation());
-document.getElementById('btn-anat-hdr').addEventListener('click', e => {
-  e.stopPropagation();
-  if (!state.get('anat.file')) return;
+
+// "show header" used to be its own button inside the ANATOMY/TRACTOGRAM
+// drop-zone rows; those rows are gone (replaced by the LOAD… button +
+// data tree), so these are now plain functions, wired up as the
+// ANATOMY/TRACTOGRAM tree rows' hamburger action (see registerAnatItem/
+// registerTrckItem below) — a stand-in for the real per-type hamburger
+// menu design, which is still TBD.
+let anatHeaderReady = false, trckHeaderReady = false;
+function showAnatHeaderPanel() {
+  if (!anatHeaderReady || !state.get('anat.file')) return;
   const shape = state.get('anat.shape')
   const vox_mm = state.get('anat.vox_mm')
   const mn = state.get('anat.mn');
@@ -3029,12 +3072,11 @@ document.getElementById('btn-anat-hdr').addEventListener('click', e => {
         b: Ab[3].map(v => +v.toFixed(6))
     }
   }, null, 2));
-});
-document.getElementById('btn-trck-hdr').addEventListener('click', e => {
-  e.stopPropagation();
-  if (!trckHeader) return;
+}
+function showTrckHeaderPanel() {
+  if (!trckHeaderReady || !trckHeader) return;
   showHeaderPanel('TRACTS HEADER', JSON.stringify(trckHeader, null, 2));
-});
+}
 document.getElementById('btn-show-indices').addEventListener('click', e => {
   e.stopPropagation();
   if (!setStreamlines || !allStreamlines) return;
@@ -3048,12 +3090,6 @@ document.getElementById('btn-show-state').addEventListener('click', e => {
   e.stopPropagation();
   showHeaderPanel('STATE', JSON.stringify(collectState(), null, 2));
 });
-
-document.addEventListener('click', () => {
-  if (panelWasDragged) return; // dragged away on purpose — only the X button (or opening a different panel) closes it now
-  document.getElementById('app-panel').classList.remove('open');
-});
-document.getElementById('app-panel').addEventListener('click', e => e.stopPropagation());
 
 // ── Floating tooltip ──────────────────────────────────────
 const tipEl = document.getElementById('tip');
@@ -3228,40 +3264,281 @@ function applyColorDefaultsForLoad() {
 // module's header) — this is the one place that bridges the two, so a
 // later tree-view UI could call MultiFileOpener.open() directly and
 // dispatch selectively instead of "load everything found".
+// A manifest problem is blocking, not a fire-and-forget alert: it asks
+// whether to continue the load anyway (falling back to auto-detected
+// colors/anatomy, ignoring the manifest) or cancel it outright, via the
+// browser's native confirm() — genuinely blocking, unlike a custom
+// modal, and this is a rare-enough path that a plain OK/Cancel dialog
+// is the right amount of ceremony. canRetry is false for a .zip drop:
+// its manifest lives inside the archive, so there's no "drop everything
+// except index.json and try again" available the way there is for a
+// set of loose files — retrying would just hit the same broken manifest.
+function confirmManifestError(err, canRetry) {
+  console.error(err);
+  const msg = String((err && err.message) || err);
+  return confirm(
+    'Problem with this drop\'s index.json manifest:\n\n' + msg + '\n\n' +
+    (canRetry
+      ? 'Continue loading the files anyway, ignoring the manifest (auto-detected colors/anatomy instead)?'
+      : 'This came from a .zip, so the files can\'t be reloaded without their manifest — click OK to cancel the load.')
+  );
+}
+
 async function dispatchOpenedFiles(rawFiles){
-  const r = await MultiFileOpener.open(rawFiles);
+  let r;
+  try {
+    r = await MultiFileOpener.open(rawFiles);
+  } catch (e) {
+    // Only intercept manifest problems here (bundle-io.js's throws all
+    // read as plain strings starting with "index.json") — anything else
+    // is a real file-load error and should keep surfacing as one via
+    // the caller's own try/catch (fi-load's change handler / the
+    // whole-page drop handler).
+    const msg = String((e && e.message) || e);
+    if (!msg.startsWith('index.json')) throw e;
+    const isZipDrop = rawFiles.length === 1 && /\.zip$/i.test(rawFiles[0].name);
+    if (isZipDrop) { confirmManifestError(e, false); return false; }
+    if (!confirmManifestError(e, true)) return false; // cancelled — load nothing
+    const withoutManifest = rawFiles.filter(f => f.name.toLowerCase() !== MANIFEST_FILENAME);
+    r = await MultiFileOpener.open(withoutManifest);
+  }
   let did = false;
   if (r.bundle)      { state.update({ 'trck.file': { __bundle: true, ...r.bundle } }); did = true; }
   else if (r.tract)  { state.update({ 'trck.file': r.tract }); did = true; }
-  if (r.lut)  { loadLUT(r.lut); did = true; }
-  if (r.anat) { state.update({ 'anat.file': r.anat }); did = true; }
+
+  const entries = r.entries || [];
+  // A multi-select drop, or a zip that unpacked to several files — as
+  // opposed to a single loose file dropped/picked on its own. Governs
+  // whether a loose LUT auto-applies below (see the r.lut block).
+  const isMultiFileLoad = entries.length > 1;
+
+  // A manifest can describe this drop's volumes (type + an optional
+  // per-volume LUT via "labels"), independent of whether it's ALSO a
+  // bundle manifest. Read straight from the classified entries — not
+  // through MultiFileOpener/resolveBundleColors, which only look at
+  // index.json along the *bundle* detection path — so this works even
+  // for a drop with no tractogram at all (e.g. just a couple of
+  // anatomy files + a LUT, the case that motivated this). Unlike the
+  // bundle-manifest error above, this one can ALWAYS offer a real
+  // "continue" — entries are already unpacked regardless of zip vs.
+  // loose, so there's nothing to retry, just volumes to skip.
+  let manifestVolumes = null;
+  const manifestEntry = entries.find(e => e.kind === 'manifest');
+  if (manifestEntry) {
+    try {
+      const raw = JSON.parse(await manifestEntry.file.text());
+      const manifest = parseManifest(raw);
+      manifestVolumes = resolveManifestVolumes(manifest, entries.map(e => e.file));
+    } catch (e) {
+      if (!confirmManifestError(e, true)) return false; // cancelled — load nothing
+      // proceed without manifest guidance — manifestVolumes stays null,
+      // falls through to the generic anatEntries/r.anat path below
+    }
+  }
+
+  // Anatomy: a manifest's "volumes" section (if any) takes priority over
+  // the generic multi-anat fallback — it carries real names/types/LUTs
+  // instead of "whatever files happen to be classified anat". Multiple
+  // files arriving together with NO manifest still load as alternatives
+  // (see registerAnatGroupItems' radio selector); a single anat file —
+  // the common case, and also what a later separate drop/pick does even
+  // if several anatomy files were loaded together earlier — just
+  // replaces the group outright, same as before this feature existed.
+  const anatEntries = entries.filter(e => e.kind === 'anat');
+  if (manifestVolumes && manifestVolumes.length) {
+    anatGroup = manifestVolumes.map(v => ({
+      file: v.file, label: v.name, volType: v.type, lutFile: v.lutFile || null,
+    }));
+    anatActiveIndex = 0;
+    state.update({ 'anat.file': anatGroup[0].file });
+    did = true;
+  } else if (anatEntries.length > 1) {
+    anatGroup = anatEntries.map(e => ({ file: e.file, label: e.file.name, volType: null, lutFile: null }));
+    anatActiveIndex = 0;
+    state.update({ 'anat.file': anatGroup[0].file });
+    did = true;
+  } else if (r.anat) {
+    anatGroup = [{ file: r.anat, label: r.anat.name, volType: null, lutFile: null }];
+    anatActiveIndex = 0;
+    state.update({ 'anat.file': r.anat });
+    did = true;
+  }
+
+  // A loose LUT: old single-file behavior — auto-applies to
+  // SEGMENTATION if the data allows (see loadLUT) — UNLESS this is a
+  // multi-file/zip drop, in which case it's only auto-applied when a
+  // manifest volume explicitly claimed it above (applied per-volume by
+  // registerAnatGroupItems/selectAnat instead, precisely when that
+  // volume becomes active). A bare LUT sitting loose in a multi-file
+  // drop with no manifest reference is registered as available but
+  // never force-applied — otherwise it lands on whichever anatomy
+  // happens to be active, which is exactly the "weird color patterns on
+  // a plain volume" glitch this is fixing.
+  if (r.lut) {
+    const claimedByManifest = manifestVolumes && manifestVolumes.some(v => v.lutFile === r.lut);
+    if (!claimedByManifest) {
+      loadLUT(r.lut, { autoApply: !isMultiFileLoad });
+      did = true;
+    }
+  }
   return did;
 }
 
-// Generic drop-zone wiring. DRAG-DROP goes through the shared
-// MultiFileOpener regardless of which zone caught it — a zip or a
-// multi-file drop can carry an anatomy + LUT + several bundles together,
-// so "which zone you happened to drop on" no longer needs to constrain
-// what's accepted. Click-to-browse (<input type=file>, no 'multiple'
-// attribute on any of them) stays single-file and calls the zone's own
-// specific handler directly, since a browsed file is unambiguous about
-// which zone the user meant it for.
-function setupDrop(dzId,inputId,handler){
-  const dz=document.getElementById(dzId);
-  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
-  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-  dz.addEventListener('drop',async e=>{
-    e.preventDefault();dz.classList.remove('over');
-    const files = Array.from(e.dataTransfer.files || []);
-    if (!files.length) return;
-    try { await dispatchOpenedFiles(files); }
-    catch(err) { alert('File load error: '+err); }
-  });
-  document.getElementById(inputId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
+// Switches the active anatomy within the current anatGroup (radio
+// select in the FILE panel) — re-runs the full loadAnat pipeline on the
+// newly-picked file, same as a fresh load, since the renderer only ever
+// holds one volume's texture/glass-brain at a time.
+async function selectAnat(i) {
+  if (i === anatActiveIndex || !anatGroup[i]) return;
+  anatActiveIndex = i;
+  const f = anatGroup[i].file;
+  try {
+    await loadAnat(f);
+    state.set('anat.file', f.name);
+  } catch (e) {
+    alert('Error loading anatomy from "'+f.name+'"');
+    console.error(e.stack || e);
+  }
 }
-setupDrop('dz-anat', 'fi-anat', f => state.update({ 'anat.file': f }));
-setupDrop('dz-trck', 'fi-trck', f => state.update({ 'trck.file': f }));
-setupDrop('dz-lut',  'fi-lut',  f => loadLUT(f));
+
+// Single LOAD… button (FILE panel) — routes through the exact same
+// dispatchOpenedFiles()/MultiFileOpener pipeline as the whole-page drop
+// below, rather than the old per-type drop zones/click targets.
+document.getElementById('load-btn-main').addEventListener('click', () => {
+  document.getElementById('fi-load').click();
+});
+document.getElementById('fi-load').addEventListener('change', async e => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = ''; // allow re-picking the same file(s) next time
+  if (!files.length) return;
+  try { await dispatchOpenedFiles(files); }
+  catch(err) { alert('File load error: '+err); }
+});
+
+// ── Loaded-data tree (FILE panel) ──────────────────────────
+// One overall LoadedDataStore + file-type-specific item classes (see
+// js/loaded-data.js), rendered as a collapsible tree by DataTreeView.
+// The store only tracks what's loaded/visible; registerAnatItem/
+// registerTrckItem/registerLutItem below are the app-specific glue that
+// wires each item's on/off checkbox to what little visibility control
+// the renderer currently exposes.
+const dataStore = new LoadedDataStore();
+new DataTreeView(document.getElementById('data-tree-root'), dataStore);
+
+function rgbRawToHex([r, g, b]) {
+  const c = v => Math.max(0, Math.min(255, Math.round(v * 255))).toString(16).padStart(2, '0');
+  return '#' + c(r) + c(g) + c(b);
+}
+
+function registerAnatGroupItems() {
+  const items = anatGroup.map((g, i) => {
+    const item = new AnatomyItem(g.label);
+    const isActive = i === anatActiveIndex;
+    if (anatGroup.length > 1) {
+      // Multiple anatomy files loaded together: radio-select which one
+      // is active (mutually exclusive), rather than an on/off checkbox
+      // per file — only one can actually be in the renderer at a time.
+      item.selectorType = 'radio';
+      item.radioGroup = 'anat';
+      item.selected = isActive;
+      item.onSelect = () => selectAnat(i);
+    }
+    if (isActive) {
+      item.onVisibilityChange = (_, visible) => {
+        // Best-effort: hides the 3D glass brain. The 2D SAG/COR/AXI
+        // anatomy slices (vol-renderer.js) aren't wired to a
+        // visibility flag at all yet — that needs a small change in
+        // that module.
+        if (glassBrainMesh) glassBrainMesh.visible = visible;
+        render3D();
+      };
+      item.onMenu = () => showAnatHeaderPanel(); // stand-in for the real hamburger menu, TBD
+    } else {
+      // Not currently loaded into the renderer — nothing to show/hide
+      // yet, so the on/off checkbox is disabled until it's selected.
+      item.checkboxDisabled = true;
+    }
+    return item;
+  });
+  dataStore.setAnatItems(items);
+
+  // Manifest-driven volumes carry explicit per-volume type/LUT info;
+  // override whatever loadAnat's own generic "a real LUT is presumably
+  // meant to persist across files" heuristic just guessed for THIS
+  // volume, so a plain anatomy volume in the same manifest group never
+  // inherits SEGMENTATION mode/coloring meant for a sibling label volume
+  // (the reported "weird color patterns" glitch) — and a label volume's
+  // own LUT is loaded+applied precisely when it becomes the active one.
+  // Only runs for manifest volumes (g.volType set); a plain multi-anat
+  // group with no manifest (volType null) is left exactly as before.
+  const active = anatGroup[anatActiveIndex];
+  if (active && active.volType != null) {
+    if (active.lutFile) {
+      loadLUT(active.lutFile, { autoApply: false }).then(() => setModality('seg'));
+    } else if (modality === 'seg') {
+      setModality('anat');
+    }
+  }
+}
+
+function registerTrckItem(filename) {
+  const item = new TractogramItem(filename);
+  item.onVisibilityChange = (_, visible) => {
+    if (selMesh) selMesh.visible = visible;
+    if (srcDots) srcDots.visible = visible;
+    if (tgtDots) tgtDots.visible = visible;
+    if (slabRenderer) slabRenderer.invalidate(visible ? selMesh : null);
+    // This app renders on demand, not on a continuous RAF loop — every
+    // other place that changes the scene (updateProbe, updateScene3d,
+    // ...) explicitly calls render3D()/updateSlicesA()/updateSlicesB()
+    // afterward, so the toggle needs to as well, rather than waiting
+    // for the next unrelated interaction (e.g. orbiting the 3D view) to
+    // happen to trigger one.
+    updateSlicesA(); updateSlicesB();
+    render3D();
+  };
+  item.onMenu = () => showTrckHeaderPanel(); // stand-in for the real hamburger menu, TBD
+  hiddenBundleIndices.clear(); // a fresh tractogram load starts with every bundle on
+  if (isBundle && bundleNames) {
+    item.setBundles(bundleNames.map((name, i) => ({
+      name,
+      color: bundlePaletteRGB && bundlePaletteRGB[i] ? rgbRawToHex(bundlePaletteRGB[i]) : null,
+    })));
+    // Per-bundle on/off is real: it filters allStreamlines by
+    // streamlineBundleId before the probe selection/thinning step (see
+    // updateProbe) and rebuilds the mesh, rather than a shader-side
+    // discard — simpler, at the cost of a rebuild per toggle.
+    // updateProbe() already ends with its own
+    // updateScene3d()/updateSlicesA()/updateSlicesB() calls, so no
+    // separate render call is needed here the way it is above.
+    item.children.forEach(bundleItem => {
+      bundleItem.onVisibilityChange = (bi, visible) => {
+        if (visible) hiddenBundleIndices.delete(bi.bundleIndex);
+        else hiddenBundleIndices.add(bi.bundleIndex);
+        updateProbe();
+      };
+      // updateProbe() rebuilds selMesh/dots from bundlePaletteRGB every
+      // call (see _lastBundleInfo = {..., palette: bundlePaletteRGB}) —
+      // mutating that array in place before calling it is enough to
+      // recolor the bundle live, no separate shader/buffer update needed.
+      bundleItem.onColorChange = (bi, hex) => {
+        bundlePaletteRGB[bi.bundleIndex] = hexToRgbRaw(hex);
+        updateProbe();
+      };
+    });
+  }
+  dataStore.setTrck(item);
+}
+
+function registerLutItem(filename) {
+  const item = new LutItem(filename);
+  item.onVisibilityChange = (_, visible) => {
+    // Lightweight on/off, independent of the MODALITY radio (SEG
+    // mode) — just toggles whether the LUT is actually applied.
+    vr.setApplyLUT(visible && modality === 'seg');
+  };
+  dataStore.setLut(item);
+}
 
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',async e=>{
@@ -3515,7 +3792,18 @@ async function loadDemoFile(url, kind) {
   const name = url.split('/').pop();
   const label = kind === 'anat' ? 'downloading anatomy' : 'downloading tractogram';
   const blob = await fetchWithProgress(url, label);
-  state.update({ [kind+'.file']: new File([blob], name) });
+  const file = new File([blob], name);
+  if (kind === 'anat') {
+    // Demo loads bypass dispatchOpenedFiles (there's no real drop/pick
+    // here, just a fetched blob), so anatGroup — which
+    // registerAnatGroupItems reads from at the end of loadAnat — needs
+    // to be populated here too, the same way dispatchOpenedFiles does
+    // for a plain single-file load. Without this the anatomy loads and
+    // renders fine but never shows up in the FILE panel's tree.
+    anatGroup = [{ file, label: name, volType: null, lutFile: null }];
+    anatActiveIndex = 0;
+  }
+  state.update({ [kind+'.file']: file });
 }
 
 if (window.location.search.includes('demo')) {

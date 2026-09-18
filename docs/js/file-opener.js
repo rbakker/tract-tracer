@@ -26,28 +26,100 @@ import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME } from './bund
 const TRACT_EXTS = ['.tck', '.dqz', '.trk'];
 const LUT_EXTS    = ['.txt', '.lut'];
 
+// Extensions with a compound ("double") suffix, e.g. "brain.nii.gz" -> base
+// "brain" rather than "brain.nii". Extend as needed for other compound
+// formats.
+const DOUBLE_EXTS = ['.nii.gz', '.mif.gz'];
+
 function extOf(name) {
   const i = name.toLowerCase().lastIndexOf('.');
   return i === -1 ? '' : name.toLowerCase().slice(i);
 }
 
+function baseNameCandidates(name) {
+  // Candidate sidecar base-names for `name`, most-specific first:
+  // "brain.nii.gz" -> ["brain.nii.gz", "brain"]
+  // "brain.webm"   -> ["brain.webm", "brain"]
+  const lower = name.toLowerCase();
+  const doubleExt = DOUBLE_EXTS.find(ext => lower.endsWith(ext));
+  const candidates = [name];
+  if (doubleExt) {
+    candidates.push(name.slice(0, -doubleExt.length));
+  } else {
+    const dot = name.lastIndexOf('.');
+    if (dot > 0) candidates.push(name.slice(0, dot));
+  }
+  return candidates;
+}
+
 export class MultiFileOpener {
   // Classifies a flat File[] by extension. 'anat' is the fallback bucket
   // for anything not recognized as a tractogram/LUT/manifest — same rule
-  // the original single-file drop handler used (.nii/.nii.gz/.mif all
+  // the original single-file drop handler used (.nii/.nii.gz/.mif/.webm all
   // just fall through to it by elimination), kept here so a file that
   // used to load fine as a loose drop still does inside a zip.
-  static classify(files) {
-    return files.map(file => {
-      const name = file.name;
-      if (name.toLowerCase() === MANIFEST_FILENAME) return { file, kind: 'manifest' };
-      const ext = extOf(name);
-      if (TRACT_EXTS.includes(ext)) return { file, kind: 'tract' };
-      if (LUT_EXTS.includes(ext))   return { file, kind: 'lut' };
-      return { file, kind: 'anat' };
-    });
-  }
 
+  static classify(files) {
+    const byName = new Map(files.map(f => [f.name, f]));
+
+    // Pass 1: match every non-json file against the json files actually
+    // present, using the "<fullname>.json" or "<fullname-minus-its-
+    // (double)-extension>.json" convention. Iterating targets (not json
+    // files) means we only ever match a sidecar that's genuinely paired to
+    // something in this drop.
+    const sidecarForTarget = new Map(); // target file.name -> sidecar File
+    //const consumedSidecars = new Set(); // json filenames already claimed
+
+    const dataFiles = [];
+    for (const file of files) {
+      const name = file.name;
+      if (name.toLowerCase().endsWith('.json')) continue; // json files are targets' sidecars, not targets themselves
+      if (name.toLowerCase() === MANIFEST_FILENAME) continue;
+
+      for (const cand of baseNameCandidates(name)) {
+        const jsonName = cand + '.json';
+        if (jsonName.toLowerCase() === MANIFEST_FILENAME) continue; // never treat the manifest as a sidecar match
+        const jsonFile = byName.get(jsonName);
+        if (jsonFile) {
+          sidecarForTarget.set(name, jsonFile);
+          //consumedSidecars.add(jsonFile.name);
+          break; // most-specific candidate wins
+        }
+      }
+      dataFiles.push(file);
+    }
+
+    // Pass 2: classify everything not already consumed as a sidecar.
+    const classified = [];
+    for (const file of dataFiles) {
+      //if (consumedSidecars.has(file.name)) continue; // folded into its target's entry below
+
+      const name = file.name;
+      if (name.toLowerCase() === MANIFEST_FILENAME) {
+        classified.push({ file, kind: 'manifest' });
+        continue;
+      }
+
+      const ext = extOf(name);
+      const sidecar = sidecarForTarget.get(name) || null;
+
+      if (ext === '.webm') {
+        // Only .webm needs the merged combo, since parseWebm's signature
+        // takes one object - other formats just get sidecar attached
+        // alongside file for now, unused until something needs it.
+        if (!sidecar) console.warn(`${name} has no matching sidecar - loading without metadata.`);
+        classified.push({ file: { name, video: file, sidecar }, kind: 'anat' });
+        continue;
+      }
+
+      if (TRACT_EXTS.includes(ext)) { classified.push({ file, kind: 'tract', sidecar }); continue; }
+      if (LUT_EXTS.includes(ext))   { classified.push({ file, kind: 'lut', sidecar });   continue; }
+      classified.push({ file, kind: 'anat', sidecar }); // nifti/mif/etc., sidecar attached if one was found
+    }
+
+    return classified;
+  }
+  
   // Unpacks a .zip into the same flat File[] a loose multi-file drop
   // would give. Per-entry decompression is native DecompressionStream
   // under the hood (same idiom volume-io.js already uses for .nii.gz) —
@@ -85,12 +157,9 @@ export class MultiFileOpener {
     const entries = MultiFileOpener.classify(files);
 
     const anat = entries.find(e => e.kind === 'anat')?.file || null;
-    const lut  = entries.find(e => e.kind === 'lut')?.file || null;
+    const lut  = entries.find(e => e.kind === 'lut')?.file  || null;
 
     let tract = null, bundle = null;
-    // detectBundleDrop re-scans `files` itself for tract exts + a
-    // manifest — cheap, and keeps the single-vs-bundle decision in one
-    // place (bundle-io.js) rather than duplicated here.
     const grouped = detectBundleDrop(files);
     if (grouped) {
       bundle = await resolveBundleColors(grouped);
