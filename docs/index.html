@@ -799,33 +799,33 @@ const schema = {
 };
 
 const pipeline = [
-  { tag: 'anat', fn: () => {
-	  const file = state.get('anat.file');
-	  try {
-		loadAnat(file);
-    	state.set('anat.file',file.name)
-	  } catch(e) {
-		alert('Error loading anatomy from "'+file+'"');
-		console.error(e.stack || e)
-		state.set('anat.file',undefined)
-	  }
+  { tag: 'anat', fn: async () => {
+    const file = state.get('anat.file');
+    try {
+      await loadAnat(file);
+      state.set('anat.file', file.name)
+    } catch(e) {
+      alert('Error loading anatomy from "'+file+'"');
+      console.error(e.stack || e)
+      state.set('anat.file', undefined)
+    }
   } },
-  { tag: 'trck', fn: () => {
-	  const val = state.get('trck.file');
-	  const isBundleDescriptor = val && val.__bundle;
-	  try {
-		if (isBundleDescriptor) {
-		  loadTrckBundle(val);
-		  state.set('trck.file', val.entries.length + ' bundle files');
-		} else {
-		  loadTrck(val);
-		  state.set('trck.file', val.name);
-		}
-	  } catch(e) {
-		alert('Error loading tractogram from "'+(isBundleDescriptor ? 'bundle set' : val)+'"');
-		console.error(e.stack || e)
-		state.set('trck.file',undefined)
+  { tag: 'trck', fn: async () => {
+	const val = state.get('trck.file');
+	const isBundleDescriptor = val && val.__bundle;
+    try {
+	  if (isBundleDescriptor) {
+		await loadTrckBundle(val);
+		state.set('trck.file', val.entries.length + ' bundle files');
+	  } else {
+		await loadTrck(val);
+		state.set('trck.file', val.name);
 	  }
+	} catch(e) {
+	  alert('Error loading tractogram from "'+(isBundleDescriptor ? 'bundle set' : val)+'"');
+	  console.error(e.stack || e)
+	  state.set('trck.file',undefined)
+	}
   } },
   { tag: 'probe', fn: () => {
 	  const pos = state.get('src.cursor');
@@ -1091,7 +1091,8 @@ function drawSlice(planeKey, tag) {
   // Left panels show the probe ring; right panels suppress it (probeRadius=-1).
   const probeRadius = tag === 'src' ? undefined : -1;
   const anat = state.get('anat.file');
-  if (!cvs || !anat) return;  
+  const vox_mm = state.get('anat.vox_mm');
+  if (!cvs || !anat || !vox_mm) return;  
   const mpp = vr._planeParams[planeKey + tag]?.mm_per_px;
 
   // Each arm's width = slab half-thickness of the plane that arm represents.
@@ -1100,7 +1101,6 @@ function drawSlice(planeKey, tag) {
   // Which arm is H and which is V depends on the plane — matches the colour mapping.
   const slabH = (mm, mpp) => mpp ? slabMultiplier * mm / 2 / mpp : 1.0;
 
-  const vox_mm = state.get('anat.vox_mm');
   const armWidths = {
     sag: { wH: slabH(vox_mm[1], mpp), wV: slabH(vox_mm[2], mpp) }, // H=COR, V=AXI
     cor: { wH: slabH(vox_mm[0], mpp), wV: slabH(vox_mm[2], mpp) }, // H=SAG, V=AXI
