@@ -166,10 +166,6 @@ uniform float u_bgInvert;
 // GLASS_ONLY_FS and SOLID_ONLY_FS.
 uniform float u_sliceMode;
 uniform float u_sliceThickness; // full thickness, in voxel-index-space units (1 unit = 1 voxel along the relevant axis)
-// TEMPORARY TUNING - caps a grazing ray's SLICE cross-section width to
-// this many multiples of u_sliceThickness, to avoid undersampling at
-// steep angles - see its usage right after the clip-plane loop.
-uniform float u_sliceWidthCapMult;
 uniform float u_glassAlphaMult; // OPACITY's multiplier on GLASS mode's Fresnel alpha — see its usage near fragAlpha
 uniform float u_rimPow;
 uniform float u_volDiagMm;
@@ -727,29 +723,6 @@ const CLIP_SETUP_GLSL = `
       }
     }
   }
-  if (u_sliceMode > 0.5 && anyPlaneActive) {
-    // Cap the slab's visible cross-section width in T, regardless of
-    // viewing angle. A ray grazing along the slab at a steep angle
-    // crosses the ±halfThickness band very slowly (width scales as
-    // 1/|dn|, dn = dot(rd,normal)), so as the angle approaches true
-    // edge-on this window can legitimately balloon far wider than the
-    // slab's own intended thickness. With a FIXED step count spread over
-    // that much wider window, each step becomes correspondingly larger -
-    // easily large enough to step clean over thin tissue structures
-    // without ever landing a sample on them, which reads as the slab
-    // going dark (RIM-LIT) or losing surfaces entirely (SOLID/GLASS) at
-    // grazing angles - undersampling, not a brightness/shading problem.
-    // Shrinking the window back to a fixed cap, symmetrically around its
-    // own centre (not just clamping tEnd, which would bias the visible
-    // cross-section toward the near side), keeps step density roughly
-    // constant regardless of angle instead.
-    float maxWidth = u_sliceThickness * u_sliceWidthCapMult;
-    if (tEnd - tStart > maxWidth) {
-      float mid = (tStart + tEnd) * 0.5;
-      tStart = mid - maxWidth * 0.5;
-      tEnd   = mid + maxWidth * 0.5;
-    }
-  }
   if (tEnd <= tStart) discard;
 `;
 
@@ -1251,7 +1224,6 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       u_bgInvert: { value: 0 },
       u_sliceMode: { value: 0 },
       u_sliceThickness: { value: 3.0 },
-      u_sliceWidthCapMult: { value: 15.0 },
       u_glassAlphaMult: { value: 1.0 },
       u_rimPow:    { value: 1.0 },
       u_contrast:  { value: 1.0 },

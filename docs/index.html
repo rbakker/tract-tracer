@@ -729,13 +729,14 @@ input[type=file]{display:none;}
     "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js",
     "three/examples/jsm/postprocessing/Pass.js": "./js/vendor/three/Pass.js",
     "postprocessing": "./js/vendor/postprocessing/postprocessing.js",
-    "n8ao": "./js/vendor/n8ao/N8AO.js"
+    "n8ao": "./js/vendor/n8ao/N8AO.js",
+    "mediabunny": "./js/mediabunny.mjs"
   }
 }
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { parseNifti, parseMif, parseWebm } from './js/volume-io.js';
+import { parseNifti, parseMif, parseWebmCodecs as parseWebm } from './js/volume-io.js';
 import { parseLUT } from './js/lut-io.js';
 import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
@@ -2405,7 +2406,7 @@ async function loadAnat(f){
   let anat;
   if (ext == '.nii' || ext == '.nii.gz')  anat=await parseNifti(f);
   else if (ext == '.mif') anat=await parseMif(f);
-  else if (ext == '.webm') anat=await parseWebm(f);
+  else if (ext == '.webm') anat=await parseWebm(f,{debugDumpFrame: 70});
   else {
       setProgress('Error.'); await tick();
 	  throw(`Unsupported format ${ext}`);

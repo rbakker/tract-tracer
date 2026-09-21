@@ -648,12 +648,301 @@ export async function parseWebm(fileCombo) {
     console.log('WebM volume', nx + '×' + ny + '×' + nz,
       channels === 3 ? 'colour (RGB)' : 'scalar', 'Ab', Ab);
 
+    // Return the SAME mn/mx basis `data` was actually built on, not the
+    // observed min/max of the decoded result (mnOut/mxOut) - a real,
+    // confirmed bug found by inspecting VolRenderer.upload: for a
+    // continuous scalar volume, `data[idx]` above is dequantized via the
+    // SIDECAR's mn/mx (mn + (u8/255)*(mx-mn)), but the display code
+    // downstream renormalizes `data` for the GPU texture using whatever
+    // mn/mx THIS function returns - so returning mnOut/mxOut (which is
+    // almost always narrower than the sidecar's true mn/mx, since lossy
+    // VP9 rarely reproduces the exact global min/max on every frame)
+    // silently re-scales every voxel on a DIFFERENT basis than the one
+    // `data` was built on. parseNifti doesn't have this bug because its
+    // returned mn/mx and its data[] are computed from the same scan in
+    // the same pass - self-consistent by construction. Categorical/label
+    // data is the one exception: data[idx] there is the RAW 0-255 pixel
+    // value (no sidecar mn/mx windowing at all - see captureFrame above),
+    // so mnOut/mxOut (the observed range of those same raw values) IS the
+    // correct, self-consistent basis to return for that case.
     return {
-      shape: [nx, ny, nz], vox_mm, Ab, invAb, decomp,
-      data, mn: mnOut, mx: mxOut, channels,
+      shape: [nx, ny, nz], vox_mm, Ab, invAb, decomp, data, channels,
+      mn: categorical ? mnOut : mn,
+      mx: categorical ? mxOut : mx,
     };
   } finally {
     document.body.removeChild(video);
     URL.revokeObjectURL(videoURL);
   }
+}
+
+// ── webm-codecs.js (appended) ────────────────────────────────────────────
+// Parallel decode path for the same .webm + .webm.json sidecar format that
+// parseWebm() above handles via <video>+seeking. This one decodes via the
+// native WebCodecs VideoDecoder API instead, which is dramatically faster
+// to load (near-instant vs. parseWebm's per-frame-seek approach).
+//
+// Needs a real demuxer, since WebCodecs itself only decodes already-
+// demuxed chunks - it doesn't parse containers. Uses `mediabunny`
+// (https://mediabunny.dev). Install with `npm install mediabunny`.
+//
+// Design, and how it differs from parseWebm():
+//  - Decodes every packet in one linear pass (VideoDecoder.decode() per
+//    packet; the `output` callback fires once each frame is ready) rather
+//    than seeking to each frame individually - no keyframe is ever
+//    decoded-from more than once. This assumes decode order matches
+//    presentation order (true as long as the exporter doesn't use
+//    B-frame/alt-ref reordering - nifti_to_webm.py's VP9 encode settings
+//    explicitly disable that; libaom-av1's defaults do NOT and will
+//    silently reorder unless -lag-in-frames 0 -auto-alt-ref 0 are set,
+//    if AV1 is ever revisited here).
+//  - Scalar (grayscale) volumes read each frame via its OWN NATIVE decoded
+//    format (copyTo() with no `format` option) rather than requesting a
+//    converting target format like RGBA. This matters: asking copyTo() to
+//    *convert* to a target format was found to invoke real (and in
+//    Firefox's case, buggy) colour-management/gamma handling in both
+//    major engines, which was the root cause of a systematic darkening
+//    bug in decoded pixel values. Reading the native format is a byte-
+//    identical memcpy with no conversion step to go wrong. This does mean
+//    handling whichever native format shows up - planar YUV-family
+//    (I420/I422/I444/NV12/...) or packed RGB-family (RGBA/BGRX/...) -
+//    see readByte() in handleFrame() below.
+//  - The exporter (nifti_to_webm.py) writes scalar volumes as GBRP with
+//    the real intensity data isolated into the GREEN channel only (red/
+//    blue held constant at 0), not duplicated into all 3 channels - see
+//    readByte()'s comment for why G specifically. GBRP has no chroma
+//    subsampling or colour-matrix step at all, so it's immune to the
+//    conversion-time bug above regardless of codec.
+//  - DEC/colour (channels===3) volumes still use the old, converting
+//    copyTo({format:'RGBA'}) path - untouched by the fix above, since
+//    real colour data hasn't been confirmed to hit the same bug and a
+//    proper fix would need a hand-rolled YUV->RGB matrix if the decoder
+//    hands back genuinely subsampled planar colour.
+//  - VideoFrame.copyTo() is ASYNC (returns Promise<PlaneLayout[]>), and
+//    per spec/MDN, calling frame.close() before an in-flight copyTo()
+//    resolves throws InvalidStateError. VideoDecoder's `output` callback
+//    is not itself awaited by the decoder - it can fire again for the
+//    next frame while a previous frame's copyTo() is still pending. This
+//    implementation chains each frame's handling onto a running promise
+//    so frames are read and closed strictly one at a time, avoiding any
+//    overlap that could race on writing into the shared `data` array or
+//    close a frame too early.
+
+export function isWebCodecsVolumeDecodeSupported() {
+  return typeof VideoDecoder !== 'undefined' && typeof VideoFrame !== 'undefined';
+}
+
+export async function parseWebmCodecs(fileCombo) {
+  if (!isWebCodecsVolumeDecodeSupported()) {
+    throw new Error('WebCodecs (VideoDecoder) is not available in this browser.');
+  }
+  // Loaded lazily so browsers/builds that never call this function don't
+  // pay for the dependency. Requires `npm install mediabunny` and a
+  // bundler (or an import map) that can resolve the bare specifier.
+  const { Input, ALL_FORMATS, BlobSource, EncodedPacketSink } = await import('mediabunny');
+
+  const { video: videoFile, sidecar: sidecarFile, name } = fileCombo;
+  if (!sidecarFile) {
+    throw new Error(`No .webm.json sidecar found for ${name} - cannot load without metadata.`);
+  }
+  const meta = JSON.parse(await sidecarFile.text());
+  const { shape, channels, vox_mm, Ab, mn, mx, categorical } = meta;
+  const [nx, ny, nz] = shape;
+  const n = nx * ny * nz;
+  const data = channels === 3 ? new Float32Array(n * 3) : new Float32Array(n);
+  let mnOut = Infinity, mxOut = -Infinity;
+
+  const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(videoFile) });
+  const videoTrack = await input.getPrimaryVideoTrack();
+  if (!videoTrack) throw new Error(`No video track found in ${name}`);
+
+  const decoderConfig = await videoTrack.getDecoderConfig();
+  if (!decoderConfig) {
+    throw new Error(
+      `Could not get a WebCodecs decoder config for ${name} - the codec ` +
+      `may be unsupported by this browser's VideoDecoder.`
+    );
+  }
+
+  // Prefer software decode: this project's VP9/GBRP streams decode
+  // correctly either way, but hardware-accelerated decode paths were the
+  // source of a real, confirmed colour-conversion bug when this was tested
+  // against AV1 - kept as a general safety preference.
+  decoderConfig.hardwareAcceleration = 'prefer-software';
+
+  const supportCheck = await VideoDecoder.isConfigSupported(decoderConfig);
+  if (!supportCheck.supported) {
+    throw new Error(`VideoDecoder reports codec config for ${name} as unsupported ` +
+      `(codec="${decoderConfig.codec}", hasDescription=${!!decoderConfig.description}).`);
+  }
+
+  let frameIndex = 0;      // next frame's Y-axis (front-to-back) index - see caveat above re: decode==presentation order
+  let framesRead = 0;
+  let sizeChecked = false;
+  let firstError = null;
+  let chain = Promise.resolve(); // serializes frame handling - see file header comment
+
+  async function handleFrame(frame) {
+    const f = frameIndex++;
+    try {
+      if (!sizeChecked) {
+        sizeChecked = true;
+        if (frame.codedWidth !== nx || frame.codedHeight !== nz) {
+          console.warn(
+            `WebM (codecs) frame size ${frame.codedWidth}x${frame.codedHeight} ` +
+            `does not match sidecar shape (expected ${nx}x${nz} from nx,nz)`
+          );
+        }
+      }
+      if (f >= ny) {
+        console.warn(`parseWebmCodecs: got more frames than expected (ny=${ny}), ignoring frame ${f}`);
+        return;
+      }
+
+      // Read the frame's own native decoded format (no `format` option
+      // passed to copyTo()) rather than converting to a target format -
+      // see the file header comment for why.
+      const nativeBuf = new Uint8Array(frame.allocationSize());
+      const planes = await frame.copyTo(nativeBuf);
+      const format = frame.format || '';
+      // Scalar volumes are encoded as GBRP with the real intensity data
+      // isolated into the GREEN channel only (red/blue constant 0) - see
+      // nifti_to_webm.py. G specifically: cheapest to encode (confirmed
+      // empirically - ~20% smaller than isolating into R or B, since G is
+      // plane 0 in ffmpeg's own gbrp plane order and gets "luma-grade"
+      // quantization), and conveniently always plane 0 on decode too.
+      // Planar/semi-planar formats (I420, I422, I444, NV12, NV21, ...)
+      // read plane 0 directly. Packed RGB-family formats (RGBA, RGBX,
+      // BGRA, BGRX, ...) interleave 4 bytes/pixel; G is always the middle
+      // channel regardless of R/B order, i.e. always byte offset +1.
+      const isPacked = /^(RGB|BGR)/i.test(format);
+      const { offset, stride } = planes[0];
+      const bytesPerPixel = isPacked ? 4 : 1;
+      function readByte(row, col) {
+        const base = offset + row * stride + col * bytesPerPixel;
+        return isPacked ? nativeBuf[base + 1] : nativeBuf[base];
+      }
+
+      if (channels === 3) {
+        // DEC/colour volumes: NOT YET migrated off the explicit
+        // copyTo({format:'RGBA'}) conversion path (still does a second,
+        // separate copyTo() call here). The darkening bug this file was
+        // rewritten around was only ever observed/investigated for
+        // scalar/grayscale volumes - real colour data hasn't been tested
+        // against it, and true colour source frames may come back from
+        // the decoder as genuinely subsampled planar YUV (not just a
+        // grayscale-in-disguise packed format), which the plane-0-only
+        // readByte() helper above can't turn into real RGB by itself
+        // (would need an actual YUV->RGB matrix applied by hand here,
+        // not just a raw byte read). Left as-is - explicit TODO - rather
+        // than risk silently breaking working DEC rendering to fix a bug
+        // that hasn't been confirmed to affect it.
+        const rgbaBuf = new Uint8Array(frame.allocationSize({ format: 'RGBA' }));
+        const [{ offset: rgbaOffset, stride: rgbaStride }] = await frame.copyTo(rgbaBuf, { format: 'RGBA' });
+        for (let row = 0; row < nz; row++) {
+          for (let col = 0; col < nx; col++) {
+            const pi = rgbaOffset + row * rgbaStride + col * 4;
+            const r = rgbaBuf[pi] / 255, g = rgbaBuf[pi + 1] / 255, b = rgbaBuf[pi + 2] / 255;
+            const idx = col + f * nx + row * nx * ny;
+            data[idx * 3 + 0] = r; data[idx * 3 + 1] = g; data[idx * 3 + 2] = b;
+            if (r < mnOut) mnOut = r; if (r > mxOut) mxOut = r;
+            if (g < mnOut) mnOut = g; if (g > mxOut) mxOut = g;
+            if (b < mnOut) mnOut = b; if (b > mxOut) mxOut = b;
+          }
+        }
+      } else {
+        // Grayscale: read the frame's native decoded byte directly - no
+        // copyTo() format conversion, no colour-management/gamma step to
+        // introduce the darkening bug this section was rewritten to fix.
+        for (let row = 0; row < nz; row++) {
+          for (let col = 0; col < nx; col++) {
+            const u8 = readByte(row, col);
+            const val = categorical ? u8 : (mn + (u8 / 255) * (mx - mn));
+            const idx = col + f * nx + row * nx * ny;
+            data[idx] = val;
+            if (val < mnOut) mnOut = val; if (val > mxOut) mxOut = val;
+          }
+        }
+      }
+      framesRead++;
+    } finally {
+      frame.close();
+    }
+  }
+
+  const decoder = new VideoDecoder({
+    output(frame) {
+      // Chain onto the running promise so frames are handled strictly in
+      // the order `output` was called, one at a time - see file header.
+      chain = chain.then(() => handleFrame(frame)).catch(e => {
+        // Logged explicitly (name + message + full object) rather than
+        // relying on however the devtools console chooses to display an
+        // unhandled rejection - that display varies by browser/console
+        // and can end up showing only the stack, with the actual error
+        // name/message easy to miss or scroll past.
+        console.error('parseWebmCodecs frame handling failed:', e && e.name, e && e.message, e);
+        // Stashed on window as a fallback in case something upstream
+        // (this app's own catch around loadAnat/dispatchOpenedFiles, or
+        // the devtools console's own default formatting of a rejected
+        // promise) ends up displaying only e.stack and dropping e.name/
+        // e.message - inspect via `window.__lastWebCodecsError` directly
+        // in the console, independent of any logging either layer does.
+        try { window.__lastWebCodecsError = e; } catch { /* no window (non-browser) */ }
+        firstError = firstError || e;
+        try { frame.close(); } catch { /* already closed by handleFrame's finally */ }
+      });
+    },
+    error(e) {
+      firstError = firstError || e;
+    },
+  });
+  decoder.configure(decoderConfig);
+
+  const sink = new EncodedPacketSink(videoTrack);
+  try {
+    for await (const packet of sink.packets()) {
+      if (firstError) break;
+      decoder.decode(packet.toEncodedVideoChunk());
+    }
+    await decoder.flush();
+  } catch (e) {
+    // decoder.flush()/decode() reject/throw with whatever error the
+    // decoder hit (e.g. a DOMException named 'EncodingError'), but
+    // callers of parseWebmCodecs typically only log e.stack, which is
+    // often empty/unhelpful for a DOMException. Log name/message
+    // explicitly, and stash on window as a console-accessible fallback,
+    // before rethrowing.
+    console.error('parseWebmCodecs decode/flush failed:', e && e.name, e && e.message, e);
+    try { window.__lastWebCodecsError = e; } catch { /* no window (non-browser) */ }
+    throw e;
+  }
+  await chain; // wait for the last queued frame handler to finish
+  decoder.close();
+
+  if (firstError) {
+    console.error('parseWebmCodecs firstError (from decoder.error callback or a frame handler):',
+      firstError && firstError.name, firstError && firstError.message, firstError);
+    try { window.__lastWebCodecsError = firstError; } catch { /* no window (non-browser) */ }
+    throw firstError;
+  }
+
+  if (framesRead !== ny) {
+    console.warn(`parseWebmCodecs: expected ${ny} frames from sidecar shape, captured ${framesRead}`);
+  }
+
+  const invAb = invertAffine(Ab);
+  const decomp = decomposeAffineKSP(Ab, vox_mm);
+
+  console.log('WebM volume (WebCodecs)', nx + '×' + ny + '×' + nz,
+    channels === 3 ? 'colour (RGB)' : 'scalar', 'Ab', Ab);
+
+  // Same fix as parseWebm - see its matching comment. Return the sidecar's
+  // mn/mx (the basis `data` was actually dequantized against), not the
+  // observed mnOut/mxOut, except for categorical data where the raw pixel
+  // value IS `data` and mnOut/mxOut is the correct self-consistent range.
+  return {
+    shape: [nx, ny, nz], vox_mm, Ab, invAb, decomp, data, channels,
+    mn: categorical ? mnOut : mn,
+    mx: categorical ? mxOut : mx,
+  };
 }

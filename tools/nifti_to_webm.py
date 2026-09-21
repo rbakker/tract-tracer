@@ -101,7 +101,7 @@ def normalize_scalar_uint8(data, categorical=False):
         mn, mx = float(np.nanmin(flat)), float(np.nanmax(flat))
         rng = (mx - mn) if (mx - mn) != 0 else 1.0
         norm = np.clip((data.astype(np.float32) - mn) / rng, 0.0, 1.0)
-        return np.round(norm * 255.0).astype(np.uint8), mn, mx
+        return (norm*255.9999).astype(np.uint8), mn, mx
 
 
 def rgb_to_uint8(data_rgb):
@@ -114,17 +114,17 @@ def rgb_to_uint8(data_rgb):
     return typed, mn, mx
 
 
-def write_frame_pngs_scalar(data_u8, out_dir, ny):
-    """Iterate coronal (Y) slices front-to-back (frame 0 = most anterior),
-    with each frame's row 0 = superior (top of image) and column 0 =
-    anatomical Right displayed on the left (radiological convention,
-    matches viewing the subject from the front)."""
-    from PIL import Image
-    for f in range(ny):
-        y_index = ny - 1 - f                     # Y flip: front-to-back order
-        tile = data_u8[::-1, y_index, ::-1].T     # X flip (col0=Right) + Z flip (row0=superior); (X,Z)->(Z,X)
-        Image.fromarray(tile, mode="L").save(
-            os.path.join(out_dir, f"frame_{f:05d}.png"))
+#def write_frame_pngs_scalar(data_u8, out_dir, ny):
+#    """Iterate coronal (Y) slices front-to-back (frame 0 = most anterior),
+#    with each frame's row 0 = superior (top of image) and column 0 =
+#    anatomical Right displayed on the left (radiological convention,
+#    matches viewing the subject from the front)."""
+#    from PIL import Image
+#    for f in range(ny):
+#        y_index = ny - 1 - f                     # Y flip: front-to-back order
+#        tile = data_u8[::-1, y_index, ::-1].T     # X flip (col0=Right) + Z flip (row0=superior); (X,Z)->(Z,X)
+#        Image.fromarray(tile, mode="L").save(
+#            os.path.join(out_dir, f"frame_{f:05d}.png"))
 
 
 def write_frame_pngs_rgb(data_u8, out_dir, ny):
@@ -138,54 +138,60 @@ def write_frame_pngs_rgb(data_u8, out_dir, ny):
             os.path.join(out_dir, f"frame_{f:05d}.png"))
 
 
-def encode_webm(frame_dir, out_path, crf, fps, pix_fmt="yuv420p", lossless=False):
+def write_frame_pngs_scalar(data_u8, out_dir, ny):
+    """For scalar (grayscale) volumes: isolates the quantized intensity
+    into the GREEN channel of an otherwise-constant-zero RGB tile, then
+    reuses write_frame_pngs_rgb() unchanged. Measured >2x smaller than
+    duplicating the same data into all 3 channels (the old -pix_fmt gray
+    approach, which ffmpeg/libvpx silently turn into gbrp anyway since
+    neither VP9 nor most ffmpeg AV1 builds expose true monochrome) - and
+    still plain GBRP (no YUV, no chroma matrix), which is the one format
+    proven to decode correctly in both Firefox and Chromium/Brave.
+    G specifically, not R or B: libvpx's rate control treats plane 0 -
+    which is G in ffmpeg's own G,B,R gbrp plane order - with noticeably
+    better quality/QP than planes 1-2, even though GBR content has no
+    real luma/chroma relationship for that to be "correct" about;
+    measured ~20% smaller than isolating into R or B instead.
+    """
+    import numpy as np
+    rgb = np.zeros((*data_u8.shape, 3), dtype=np.uint8)
+    rgb[..., 1] = data_u8  # G channel carries the real data; R, B stay 0
+    write_frame_pngs_rgb(rgb, out_dir, ny)
+    
+
+def encode_webm(frame_dir, out_path, crf, fps, pix_fmt, lossless=False):
     cmd = [
         "ffmpeg", "-y",
         "-framerate", str(fps),
         "-i", os.path.join(frame_dir, "frame_%05d.png"),
-        # Force full-range (0-255) explicitly at the swscale conversion
-        # step AND tag the output as full-range. Without this, ffmpeg
-        # commonly defaults yuv420p to "limited"/"tv" range (16-235) even
-        # for a genuinely full-range (0-255) source - an implicit rescale
-        # on encode and its inverse on decode, a real lossy value
-        # transform that happens BEFORE/AFTER VP9's own (exact, even at
-        # lossless) entropy coding. Diagnosed via: diff=1 between an
-        # original PNG frame and one ffmpeg-extracted from a lossless
-        # webm - true lossless coding can't produce that on its own, so
-        # the discrepancy had to come from a value transform outside the
-        # coder itself, and unintended range conversion is the standard
-        # cause of exactly this signature.
-        "-vf", f"scale=in_range=full:out_range=full,format={pix_fmt}",
-        "-color_range", "pc",  # tag output as full-range (not just convert to it)
-        # Force an exact 1:1 input-frame-to-output-frame mapping. Without
-        # this, ffmpeg's default frame-rate reconciliation (-fps_mode
-        # auto) is free to duplicate or drop frames to resolve timestamp
-        # rounding against the encoder's internal timebase - even when
-        # fed a clean, evenly-spaced PNG sequence. Confirmed via: many
-        # captured frames in the browser turning out to be pixel-identical
-        # to a neighbor - i.e. some coronal Y-positions never got their
-        # own distinct encoded frame at all, which is exactly what
-        # produced the "terraced" look in orthogonal (sagittal/axial)
-        # views while looking fine within any single coronal slice.
+        # Frames in frame_dir are now written as 3-channel RGB PNGs with
+        # the real intensity data in the GREEN channel and red/blue held
+        # constant at 0 (see the frame-writing code - needs updating to
+        # match, see below) - NOT plain grayscale PNGs converted to gbrp
+        # by ffmpeg, which would duplicate the same data into all 3
+        # channels. Isolating to G instead of duplicating cut GBRP file
+        # size by >2x in testing (measured: ~2.3x on a synthetic test),
+        # and G specifically (not R or B) because libvpx's rate control
+        # treats plane 0 (which is G in ffmpeg's own G,B,R gbrp ordering)
+        # with better quality/QP than planes 1-2, even for GBR content
+        # with no real luma/chroma relationship - confirmed empirically,
+        # G was ~20% smaller than isolating into R or B.
+        "-pix_fmt", "gbrp",
+        "-color_range", "2",
+        "-color_primaries", "1",
+        "-color_trc", "1",
+        "-colorspace", "1",
+        #"-sws_flags", "spline+accurate_rnd+full_chroma_int",
         "-fps_mode", "passthrough",
-        # Explicit keyframe interval. Without this, libvpx-vp9's default
-        # (sparse) keyframe spacing means seeking to an arbitrary frame
-        # requires redecoding from a distant keyframe forward - this is
-        # what made per-frame seeking (needed below to avoid a proven
-        # browser-side frame-duplication race in sequential playback
-        # capture) take minutes instead of seconds. A keyframe every 30
-        # frames bounds worst-case see  k cost to ~30 predicted-frame
-        # decodes, a small cost against inter-frame compression within
-        # each 30-frame GOP.
-        "-g", "20",
+        "-g", "30",
         "-c:v", "libvpx-vp9",
     ]
     if lossless:
-        cmd += ["-lossless", "1"]  # mutually exclusive with -crf
+        cmd += ["-lossless", "1"]
     else:
         cmd += ["-b:v", "0", "-crf", str(crf)]
     cmd.append(out_path)
-
+        
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if res.returncode != 0:
         print("FFMPEG ENCODE ERROR:\n", res.stderr[-2000:])
