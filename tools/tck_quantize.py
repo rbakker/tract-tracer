@@ -51,7 +51,8 @@ FILE FORMAT — JSON-headered for easy browser-side reading:
         {
           "divisor": 127,
           "n_streamlines": 5735,
-          "source_header": { ...original .tck header's CUSTOM fields... }
+          "source_header": { ...original .tck header's CUSTOM fields... },
+          "uuid": "..."   (only if the source .tck has a timestamp — see below)
         }
     then, per streamline, back to back with no padding:
         n_points   4 bytes   uint32
@@ -63,6 +64,13 @@ FILE FORMAT — JSON-headered for easy browser-side reading:
 source_header carries the ORIGINAL file's custom header fields,
 so the original .tck file can be reconstructed exactly, apart from 
 quantization losses.
+
+uuid identifies this streamline set to .dqz child data files (their
+"parent" field). It is set to the source .tck's own `timestamp` header
+field when there is one: MRtrix copies that timestamp into every .tsf
+derived from the .tck, so tsf_to_dqz.py can name the parent from the
+.tsf alone. With no timestamp, no uuid is written here; tsf_to_dqz.py
+--parent-dqz inserts one when the first child is made. See dqz-format.md.
 """
 
 import json
@@ -222,6 +230,9 @@ def compress_tractogram(in_path, out_path=None, divisor=127,
         'n_streamlines': len(orig_streamlines),
         'source_header': source_header,
     }
+    timestamp = source_header.get('timestamp')
+    if timestamp not in (None, ''):
+        header_obj['uuid'] = str(timestamp).strip()
     header_bytes = json.dumps(header_obj).encode('utf-8')
 
     n_clip_total = 0

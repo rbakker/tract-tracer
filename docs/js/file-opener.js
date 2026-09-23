@@ -22,6 +22,7 @@
 
 import { unzipSync } from 'fflate';
 import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME } from './bundle-io.js';
+import { sniffDqzKind, readDqzChildHeader } from './tract-io.js';
 
 const TRACT_EXTS = ['.tck', '.dqz', '.trk'];
 const LUT_EXTS    = ['.txt', '.lut'];
@@ -136,9 +137,28 @@ export class MultiFileOpener {
     return files;
   }
 
+  // .dqz child data files (DQZDATA1) share the .dqz extension with
+  // geometry files, so classify() — synchronous, extension-only — files
+  // them under 'tract' along with real geometry. This async pass sniffs
+  // the magic bytes of every .dqz 'tract' entry and re-labels the data
+  // files as kind 'dqzChild' (header attached), so they never reach
+  // detectBundleDrop/the tractogram loaders as if they were geometry.
+  // Only the first few bytes + JSON header are read here, not the data.
+  // A child with a malformed header is still reported (kind
+  // 'dqzChild', header null, error set) rather than silently dropped.
+  static async separateDqzChildren(entries) {
+    for (const e of entries) {
+      if (e.kind !== 'tract' || extOf(e.file.name) !== '.dqz') continue;
+      if (await sniffDqzKind(e.file) !== 'child') continue;
+      e.kind = 'dqzChild';
+      try { e.header = await readDqzChildHeader(e.file); e.error = null; }
+      catch (err) { e.header = null; e.error = String((err && err.message) || err); }
+    }
+  }
+
   // Main entry point. rawFiles: the raw File[] from a drop or file input
   // — either loose files, or a single-element array containing one .zip.
-  // Returns { entries, anat, lut, tract, bundle }:
+  // Returns { entries, anat, lut, tract, bundle, children }:
   //   entries — every classified {file, kind} record (zip-expanded if
   //             applicable) — see the class comment above.
   //   anat    — a File to load as anatomy, or null.
@@ -150,23 +170,36 @@ export class MultiFileOpener {
   //   bundle  — a resolveBundleColors() result ({manifest, entries}) to
   //             load as a bundle set, or null — set whenever there's more
   //             than one tract file, or exactly one alongside index.json.
+  //   children — [{file, header, error}] for every .dqz child data file in
+  //             the drop (see separateDqzChildren). Not matched to a
+  //             parent here — that needs the loaded geometry, so it's
+  //             the caller's job. Never counted as tract files above.
   // At most one of tract/bundle is ever set.
   static async open(rawFiles) {
     const isSingleZip = rawFiles.length === 1 && extOf(rawFiles[0].name) === '.zip';
     const files = isSingleZip ? await MultiFileOpener.filesFromZip(rawFiles[0]) : Array.from(rawFiles);
     const entries = MultiFileOpener.classify(files);
+    await MultiFileOpener.separateDqzChildren(entries);
 
     const anat = entries.find(e => e.kind === 'anat')?.file || null;
     const lut  = entries.find(e => e.kind === 'lut')?.file  || null;
+    const childEntries = entries.filter(e => e.kind === 'dqzChild');
+    const children = childEntries.map(e => ({ file: e.file, header: e.header, error: e.error }));
+
+    // detectBundleDrop groups by extension, so hand it the drop minus
+    // the child files — otherwise geometry + one child would look like a
+    // two-file bundle set.
+    const childFiles = new Set(childEntries.map(e => e.file));
+    const geometryFiles = files.filter(f => !childFiles.has(f));
 
     let tract = null, bundle = null;
-    const grouped = detectBundleDrop(files);
+    const grouped = detectBundleDrop(geometryFiles);
     if (grouped) {
       bundle = await resolveBundleColors(grouped);
     } else {
       tract = entries.find(e => e.kind === 'tract')?.file || null;
     }
 
-    return { entries, anat, lut, tract, bundle };
+    return { entries, anat, lut, tract, bundle, children };
   }
 }

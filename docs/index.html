@@ -8,8 +8,9 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
-  --bg:#080b0f;--panel:#0c1018;--border:#2a3550;
-  --accent:#4af;--accent2:#f84;--dim:#9ad;
+  --bg:#080b0f;--panel:#0c1018;--border:#2a3550;--focus:#9bf;
+  /* --accent:#4af;--accent2:#f84;--dim:#9ad; */
+  --accent:#9bf;--accent2:#48f;--dim:#9ad;
   --text:#8899aa;--bright:#ccdde8;
   --sag:#3af8cc;--cor:#f8a03a;--axi:#a03af8;
 }
@@ -101,6 +102,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
   font-size:16px;cursor:pointer;font-family:'JetBrains Mono',monospace;
   line-height:1;padding:2px 4px;}
 .app-panel-close:hover{color:var(--accent);}
+.app-panel.focused { border-color: var(--focus); }
 .app-panel-body{overflow-y:auto;overflow-x:hidden;padding:14px 16px;flex:1 1 auto;}
 .panel-content{display:block;}
 
@@ -137,6 +139,10 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
   cursor:pointer;padding:0 3px;font-family:inherit;}
 .dt-menu-btn:hover{color:var(--accent);}
 .dt-menu-btn:disabled{opacity:0.25;cursor:default;}
+.dt-noselect{flex:none;width:13px;margin:3px 3px 3px 4px;}
+.dt-tag{flex:none;color:var(--dim);font-size:9px;letter-spacing:0.04em;white-space:nowrap;}
+.dt-dim .dt-label,.dt-dim .dt-tag{opacity:0.45;}
+.dt-err .dt-tag{color:#ff6b5a;}
 
 /* ── DROP ZONES (FILE panel content) ── */
 .dz-row{display:flex;align-items:stretch;border:1px solid var(--border);margin-bottom:10px;}
@@ -157,7 +163,7 @@ a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
    the same .app-panel/FloatingPanel machinery as FILE/SETTINGS/ABOUT —
    draggable, pins on drag — just wider, accent-bordered, and default-
    positioned near the top-left corner instead of under the top-btn row. */
-#hdr-panel{width:430px;max-height:70vh;border-color:var(--accent);}
+#hdr-panel{width:430px;max-height:70vh;}
 #hdr-panel-pre{color:var(--text);font-size:9px;line-height:1.7;
   white-space:pre-wrap;word-break:break-all;user-select:text;margin:0;}
 /* about.html ships as an unstyled fragment (text + logos) — give it
@@ -440,7 +446,7 @@ input[type=file]{display:none;}
 
     <div id="panel-content-settings" class="panel-content">
     <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
-      <label>GPU TIER</label>
+      <label>GPU·TIER</label>
       <div class="clip-radio-row">
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>LOW</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>HIGH</span></label>
@@ -571,7 +577,7 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="light-val">CENTER</span>
     </div>
     <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead. FRAMES shows/hides all three plane rectangles without affecting clipping.">
-      <label>CLIPPING</label>
+      <label>CLIP·PLANE</label>
       <div class="clip-radio-row">
         <label class="clip-radio-opt cro-none"><input type="radio" autocomplete="off" name="clip-plane" value="none" checked><span>NONE</span></label>
         <label class="clip-radio-opt cro-sag"><input type="radio" autocomplete="off" name="clip-plane" value="sag"><span>SAG</span></label>
@@ -738,17 +744,19 @@ input[type=file]{display:none;}
 import * as THREE from 'three';
 import { parseNifti, parseMif, parseWebmCodecs as parseWebm } from './js/volume-io.js';
 import { parseLUT } from './js/lut-io.js';
-import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk } from './js/tract-io.js';
+import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
+         parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
 import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME } from './js/bundle-io.js';
-import { LoadedDataStore, AnatomyItem, TractogramItem, LutItem, DataTreeView } from './js/loaded-data.js';
+import { LoadedDataStore, AnatomyItem, TractogramItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView } from './js/loaded-data.js';
 import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
-         makeRibbonLines, makeEndpointDots, hexToRgbRaw } from './js/scene3d.js';
+         makeRibbonLines, makeEndpointDots, hexToRgbRaw, makeColormapTexture,
+         setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
 
 'use strict';
@@ -974,6 +982,14 @@ const readColorState = (pickerId, mode) => [mode, document.getElementById(picker
 let lineStyle = readColorState('line-color-picker', 'ras');
 let srcStyle  = readColorState('src-color-picker',  'flat');
 let tgtStyle  = readColorState('tgt-color-picker',  'flat');
+// One colormap texture shared by every (re)built streamline mesh (3D and
+// 2D) — see makeColormapTexture in scene3d.js. One ROW per loaded
+// streamline file: trckParents[i] uses row i, written by
+// writeFieldColormapRow when a field is activated. Hence the cap on how
+// many files one bundle load may contain (MAX_TRACT_FILES). Changing a
+// file's colormap later = rewrite its row + a redraw, no geometry rebuild.
+const MAX_TRACT_FILES = MAX_COLORMAP_ROWS;
+const lineColormapTex = makeColormapTexture('jet', MAX_TRACT_FILES);
 
 let pitch=0, yaw=0, roll=0;
 const vr = new VolRenderer();
@@ -2194,6 +2210,11 @@ function updateProbe(){
                  : Int32Array.from(ids.map(i=>streamlineBundleId[i])))
     : null;
   _lastBundleInfo = renderBundleIds ? { idPerStreamline: renderBundleIds, palette: bundlePaletteRGB } : null;
+  // Data-field coloring: for every rendered streamline whose geometry
+  // file has an active .dqz data field, its normalized values (see
+  // activeFieldValues) — null for the rest, which keep LINE·COLOR.
+  const renderIds = isThinned ? renderPos.map(p => ids[p]) : ids;
+  const fieldInfo = buildFieldInfo(renderIds);
 
   let selText=ids.length?ids.length.toLocaleString()+' selected':'';
   if (isThinned) selText += ' · ' + renderStreamlines.length.toLocaleString() + ' rendered';
@@ -2207,7 +2228,7 @@ function updateProbe(){
     else idxBtn.classList.add('disabled');
   }
   if(ids.length){
-    selMesh = makeRibbonLines(renderStreamlines, lineWidthPx, 0.5, _lastBundleInfo);
+    selMesh = makeRibbonLines(renderStreamlines, lineWidthPx, 0.5, _lastBundleInfo, fieldInfo);
     // Sync to the current LIGHT slider position immediately — otherwise a
     // freshly-rebuilt selMesh starts back at the default CENTER light
     // until the slider is next touched.
@@ -2423,10 +2444,13 @@ async function loadAnat(f){
   resetAutoLutIfAny();
   const isColorData = channels === 3;
   // Auto-pick MODALITY for the newly loaded volume: 3-channel data always
-  // means direction-encoded. Scalar data defaults to plain ANAT, unless a
-  // real (not auto-generated) LUT is already active, in which case it's
-  // presumably meant to be reapplied here too.
-  modality = isColorData ? 'dec' : (lutMap && !lutIsAutoGenerated ? 'seg' : 'anat');
+  // means direction-encoded, scalar data is plain ANAT. Loading a volume
+  // never switches to Label (SEG) mode by itself, even if a LUT is
+  // already loaded: that only happens when a LUT is dropped on its own
+  // onto an already-loaded anatomy (see loadLUT), or when a manifest
+  // names a LUT for this volume (see registerAnatGroupItems). The LUT
+  // stays loaded, so the user can still pick Label mode by hand.
+  modality = isColorData ? 'dec' : 'anat';
   document.getElementById('modality-' + modality).checked = true;
   document.getElementById('modality-dec').disabled = !isColorData;
   document.getElementById('modality-seg').disabled = isColorData;
@@ -2435,7 +2459,25 @@ async function loadAnat(f){
   updateLabelHud('src'); updateLabelHud('tgt');
 
   state.set( 'anat', { shape, vox_mm, Ab, invAb, decomp, mn, mx, channels } );
-  const probeCenter = mat3mulVec(Ab, [shape[0]/2, shape[1]/2, shape[2]/2]);
+  // Start at the middle voxel, chosen so the same PHYSICAL voxel is picked
+  // however the file stores its axes (LR vs RL, etc.). Voxel indices
+  // 0..N-1 are voxel centres under the affine, so the true middle is
+  // (N-1)/2: an exact voxel for odd N, but the boundary between voxels
+  // N/2-1 and N/2 for even N — where a slice would land between two
+  // sections. Picking by index (e.g. N/2) flips to the other physical
+  // voxel when the axis is stored reversed, shifting everything by one
+  // voxel. Instead, for even N, take whichever of the two middle voxels
+  // lies further toward +R/+A/+S along the world axis this voxel axis
+  // mostly runs along (largest |entry| of its affine column; Ab rows
+  // 0..2 are the rows of A, see showAnatHeaderPanel).
+  const midIndex = j => {
+    const N = shape[j];
+    if (N % 2 === 1) return (N - 1) / 2;
+    const col = [Ab[0][j], Ab[1][j], Ab[2][j]];
+    const dom = col.reduce((best, v) => Math.abs(v) > Math.abs(best) ? v : best, 0);
+    return dom >= 0 ? N / 2 : N / 2 - 1; // higher index is more RAS when dom > 0
+  };
+  const probeCenter = mat3mulVec(Ab, [midIndex(0), midIndex(1), midIndex(2)]);
   for (const k of ['sag','cor','axi']) {
 	state.set('src.view.'+k,probeCenter), 
 	state.set('tgt.view.'+k,probeCenter)
@@ -2597,16 +2639,15 @@ async function loadLUT(f, { autoApply = true } = {}) {
     lutMap = map; lutMaxIndex = maxIndex; lutIsAutoGenerated = false;
     vr.uploadLUT(map, maxIndex);
     if (dzLutP) { dzLutP.textContent = '✓ '+map.size.toLocaleString()+' labels'; dzLutP.className = ''; }
-    // Dropping a real LUT auto-activates SEGMENTATION display (matching
-    // the old toggle's behavior) — but only when the current data is
-    // actually scalar (MODALITY-SEG stays disabled for 3-channel/DEC
-    // data) AND autoApply is allowed. autoApply is false for a LUT that
-    // arrived loose in a multi-file/zip drop with no manifest claim on
-    // it (see dispatchOpenedFiles) — auto-applying it to whichever
-    // anatomy happens to be active would otherwise produce "weird color
-    // patterns" on a plain (non-label) volume.
+    // The ONE automatic route into Label (SEG) mode: a LUT dropped on its
+    // own (autoApply, i.e. a single-file drop — see dispatchOpenedFiles)
+    // AFTER an anatomy has loaded, and only for scalar data (SEG stays
+    // disabled for 3-channel/DEC data). A LUT arriving in a multi-file/
+    // zip drop, or before any anatomy, just gets loaded; loadAnat never
+    // switches to SEG on its own either. Manifest-claimed LUTs are applied
+    // separately (registerAnatGroupItems).
     const isColorData = currentAnat && (currentAnat.channels || 1) === 3;
-    if (autoApply && !isColorData) setModality('seg');
+    if (autoApply && currentAnat && !isColorData) setModality('seg');
     registerLutItem(f.name);
   } catch(e) {
     alert('LUT error: '+e);
@@ -2686,10 +2727,14 @@ async function loadTrck(f){
   try {
 	  parsed=( ext=='.tck' ? await parseTck(f) : ( ext=='.dqz' ? await parseDqz(f) : await parseTrk(f) ) )
   } catch(e){
-	  alert(`${ext.toUpperCase()} error: `+e);if(dTrckP){dTrckP.textContent='drop or click';dTrckP.className=''}setProgress('');return;
+	  alert(`${ext.toUpperCase()} error: `+e);if(dTrckP){dTrckP.textContent='drop or click';dTrckP.className=''}setProgress('');
+	  matchDqzChildren(); // a drop's data files still need placing (against whatever is still loaded)
+	  return;
   }
   trckHeader=parsed.header;
   allStreamlines=parsed.streamlines; streamlineLookup=parsed.streamlineLookup;
+  trckParents = [{ name: f.name, uuid: parsed.header._dqz?.uuid ?? null, bundleIndex: null,
+                   firstStreamline: 0, streamlines: parsed.streamlines, item: null }];
   isBundle=false; streamlineBundleId=null; bundlePaletteRGB=null; bundleNames=null;
   await finishTrckLoad(dTrckP);
 }
@@ -2703,6 +2748,10 @@ async function loadTrck(f){
 // parallel array, giving each streamline's index into bundlePaletteRGB.
 async function loadTrckBundle(descriptor){
   const { entries } = descriptor;
+  if (entries.length > MAX_TRACT_FILES) {
+    alert(`This drop has ${entries.length} streamline files; at most ${MAX_TRACT_FILES} can be loaded together.`);
+    return;
+  }
   trckFileName = entries.length + (entries.length===1 ? ' file' : ' files');
   const dTrckP = document.getElementById('dz-trck-status');
   if (dTrckP) { dTrckP.textContent = 'loading…'; dTrckP.className = 'is-loading'; }
@@ -2720,7 +2769,9 @@ async function loadTrckBundle(descriptor){
     } catch(e) {
       alert(`${ext.toUpperCase()} error in "${f.name}": `+e);
       if (dTrckP) { dTrckP.textContent='drop or click'; dTrckP.className=''; }
-      setProgress(''); return;
+      setProgress('');
+      matchDqzChildren(); // a drop's data files still need placing (against whatever is still loaded)
+      return;
     }
     perFileStreamlines.push(parsed.streamlines);
     perFileHeaders.push({ name: f.name, header: parsed.header });
@@ -2731,8 +2782,11 @@ async function loadTrckBundle(descriptor){
   const bundleIdArr = [];
   const lookupParts = [];
   let lookupOffset = 0;
+  trckParents = [];
   for (let bi = 0; bi < perFileStreamlines.length; bi++) {
     const streams = perFileStreamlines[bi];
+    trckParents.push({ name: perFileHeaders[bi].name, uuid: perFileHeaders[bi].header._dqz?.uuid ?? null,
+                       bundleIndex: bi, firstStreamline: allStreamlines.length, streamlines: streams, item: null });
     for (const t of streams) { allStreamlines.push(t); bundleIdArr.push(bi); }
   }
   // streamlineLookup maps a flat point index -> its streamline index,
@@ -3304,6 +3358,19 @@ async function dispatchOpenedFiles(rawFiles){
     r = await MultiFileOpener.open(withoutManifest);
   }
   let did = false;
+  // .dqz child data files: queued BEFORE any tractogram load below
+  // starts, since that load (async, not awaited by state.update) ends in
+  // registerTrckItem -> matchDqzChildren, which picks them up from the
+  // queue. With no geometry in this drop, match against what's already
+  // loaded right away instead.
+  if (r.children && r.children.length) {
+    const bad = r.children.filter(c => c.error);
+    if (bad.length) alert('Could not read ' + (bad.length === 1 ? 'this data file' : 'these data files') + ':\n\n' +
+                          bad.map(c => c.file.name + ':\n' + c.error).join('\n\n'));
+    addDqzChildren(r.children);
+    did = true;
+    if (!r.bundle && !r.tract) await matchDqzChildren();
+  }
   if (r.bundle)      { state.update({ 'trck.file': { __bundle: true, ...r.bundle } }); did = true; }
   else if (r.tract)  { state.update({ 'trck.file': r.tract }); did = true; }
 
@@ -3528,7 +3595,277 @@ function registerTrckItem(filename) {
       };
     });
   }
+  // Each loaded geometry file's own tree row — where its .dqz data files
+  // hang: the bundle row in a bundle set, the tractogram row otherwise.
+  for (const p of trckParents) p.item = p.bundleIndex === null ? item : item.children[p.bundleIndex];
   dataStore.setTrck(item);
+  matchDqzChildren();
+}
+
+// ── .dqz child data files ──────────────────────────────────
+// A child (DQZDATA1) carries one named per-vertex or per-streamline
+// field for exactly one .dqz geometry file, identified by that file's
+// header uuid (see dqz-format.md). Children are kept in dqzChildRecords
+// for the whole session, independent of what geometry is loaded, and
+// re-matched against trckParents every time the tractogram changes —
+// so a child dropped before its parent (or after a different
+// tractogram replaced it) attaches as soon as the parent is loaded,
+// and falls back to "unmatched" if its parent goes away. A child is
+// only ever attached after passing, in order: uuid match, n_streamlines
+// match, and (per-vertex) a per-streamline point-count match against
+// the parent's actual geometry — never applied to the wrong file.
+//
+// Nothing is rendered from the data yet: a matched record's `parsed`
+// ({values, codes, pointCounts, offsets} — see parseDqzChild) plus its
+// parent's firstStreamline (offset into allStreamlines) is what a later
+// "color by field" action will read.
+//
+// trckParents: one entry per currently loaded geometry file —
+// { name, uuid, bundleIndex (null for a single-file load),
+//   firstStreamline, streamlines, item }.
+let trckParents = [];
+let dqzChildRecords = []; // { file, header, error, parsed, status, reason, parent }
+let _dqzMatchRun = 0;
+
+function addDqzChildren(children) {
+  for (const c of children) {
+    // Re-dropping a file with the same name replaces the old record.
+    dqzChildRecords = dqzChildRecords.filter(r => r.file.name !== c.file.name);
+    dqzChildRecords.push({ file: c.file, header: c.header, error: c.error || null,
+                           parsed: null, status: 'pending', reason: null, parent: null });
+  }
+}
+
+async function matchDqzChildren() {
+  const run = ++_dqzMatchRun;
+  for (const rec of dqzChildRecords) {
+    rec.parent = null;
+    if (rec.error) { rec.status = 'invalid'; rec.reason = rec.error; continue; }
+    const h = rec.header;
+    const p = trckParents.find(tp => tp.uuid && tp.uuid === h.parent);
+    if (!p) {
+      rec.status = 'unmatched';
+      rec.reason = `parent .dqz (uuid ${h.parent}) is not loaded`;
+      continue;
+    }
+    if (h.n_streamlines !== p.streamlines.length) {
+      rec.status = 'mismatch';
+      rec.reason = `parent "${p.name}" has matching uuid but ${p.streamlines.length} streamlines, file says ${h.n_streamlines}`;
+      continue;
+    }
+    if (!rec.parsed) {
+      try { rec.parsed = await parseDqzChild(rec.file); }
+      catch (e) { rec.status = 'invalid'; rec.reason = String((e && e.message) || e); continue; }
+      if (run !== _dqzMatchRun) return; // a newer tractogram load superseded this pass
+    }
+    const bad = checkDqzChildAgainst(rec.parsed, p.streamlines);
+    if (bad) { rec.status = 'mismatch'; rec.reason = `parent "${p.name}": ${bad}`; continue; }
+    rec.status = 'matched'; rec.reason = null; rec.parent = p;
+  }
+  if (run !== _dqzMatchRun) return;
+  rebuildDqzChildItems();
+}
+
+function rebuildDqzChildItems() {
+  // Drop previously attached field rows, then re-attach from scratch.
+  for (const p of trckParents) {
+    if (p.item) p.item.children = p.item.children.filter(c => c.kind !== 'field');
+    // An active field that no longer belongs here (re-matched elsewhere,
+    // or replaced by a re-dropped file) stops being active.
+    if (p.activeField && (p.activeField.parent !== p || !dqzChildRecords.includes(p.activeField))) p.activeField = null;
+  }
+  let unmatched = null, invalid = null;
+  for (const rec of dqzChildRecords) {
+    const fi = makeDqzFieldItem(rec);
+    if (rec.status === 'matched' && rec.parent.item) {
+      const p = rec.parent;
+      fi.selectorType = 'radio';
+      fi.radioGroup = 'field-' + trckParents.indexOf(p);
+      fi.selected = p.activeField === rec;
+      fi.onSelect = () => setActiveField(p, p.activeField === rec ? null : rec);
+      p.item.addChild(fi);
+    } else if (rec.status === 'invalid') {
+      // A file that can't be read at all — kept apart from "unmatched"
+      // (a readable file whose parent just isn't loaded), and not dimmed.
+      fi.tag = '⚠ error';
+      fi.isError = true;
+      if (!invalid) invalid = new DataGroupItem('Data files with errors');
+      invalid.addChild(fi);
+    } else {
+      fi.dimmed = true;
+      if (!unmatched) unmatched = new DataGroupItem('Unmatched data files');
+      unmatched.addChild(fi);
+    }
+  }
+  if (unmatched) unmatched.tag = String(unmatched.children.length);
+  if (invalid) invalid.tag = String(invalid.children.length);
+  dataStore.setUnmatched(unmatched, invalid); // also re-renders the whole tree
+}
+
+// Makes `rec` (or nothing, for null) the field that colors parent file
+// p's streamlines, then rebuilds the streamline mesh. At most one field
+// per geometry file; files without one keep the global LINE·COLOR mode.
+function setActiveField(p, rec) {
+  p.activeField = rec;
+  if (rec) { activeFieldValues(rec); writeFieldColormapRow(p); } // not mid-rebuild
+  rebuildDqzChildItems();          // radio states
+  updateProbe();
+}
+
+// Colormap row for geometry file p (row = its index in trckParents), from
+// its active field: the legend's colors when it has one (see
+// parseFieldLegend), else jet. Unused texels of a legend row, and texel
+// COLORMAP_SIZE-1 (codes not in the legend), are neutral gray.
+const LEGEND_FALLBACK_RGB = [0.5, 0.5, 0.5];
+function writeFieldColormapRow(p) {
+  const row = trckParents.indexOf(p), rec = p.activeField;
+  if (row < 0 || !rec) return;
+  if (rec.legend) {
+    const rgb = new Array(COLORMAP_SIZE).fill(LEGEND_FALLBACK_RGB);
+    rec.legend.entries.forEach((e, i) => { rgb[i] = e.rgb; });
+    setColormapRGB(lineColormapTex, rgb, row);
+  } else {
+    setColormap(lineColormapTex, 'jet', row);
+  }
+}
+
+// A field header's `legend` → { entries: [{value, name, rgb}], indexOf:
+// Map(value -> texel index) }, or null when there is no usable legend.
+// Entries are sorted by value and given texels 0, 1, 2, … (at most
+// COLORMAP_SIZE-1; the last texel is the "not in legend" fallback), so
+// codes of any dtype — negative, or above 255 — map onto one row.
+// Entries without a numeric value or a valid [r,g,b] color are skipped;
+// a missing name falls back to the code itself (per the spec).
+function parseFieldLegend(header) {
+  const L = header && header.legend;
+  if (!Array.isArray(L)) return null;
+  const seen = new Set(), entries = [];
+  for (const e of L) {
+    if (!e || !Number.isFinite(e.value) || seen.has(e.value)) continue;
+    const c = e.color;
+    if (!Array.isArray(c) || c.length !== 3 || !c.every(Number.isFinite)) continue;
+    seen.add(e.value);
+    entries.push({ value: e.value, name: typeof e.name === 'string' && e.name ? e.name : String(e.value),
+                   rgb: c.map(x => Math.max(0, Math.min(255, x)) / 255) });
+  }
+  if (!entries.length) return null;
+  entries.sort((a, b) => a.value - b.value);
+  if (entries.length > COLORMAP_SIZE - 1) {
+    console.warn(`legend has ${entries.length} entries; only the first ${COLORMAP_SIZE - 1} get their own color`);
+    entries.length = COLORMAP_SIZE - 1;
+  }
+  return { entries, indexOf: new Map(entries.map((e, i) => [e.value, i])) };
+}
+
+// A field's values normalized to [0,1] for colormap lookup, computed once
+// per record and cached: same layout as rec.parsed.values (per-vertex:
+// flat over all points, see parseDqzChild's offsets; per-streamline: one
+// per streamline). Also sets rec.legend and rec.categorical.
+//  - With a legend: each stored code maps to its legend entry's texel,
+//    t = texel / (COLORMAP_SIZE-1), so it hits that texel exactly;
+//    codes not in the legend get the fallback texel. Drawn categorical
+//    (no blending between neighbouring codes), whatever the kind.
+//  - Otherwise the range is the header's value_min/value_max when both
+//    are given — the generating scripts keep these identical across
+//    files, so the same color means the same value in every bundle —
+//    else the data's own finite min/max. kind "categorical" without a
+//    legend is spread over jet the same way, but still drawn categorical.
+// Non-finite values stay NaN (drawn in the global LINE·COLOR mode).
+function activeFieldValues(rec) {
+  if (rec.norm) return rec.norm;
+  const h = rec.header;
+  rec.legend = parseFieldLegend(h);
+  rec.categorical = !!rec.legend || h.kind === 'categorical';
+  if (rec.legend) {
+    const codes = rec.parsed.codes, idx = rec.legend.indexOf, fb = COLORMAP_SIZE - 1;
+    const norm = new Float32Array(codes.length);
+    for (let i = 0; i < codes.length; i++) {
+      const k = idx.get(codes[i]);
+      norm[i] = (k === undefined ? fb : k) / (COLORMAP_SIZE - 1);
+    }
+    rec.colorRange = null;
+    rec.norm = norm;
+    return norm;
+  }
+  const v = rec.parsed.values;
+  let lo, hi;
+  if (h.kind !== 'categorical' && Number.isFinite(h.value_min) && Number.isFinite(h.value_max) && h.value_max > h.value_min) {
+    lo = h.value_min; hi = h.value_max;
+  } else {
+    lo = Infinity; hi = -Infinity;
+    for (let i = 0; i < v.length; i++) { const x = v[i]; if (Number.isFinite(x)) { if (x < lo) lo = x; if (x > hi) hi = x; } }
+    if (lo > hi) { lo = 0; hi = 1; } // no finite values at all
+  }
+  const span = hi - lo;
+  const norm = new Float32Array(v.length);
+  for (let i = 0; i < v.length; i++) norm[i] = span > 0 ? (v[i] - lo) / span : 0.5;
+  rec.colorRange = [lo, hi];
+  rec.norm = norm;
+  return norm;
+}
+
+// fieldInfo for makeRibbonLines: perTract[i] for global streamline index
+// renderIds[i] — a zero-copy per-vertex subarray, a per-streamline
+// number, or null. Returns null (no field arrays at all) when no file has
+// an active field, the common case.
+function buildFieldInfo(renderIds) {
+  if (!trckParents.some(p => p.activeField)) return null;
+  // Signed row coordinate per geometry file (see FIELD_COLOR_GLSL):
+  // negative = categorical.
+  const rowV = trckParents.map((p, i) => p.activeField
+    ? (activeFieldValues(p.activeField), (p.activeField.categorical ? -1 : 1) * colormapRowV(lineColormapTex, i))
+    : 0);
+  const perTract = new Array(renderIds.length);
+  const perTractRow = new Float32Array(renderIds.length);
+  for (let k = 0; k < renderIds.length; k++) {
+    const gi = renderIds[k];
+    const pi = isBundle && streamlineBundleId ? streamlineBundleId[gi] : 0;
+    const p = trckParents[pi];
+    const rec = p && p.activeField;
+    if (!rec) { perTract[k] = null; continue; }
+    perTractRow[k] = rowV[pi];
+    const norm = activeFieldValues(rec);
+    const local = gi - p.firstStreamline;
+    if (rec.parsed.scope === 'per_vertex') {
+      const o = rec.parsed.offsets;
+      perTract[k] = norm.subarray(o[local], o[local + 1]);
+    } else {
+      perTract[k] = norm[local];
+    }
+  }
+  return { perTract, perTractRow, colormap: lineColormapTex };
+}
+
+function makeDqzFieldItem(rec) {
+  const h = rec.header;
+  const fi = new DataFieldItem(h && h.name ? h.name : rec.file.name, rec);
+  if (h) {
+    fi.tag = (h.scope === 'per_vertex' ? 'per-vertex' : 'per-streamline') + ' · ' + h.kind
+           + (parseFieldLegend(h) ? ' · legend' : '');
+    fi.tooltip = [h.name, h.description, rec.file.name].filter(Boolean).join('\n');
+  }
+  if (rec.reason) fi.tooltip = (fi.tooltip ? fi.tooltip + '\n' : '') + '⚠ ' + rec.reason;
+  else if (rec.status === 'matched') fi.tooltip = (fi.tooltip ? fi.tooltip + '\n' : '') + '(radio: color streamlines by this field; click again to turn off)';
+  fi.onMenu = () => showDqzChildHeaderPanel(rec);
+  return fi;
+}
+
+function showDqzChildHeaderPanel(rec) {
+  const { _dataOffset, ...header } = rec.header || {};
+  const info = { file: rec.file.name, status: rec.status };
+  if (rec.reason) info.reason = rec.reason;
+  if (rec.parent) info.parent_file = rec.parent.name;
+  if (rec.parsed && rec.status === 'matched') {
+    const v = rec.parsed.values;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < v.length; i++) { const x = v[i]; if (x < mn) mn = x; if (x > mx) mx = x; }
+    info.n_values = v.length;
+    if (v.length) info.decoded_range = [+mn.toPrecision(6), +mx.toPrecision(6)];
+    info.coloring = rec.parent.activeField === rec ? 'active' : 'off';
+    if (rec.legend) info.colored_by = 'legend (' + rec.legend.entries.length + ' entries)';
+    else if (rec.colorRange) { info.colored_by = 'jet'; info.colormap_range = rec.colorRange.map(x => +x.toPrecision(6)); }
+  }
+  showHeaderPanel('DATA FILE HEADER', JSON.stringify({ ...info, header }, null, 2));
 }
 
 function registerLutItem(filename) {

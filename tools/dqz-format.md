@@ -146,14 +146,24 @@ offset  size      contents
 - `divisor` — the quantization divisor used for every streamline in this
   file (127 unless a smaller value was explicitly requested).
 - `n_streamlines` — how many per-streamline records follow.
-- `uuid` — a randomly generated identifier (e.g. UUIDv4) for this specific
-  file. Optional, but strongly recommended: it is what lets a *child* data
+- `uuid` — an opaque string identifying the streamline set this file
+  encodes. Optional, but strongly recommended: it is what lets a *child* data
   file (see [Per-vertex and per-streamline data files](#per-vertex-and-per-streamline-data-files-dqz-children)
   below) verify it was generated against this exact `.dqz`, and what lets a
   viewer auto-apply per-vertex or per-streamline data dropped in alongside
-  it. `uuid` is not derived from the file's contents — copying a `.dqz`
-  file preserves its `uuid` unchanged — it only distinguishes one encode
-  from another. `parent` is a reserved header key used exclusively by
+  it. When the source `.tck` has a `timestamp` header field, the encoder
+  sets `uuid` to that timestamp, verbatim as a string: MRtrix copies the
+  same timestamp into every `.tsf` it derives from that `.tck`, so a
+  child converted from a `.tsf` can name its parent without any extra
+  bookkeeping. When the `.tck` has no timestamp, the encoder writes no
+  `uuid`; the tool that creates the first child for the file adds one
+  to the geometry file's header (the `.tsf`'s timestamp if it has one,
+  otherwise a random identifier such as a UUIDv4), as
+  `tsf_to_dqz.py --parent-dqz` does.
+  Despite the name, the value need not be a UUID; decoders compare it as
+  an exact string and must not validate its form. `uuid` is not derived
+  from the file's contents — copying a `.dqz` file preserves its `uuid`
+  unchanged. `parent` is a reserved header key used exclusively by
   child data files to reference this field; a plain geometry `.dqz` never
   has a `parent` field itself.
 - `source_header` — the custom fields carried by the original `.tck`
@@ -245,10 +255,14 @@ offset  size      contents
 }
 ```
 
-- `parent` — the `uuid` of the `.dqz` geometry file this data belongs to.
-  The one reserved header key across the whole `.dqz` family: a plain
-  geometry `.dqz` never has a `parent` field, and any file that does is a
-  child, regardless of its name.
+- `parent` — the `uuid` of the `.dqz` geometry file this data belongs to
+  (for a child converted from a `.tsf`, that `.tsf`'s `timestamp`).
+  Required, and must be a non-empty string: per-streamline data without
+  the streamlines it describes has no meaning, so a child without a
+  parent is invalid and a decoder rejects it. The one reserved header key
+  across the whole `.dqz` family: a plain geometry `.dqz` never has a
+  `parent` field, and any file that does is a child, regardless of its
+  name.
 - `n_streamlines` — must match the parent's count; a cheap first
   consistency check before comparing `parent` against a loaded file's
   `uuid`.
@@ -261,10 +275,13 @@ offset  size      contents
     scaled (counts, indices).
   - `"scaled"` — the stored integer is a linear quantization of a
     continuous value: `value = value_min + (code / max_code) ×
-    (value_max − value_min)`, where `max_code` is `255` for `uint8`,
-    `65535` for `uint16`, and so on. `value_min`/`value_max` are
-    required. Not meaningful with `dtype: "float32"` — there's no byte
-    budget to save by scaling a value already stored at full width.
+    (value_max − value_min)`, where `max_code` is `255` for `uint8` and
+    `65535` for `uint16`. `value_min`/`value_max` are required. Only
+    `uint8` and `uint16` are allowed: with an explicit value range a
+    signed code adds nothing (the same number of bits covers the same
+    range) while making the code-to-value mapping easy to get wrong, and
+    `float32` has no byte budget to save by scaling. A decoder rejects
+    `"scaled"` with any other `dtype`.
   - `"categorical"` — the stored integer is a code, not a measurement;
     interpolating or averaging it is meaningless. `value_min`/`value_max`
     are not required and are typically omitted.
@@ -277,7 +294,8 @@ offset  size      contents
     `.tck`/`.dqz` files to begin with need no child file for this — the
     bundle membership is already the file.)
 - `dtype` — `"uint8"`, `"int8"`, `"uint16"`, `"int16"`, or `"float32"`.
-  Fixed for the whole file.
+  Fixed for the whole file. The signed types are for `"raw"` and
+  `"categorical"` data only (see `kind`).
 - `legend` — optional array of `{value, name, color}` entries (`color` as
   `[r, g, b]`, 0–255), mainly for `kind: "categorical"`. Partial or
   entirely absent legends are fine — a decoder falls back to the raw
@@ -293,8 +311,10 @@ mirroring the parent's own per-streamline records:
 ```
 size                    contents
 4 bytes                 n_points (uint32)
-                        — if n_points == 0, record ends here; must match
-                          the parent streamline's own n_points otherwise
+                        — must equal the parent streamline's own
+                          n_points (so it is 0, and the record ends here,
+                          exactly when the parent streamline is empty);
+                          a decoder rejects the whole file on any mismatch
 n_points × elem_size    values, one per vertex, in the file's dtype
 ```
 

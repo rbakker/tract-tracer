@@ -1406,10 +1406,44 @@ export function makePlaneMesh(planeKey, vr, viewCentre) {
 // as "lit fiber" rather than flat color, but it is NOT the same as true
 // roundness — a real round-tube look needs actual cross-section shading
 // (true cylinder geometry), which even the ribbon doesn't have.
+// ── Data-field coloring, shared by LINE_FS and slab-renderer.js's SLAB_FS ──
+// Per segment (instanceField attribute, see makeRibbonLines):
+//   x, y = field value at the segment's start / end, normalized to [0,1]
+//   z    = which colormap row, as the texture's v coordinate of that row's
+//          centre; SIGN = mode: > 0 continuous (interpolate along the
+//          segment, linear colormap lookup), < 0 categorical (no
+//          interpolation: each half of the segment takes its own end's
+//          code, looked up at an exact texel centre so neighbouring
+//          categories never blend), 0 = no field (keep u_autoColor color).
+// A vertex shader using this passes vFieldSE = instanceField.xy,
+// vSegPos = position.y, vFieldRow = instanceField.z.
+export const FIELD_COLOR_GLSL = `
+vec3 applyFieldColor(vec3 base) {
+  if (abs(vFieldRow) < 1e-5) return base;
+  float n = float(COLORMAP_SIZE);
+  float u;
+  if (vFieldRow < 0.0) {
+    float t = vSegPos < 0.5 ? vFieldSE.x : vFieldSE.y;
+    u = (floor(clamp(t, 0.0, 1.0) * (n - 1.0) + 0.5) + 0.5) / n;
+  } else {
+    float t = mix(vFieldSE.x, vFieldSE.y, vSegPos);
+    // texel centres: t=0 -> first texel's centre, t=1 -> last's
+    u = (clamp(t, 0.0, 1.0) * (n - 1.0) + 0.5) / n;
+  }
+  return texture2D(u_colormap, vec2(u, abs(vFieldRow))).rgb;
+}
+`;
+
 export const LINE_FS = `
 precision highp float;
 varying vec3  vColor;
 varying vec3  vBundleColor;
+// Data-field coloring (.dqz child files) — see FIELD_COLOR_GLSL.
+varying vec2  vFieldSE;
+varying float vSegPos;
+varying float vFieldRow;
+uniform sampler2D u_colormap;
+` + FIELD_COLOR_GLSL + `
 varying vec3  vTangent;
 varying vec3  vWorldPos;
 uniform vec3  u_lightDir;
@@ -1437,6 +1471,7 @@ uniform int   u_depthAttenEnabled;
 uniform float u_reflectance; // 0 = flat base color, 1 = normal strength, >1 exaggerated
 void main() {
   vec3 base = (u_autoColor == 1) ? vColor : ((u_autoColor == 2) ? vBundleColor : u_lineColor);
+  base = applyFieldColor(base);
   vec3 T = normalize(vTangent);
   vec3 L = normalize(u_lightDir);
   vec3 V = normalize(cameraPosition - vWorldPos);
@@ -1600,6 +1635,9 @@ attribute vec3 instanceColor;
 // default color the uniform picker would use; only consulted when
 // u_autoColor==2 selects it below.
 attribute vec3 instanceBundleColor;
+// Data-field value per segment — see FIELD_COLOR_GLSL for x/y/z.
+// All zeros when no field is active.
+attribute vec3 instanceField;
 // The shared per-instance template quad's own attribute, reusing the
 // built-in "position" rather than adding a redundant custom one:
 // position.x = SIDE (-1/+1, which edge of the ribbon this corner is on),
@@ -1613,11 +1651,17 @@ uniform vec3  u_depthTarget;
 uniform float u_depthRadius;
 varying vec3  vColor;
 varying vec3  vBundleColor;
+varying vec2  vFieldSE;
+varying float vSegPos;
+varying float vFieldRow;
 varying vec3  vTangent;
 varying vec3  vWorldPos;
 void main() {
   vColor       = instanceColor;
   vBundleColor = instanceBundleColor;
+  vFieldSE     = instanceField.xy;
+  vSegPos      = position.y;
+  vFieldRow    = instanceField.z;
   vTangent = normalize(mat3(modelMatrix) * instanceTangent);
 
   vec4 worldStart = modelMatrix * vec4(instanceStart, 1.0);
@@ -1672,12 +1716,16 @@ void main() {
   gl_Position = clip;
 }`;
 
-export function makeRibbonMaterial() {
+export function makeRibbonMaterial(colormapTex = null) {
   return new THREE.ShaderMaterial({
     vertexShader:   RIBBON_VS,
     fragmentShader: LINE_FS,
+    defines: { COLORMAP_SIZE: COLORMAP_SIZE },
     uniforms: {
       ...sharedLineUniforms(),
+      // Shared BY REFERENCE across every rebuilt ribbon mesh (see
+      // makeColormapTexture) — never disposed with the material.
+      u_colormap:     { value: colormapTex || defaultColormapTexture() },
       u_resolution:   { value: new THREE.Vector2(1, 1) },
       u_widthNearPx:  { value: 3.0 },
       u_widthFarPx:   { value: 1.0 },
@@ -1688,6 +1736,80 @@ export function makeRibbonMaterial() {
     // ribbon from one side rather than something worth debugging by eye.
     side: THREE.DoubleSide,
   });
+}
+
+// ── Colormaps (data-field coloring) ─────────────────────────────────────
+// A colormap texture is COLORMAP_SIZE wide and one ROW per colormap:
+// index.html gives every loaded streamline file its own row (so each
+// file's active field can have its own map or legend), capped at
+// MAX_COLORMAP_ROWS. It's kept as a texture (not baked into per-vertex
+// colors) so it can be swapped on the fly: setColormap()/setColormapRGB()
+// rewrite one row in place and every mesh holding the texture picks the
+// change up on its next render, with no geometry rebuild. Values are raw [0,1] display values, same convention
+// as hexToRgbRaw below (no sRGB<->linear conversion: the texture's
+// colorSpace stays NoColorSpace, and LINE_FS never re-encodes on output).
+export const COLORMAP_SIZE = 256;
+export const MAX_COLORMAP_ROWS = 256;
+
+// name -> (t in [0,1]) => [r,g,b] in [0,1]. Only 'jet' for now; add
+// entries here (or a legend-derived table via setColormapRGB) later.
+export const COLORMAPS = {
+  // MATLAB-style jet: dark blue -> blue -> cyan -> yellow -> red -> dark red.
+  jet: t => {
+    const c = x => Math.min(1, Math.max(0, x));
+    return [c(1.5 - Math.abs(4 * t - 3)), c(1.5 - Math.abs(4 * t - 2)), c(1.5 - Math.abs(4 * t - 1))];
+  },
+};
+
+// Every row starts as `name`. Linear filtering along a row (smooth
+// continuous maps); rows never bleed into each other because lookups
+// always hit a row's centre (see colormapRowV) and filtering between
+// texel centres of the same row only.
+export function makeColormapTexture(name = 'jet', rows = 1) {
+  if (rows < 1 || rows > MAX_COLORMAP_ROWS) throw `colormap rows must be 1..${MAX_COLORMAP_ROWS}`;
+  const data = new Uint8Array(COLORMAP_SIZE * rows * 4);
+  const tex = new THREE.DataTexture(data, COLORMAP_SIZE, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.generateMipmaps = false;
+  for (let r = 0; r < rows; r++) setColormap(tex, name, r);
+  return tex;
+}
+
+// v texture coordinate of a row's centre — what makeRibbonLines' fieldInfo
+// .perTractRow carries (negated for categorical, see FIELD_COLOR_GLSL).
+export function colormapRowV(tex, row) {
+  return (row + 0.5) / tex.image.height;
+}
+
+// Rewrites one row of a colormap texture in place (named colormap).
+export function setColormap(tex, name, row = 0) {
+  const fn = COLORMAPS[name];
+  if (!fn) throw `unknown colormap "${name}"`;
+  const rgb = new Array(COLORMAP_SIZE);
+  for (let i = 0; i < COLORMAP_SIZE; i++) rgb[i] = fn(i / (COLORMAP_SIZE - 1));
+  setColormapRGB(tex, rgb, row);
+}
+
+// Rewrites one row of a colormap texture in place from COLORMAP_SIZE
+// [r,g,b] entries in [0,1] — the hook for custom and legend-derived maps.
+export function setColormapRGB(tex, rgb, row = 0) {
+  const d = tex.image.data;
+  const o = row * COLORMAP_SIZE * 4;
+  for (let i = 0; i < COLORMAP_SIZE; i++) {
+    const [r, g, b] = rgb[i];
+    d[o+4*i]   = Math.round(r * 255);
+    d[o+4*i+1] = Math.round(g * 255);
+    d[o+4*i+2] = Math.round(b * 255);
+    d[o+4*i+3] = 255;
+  }
+  tex.needsUpdate = true;
+}
+
+let _defaultColormapTex = null;
+function defaultColormapTexture() {
+  return _defaultColormapTex || (_defaultColormapTex = makeColormapTexture('jet'));
 }
 
 // bundleInfo (optional): { idPerStreamline: Int32Array|null, palette: [r,g,b][] }
@@ -1720,7 +1842,16 @@ export function hexToRgbRaw(hex) {
   return [ ((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255 ];
 }
 
-export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bundleInfo = null) {
+// fieldInfo (optional): { perTract: Array, perTractRow: Float32Array,
+// colormap: DataTexture|null } —
+// perTract[i] is the data-field value for tracts[i], ALREADY normalized
+// to [0,1]: a Float32Array with one value per point (per-vertex field),
+// a single number (per-streamline field), or null (no active field for
+// this streamline: it keeps the global LINE·COLOR mode). A non-finite
+// value (NaN) also means "no value" for the segments touching it.
+// perTractRow[i] is that streamline's colormap row as colormapRowV(),
+// negated for a categorical field (see FIELD_COLOR_GLSL).
+export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bundleInfo = null, fieldInfo = null) {
   let segCount = 0;
   for (const t of tracts) { const n = t.length / 3; if (n >= 2) segCount += n - 1; }
 
@@ -1729,6 +1860,9 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
   const instTan   = new Float32Array(segCount * 3);
   const instCol   = new Float32Array(segCount * 3);
   const instBCol  = new Float32Array(segCount * 3);
+  const instField = new Float32Array(segCount * 3); // zeros = no field
+  const perTract  = fieldInfo && fieldInfo.perTract;
+  const perRow    = fieldInfo && fieldInfo.perTractRow;
   let si = 0;
   for (let ti2 = 0; ti2 < tracts.length; ti2++) {
     const t = tracts[ti2];
@@ -1738,6 +1872,10 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
       const pal = bundleInfo.palette[bundleInfo.idPerStreamline[ti2]];
       if (pal) bc = pal;
     }
+    const fv = perTract ? perTract[ti2] : null;
+    const fRow = perRow ? perRow[ti2] : 0;
+    const fvIsArray = fv != null && typeof fv !== 'number';
+    const fvConstOk = typeof fv === 'number' && Number.isFinite(fv);
     for (let i = 0; i < n - 1; i++) {
       const x0 = t[3*i], y0 = t[3*i+1], z0 = t[3*i+2];
       const x1 = t[3*i+3], y1 = t[3*i+4], z1 = t[3*i+5];
@@ -1752,6 +1890,14 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
       instBCol[3*si]   = bc[0];
       instBCol[3*si+1] = bc[1];
       instBCol[3*si+2] = bc[2];
+      if (fvIsArray) {
+        const a = fv[i], b = fv[i + 1];
+        if (Number.isFinite(a) && Number.isFinite(b)) {
+          instField[3*si] = a; instField[3*si+1] = b; instField[3*si+2] = fRow;
+        }
+      } else if (fvConstOk) {
+        instField[3*si] = fv; instField[3*si+1] = fv; instField[3*si+2] = fRow;
+      }
       si++;
     }
   }
@@ -1776,9 +1922,10 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
   geo.setAttribute('instanceTangent', new THREE.InstancedBufferAttribute(instTan,   3));
   geo.setAttribute('instanceColor',   new THREE.InstancedBufferAttribute(instCol,   3));
   geo.setAttribute('instanceBundleColor', new THREE.InstancedBufferAttribute(instBCol, 3));
+  geo.setAttribute('instanceField', new THREE.InstancedBufferAttribute(instField, 3));
   geo.instanceCount = si;
 
-  const material = makeRibbonMaterial();
+  const material = makeRibbonMaterial(fieldInfo && fieldInfo.colormap);
   material.uniforms.u_widthNearPx.value = widthNearPx;
   material.uniforms.u_widthFarPx.value  = widthFarPx;
 

@@ -17,7 +17,7 @@
 
 class LoadedItem {
   constructor(kind, label) {
-    this.kind = kind;     // 'anat' | 'trck' | 'bundle' | 'lut'
+    this.kind = kind;     // 'anat' | 'trck' | 'bundle' | 'lut' | 'field' | 'group'
     this.label = label;   // filename / display name
     this.children = [];
     this.parent = null;
@@ -31,9 +31,21 @@ class LoadedItem {
     this.selectorType = 'checkbox';
     this.radioGroup = null;   // shared name string for a radio's siblings
     this.selected = false;    // radio state, independent of `visible`
+    this.radioDeselectable = false; // clicking the already-selected radio
+                                    // de-selects it (onSelect fires again;
+                                    // the handler toggles) — for "at most
+                                    // one", as opposed to "exactly one" 
     this.checkboxDisabled = false; // greys out the checkbox (e.g. an
                                     // anatomy file not currently active,
                                     // so there's nothing to show/hide yet)
+                                    // selectorType 'none' = no selector at
+                                    // all (just a same-width spacer).
+
+    // Optional row decorations:
+    this.tag = null;      // short dim text after the label (e.g. 'per-vertex · scaled')
+    this.tooltip = null;  // row hover text; defaults to the label
+    this.dimmed = false;  // greyed-out row (e.g. an unmatched data file)
+    this.isError = false; // error-styled tag (e.g. an unreadable data file)
 
     // Wired up by the app after construction:
     this.onVisibilityChange = null; // (item, visible) => void
@@ -78,6 +90,32 @@ class BundleItem extends LoadedItem {
   }
 }
 
+// One .dqz child data file (a named per-vertex or per-streamline field).
+// Hangs under the tree item of the geometry file it belongs to — a
+// TractogramItem for a single-file load, or that file's BundleItem in a
+// bundle set — or, while it has no matching parent, under the store's
+// "unmatched" group (dimmed). `record` is the app's own bookkeeping
+// object for the file (header, parsed data, match status); this class
+// doesn't interpret it. A matched field gets a de-selectable radio (the
+// app sets selectorType/radioGroup): at most one field per geometry file
+// is the active one used to color its streamlines.
+class DataFieldItem extends LoadedItem {
+  constructor(label, record) {
+    super('field', label);
+    this.record = record;
+    this.selectorType = 'none';
+    this.radioDeselectable = true;
+  }
+}
+
+// A plain grouping row with no file of its own (e.g. "unmatched data").
+class DataGroupItem extends LoadedItem {
+  constructor(label) {
+    super('group', label);
+    this.selectorType = 'none';
+  }
+}
+
 class TractogramItem extends LoadedItem {
   constructor(label) { super('trck', label); }
 
@@ -101,19 +139,24 @@ class LoadedDataStore {
   constructor() {
     this.anatItems = [];
     this.types = { trck: null, lut: null };
+    this.unmatchedGroup = null; // DataGroupItem of not-yet-matched data files, or null
+    this.invalidGroup = null;   // DataGroupItem of unreadable data files, or null
     this.onChange = null; // () => void
   }
 
   setAnatItems(items) { this.anatItems = items; this._fire(); }
   setTrck(item) { this.types.trck = item; this._fire(); }
   setLut(item)  { this.types.lut  = item; this._fire(); }
+  setUnmatched(item, invalidItem = null) { this.unmatchedGroup = item; this.invalidGroup = invalidItem; this._fire(); }
+  // Children were added/removed below an existing root — re-render.
+  refresh() { this._fire(); }
 
   clearAnat() { this.anatItems = []; this._fire(); }
   clearTrck() { this.types.trck = null; this._fire(); }
   clearLut()  { this.types.lut  = null; this._fire(); }
 
   get roots() {
-    return [...this.anatItems, this.types.trck, this.types.lut].filter(Boolean);
+    return [...this.anatItems, this.types.trck, this.types.lut, this.unmatchedGroup, this.invalidGroup].filter(Boolean);
   }
 
   _fire() {
@@ -150,7 +193,7 @@ class DataTreeView {
     const wrap = document.createElement('div');
 
     const row = document.createElement('div');
-    row.className = 'dt-row' + (depth > 0 ? ' dt-sub' : '');
+    row.className = 'dt-row' + (depth > 0 ? ' dt-sub' : '') + (item.dimmed ? ' dt-dim' : '') + (item.isError ? ' dt-err' : '');
     row.style.paddingLeft = (8 + depth * 14) + 'px';
 
     const hasChildren = item.children.length > 0;
@@ -166,15 +209,30 @@ class DataTreeView {
     }
 
     let selector;
-    if (item.selectorType === 'radio') {
+    if (item.selectorType === 'none') {
+      selector = document.createElement('span');
+      selector.className = 'dt-noselect';
+    } else if (item.selectorType === 'radio') {
       selector = document.createElement('input');
       selector.type = 'radio';
       selector.className = 'dt-radio';
       selector.name = 'dt-radio-' + (item.radioGroup || 'default');
       selector.checked = !!item.selected;
-      selector.addEventListener('click', e => e.stopPropagation());
       selector.addEventListener('change', () => {
         if (item.onSelect) item.onSelect(item);
+      });
+      // A native radio can't be un-checked by clicking it (no 'change'
+      // fires), so for a de-selectable radio, remember whether it was
+      // already checked when the press started and handle that case here.
+      let wasChecked = false;
+      selector.addEventListener('pointerdown', () => { wasChecked = selector.checked; });
+      selector.addEventListener('click', e => {
+        e.stopPropagation();
+        if (item.radioDeselectable && wasChecked) {
+          selector.checked = false;
+          if (item.onSelect) item.onSelect(item);
+        }
+        wasChecked = false;
       });
     } else {
       selector = document.createElement('input');
@@ -207,7 +265,14 @@ class DataTreeView {
     const label = document.createElement('span');
     label.className = 'dt-label';
     label.textContent = item.label;
-    label.title = item.label;
+    label.title = item.tooltip || item.label;
+
+    let tag = null;
+    if (item.tag) {
+      tag = document.createElement('span');
+      tag.className = 'dt-tag';
+      tag.textContent = item.tag;
+    }
 
     const menuBtn = document.createElement('button');
     menuBtn.className = 'dt-menu-btn';
@@ -227,6 +292,7 @@ class DataTreeView {
     row.appendChild(selector);
     if (swatch) row.appendChild(swatch);
     row.appendChild(label);
+    if (tag) row.appendChild(tag);
     row.appendChild(menuBtn);
     wrap.appendChild(row);
 
@@ -237,4 +303,4 @@ class DataTreeView {
   }
 }
 
-export { LoadedItem, AnatomyItem, TractogramItem, BundleItem, LutItem, LoadedDataStore, DataTreeView };
+export { LoadedItem, AnatomyItem, TractogramItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView };
