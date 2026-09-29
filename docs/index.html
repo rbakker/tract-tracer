@@ -114,9 +114,13 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 #load-btn-main:hover{background:var(--accent);color:#04070a;}
 .data-tree{border:1px solid var(--border);margin-bottom:14px;min-height:36px;}
 .dt-empty{color:var(--dim);font-size:10px;letter-spacing:0.06em;padding:10px 12px;}
+/* Separator ABOVE each row (not below): every row sits in its own
+   wrapper div, so a :last-child rule on rows can't tell "last row of the
+   tree" from "row without expanded children". Only the tree's very first
+   row drops its separator. */
 .dt-row{display:flex;align-items:center;gap:6px;padding:5px 8px;
-  border-bottom:1px solid var(--border);}
-.dt-row:last-child{border-bottom:none;}
+  border-top:1px solid var(--border);}
+.dt-root > div:first-child > .dt-row{border-top:none;}
 .dt-row:hover{background:rgba(255,255,255,0.03);}
 .dt-caret{width:14px;flex:none;text-align:center;color:var(--dim);cursor:pointer;
   font-size:13px;line-height:1;user-select:none;
@@ -133,12 +137,62 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .dt-swatch::-moz-color-swatch{border:none;border-radius:1px;}
 .dt-swatch:hover{border-color:var(--accent);transform:scale(1.25);}
 .dt-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  color:var(--bright);font-size:10px;letter-spacing:0.03em;}
+  color:var(--bright);font-size:10px;letter-spacing:0.03em;
+  line-height:1.4;} /* room for underscores: overflow:hidden clipped them at the default line height */
 .dt-sub .dt-label{color:var(--text);}
-.dt-menu-btn{flex:none;background:none;border:none;color:var(--dim);font-size:12px;
-  cursor:pointer;padding:0 3px;font-family:inherit;}
-.dt-menu-btn:hover{color:var(--accent);}
-.dt-menu-btn:disabled{opacity:0.25;cursor:default;}
+/* category headings (Anatomy / Parcellations / Streamline bundles) */
+.dt-cat{cursor:pointer;background:rgba(255,255,255,0.025);}
+.dt-cat .dt-label{color:var(--accent);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;}
+/* a labelled <select> in a settings area ("show as", "attach to") */
+.dt-choice{display:flex;align-items:center;gap:6px;flex-basis:100%;min-width:0;}
+.dt-choice label{color:var(--dim);font-size:9px;letter-spacing:0.06em;white-space:nowrap;}
+.dt-choice select{min-width:0;max-width:100%;flex:1;}
+/* a streamline row's DATA list (its .dqz fields) */
+.dt-fields{flex-basis:100%;display:flex;flex-direction:column;gap:1px;margin-top:2px;}
+.dt-fields-title{color:var(--dim);font-size:9px;letter-spacing:0.1em;}
+.dt-field-line{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0;padding:1px 0;}
+.dt-field-line:hover .dt-field-name{color:var(--bright);}
+.dt-field-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--text);font-size:10px;line-height:1.4;}
+.dt-toolbar{gap:10px;cursor:default;}
+.dt-toolbar:hover{background:none;}
+.dt-toolbar-lbl{color:var(--dim);font-size:9px;letter-spacing:0.06em;margin-left:20px;}
+.ld-overlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.55);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.ld-box{background:var(--panel);border:1px solid var(--accent);width:min(440px,100%);
+  padding:14px 16px 12px;box-shadow:0 10px 40px rgba(0,0,0,0.6);}
+.ld-title{color:var(--accent);font-size:10px;letter-spacing:0.14em;margin-bottom:10px;}
+.ld-box p{color:var(--text);font-size:11px;line-height:1.6;margin:0 0 8px;word-break:break-word;}
+.ld-box p:first-of-type{color:var(--bright);}
+.ld-choice{margin:4px 0 8px;}
+.ld-btns{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.ld-btn{background:none;border:1px solid var(--border);color:var(--bright);font-family:inherit;
+  font-size:10px;letter-spacing:0.06em;padding:5px 12px;cursor:pointer;border-radius:2px;}
+.ld-btn:hover{border-color:var(--accent);}
+.ld-btn.ld-default{border-color:var(--accent);color:var(--accent);}
+.ld-btn:focus-visible{outline:1px solid var(--accent);outline-offset:2px;}
+.ld-btn.ld-cancel{color:var(--dim);margin-right:auto;order:-1;}
+.dt-toolbar{flex-wrap:wrap;}
+.dt-toolbar-choice{margin-left:20px;}
+.dt-note{flex-basis:100%;color:var(--dim);font-size:9px;line-height:1.5;}
+.dt-menu-btn{flex:none;width:16px;text-align:center;background:none;border:none;color:var(--dim);font-size:13px;
+  cursor:pointer;padding:0;font-family:inherit;line-height:1;transform:rotate(90deg);transition:transform 0.15s;}
+span.dt-menu-btn{cursor:default;}
+.dt-menu-btn.dt-open{transform:rotate(-90deg);color:var(--accent);}
+button.dt-menu-btn:hover{color:var(--accent);}
+.dt-settings{display:flex;flex-wrap:wrap;gap:4px 12px;padding:4px 8px 6px;
+  border-top:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);}
+.dt-set-btn{font-size:10px;letter-spacing:0.06em;}
+.dt-cmap{display:flex;align-items:center;gap:6px;flex-basis:100%;}
+.dt-cmap-lbl{color:var(--dim);font-size:9px;letter-spacing:0.06em;}
+.dt-settings .dt-slider-row{flex-basis:100%;margin:0;}
+.dt-settings .dt-slider-row label{min-width:72px;}
+.dt-settings .slider-val{min-width:58px;font-size:9px;color:var(--text);text-align:right;}
+.dt-cmap-swatch{flex:1;min-width:40px;height:9px;border-radius:2px;border:1px solid rgba(255,255,255,0.15);
+  /* gradient spans the border box and doesn't tile: the default (sized to
+     the padding box, repeating) showed the gradient's far end in the 1px
+     left border — a white pixel before a black-to-white ramp. */
+  background-origin:border-box;background-repeat:no-repeat;}
 .dt-noselect{flex:none;width:13px;margin:3px 3px 3px 4px;}
 .dt-tag{flex:none;color:var(--dim);font-size:9px;letter-spacing:0.04em;white-space:nowrap;}
 .dt-dim .dt-label,.dt-dim .dt-tag{opacity:0.45;}
@@ -407,9 +461,10 @@ input[type=file]{display:none;}
       <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.txt,.lut,.json,.zip">
     </div>
 
-    <!-- Collapsible tree of what's currently loaded, grouped by file
-         type, each row with an on/off checkbox and a stub hamburger
-         menu (real per-type menu design TBD — see js/loaded-data.js). -->
+    <!-- Collapsible tree of what's currently loaded, under three
+         category headings (Anatomy / Parcellations / Streamline
+         bundles), each row with its selector and an inline settings
+         toggle (see js/loaded-data.js). -->
     <div id="data-tree-root" class="data-tree"></div>
 
     <div class="cfg-section">EXPORT / SESSION</div>
@@ -747,8 +802,8 @@ import { parseLUT } from './js/lut-io.js';
 import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
          parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
-import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME } from './js/bundle-io.js';
-import { LoadedDataStore, AnatomyItem, TractogramItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView } from './js/loaded-data.js';
+import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
+import { LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton } from './js/loaded-data.js';
 import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
@@ -756,7 +811,9 @@ import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
          makeRibbonLines, makeEndpointDots, hexToRgbRaw, makeColormapTexture,
-         setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE } from './js/scene3d.js';
+         setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE,
+         BUILTIN_COLORMAPS, writeColormapRow, colormapCSSGradient,
+         makeFileStyleTexture, setFileStyle, setRibbonFaintMode } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
 
 'use strict';
@@ -823,13 +880,11 @@ const pipeline = [
 	const val = state.get('trck.file');
 	const isBundleDescriptor = val && val.__bundle;
     try {
-	  if (isBundleDescriptor) {
-		await loadTrckBundle(val);
-		state.set('trck.file', val.entries.length + ' bundle files');
-	  } else {
-		await loadTrck(val);
-		state.set('trck.file', val.name);
-	  }
+	  // A single file comes as a plain File; a bundle set (or a load
+	  // with mode 'add') as a descriptor — both go through the same loader.
+	  const desc = isBundleDescriptor ? val : { manifest: null, entries: [{ file: val, color: null, name: stripPathExt(val.name) }] };
+	  await loadTrckBundle(desc, desc.mode || 'replace');
+	  if (trckParents.length) state.set('trck.file', trckParents.length === 1 ? trckParents[0].name : trckParents.length + ' files');
 	} catch(e) {
 	  alert('Error loading tractogram from "'+(isBundleDescriptor ? 'bundle set' : val)+'"');
 	  console.error(e.stack || e)
@@ -990,6 +1045,9 @@ let tgtStyle  = readColorState('tgt-color-picker',  'flat');
 // file's colormap later = rewrite its row + a redraw, no geometry rebuild.
 const MAX_TRACT_FILES = MAX_COLORMAP_ROWS;
 const lineColormapTex = makeColormapTexture('jet', MAX_TRACT_FILES);
+// Per streamline file: [width px, opacity, field window lo, hi] — one
+// texel per file, same index as its colormap row (see writeFileStyles).
+const fileStyleTex = makeFileStyleTexture(MAX_TRACT_FILES);
 
 let pitch=0, yaw=0, roll=0;
 const vr = new VolRenderer();
@@ -1149,7 +1207,10 @@ function drawSlice(planeKey, tag) {
 	  // to nothing on a thin slab — EXCEPT at exactly 0, which must stay
 	  // 0 so WIDTH=0 (lines off) hides the 2D lines too, not just the 3D
 	  // ones (slab-renderer.js gates visibility on this value being > 0).
-	  lineWidthPx2D: lineWidthPx === 0 ? 0 : Math.max(1, lineWidthPx / 2),
+	  // Per-file widths come from fileStyleTex now; this only gates "any
+	  // lines at all" (slab-renderer.js skips its line passes at 0).
+	  lineWidthPx2D: anyLineWidth() > 0 ? 1 : 0,
+	  hasFaint: anyFaint(),
 	};
 	const viewCentre = state.get(tag+'.view.'+planeKey);
 	slabRenderer.render(cvs, planeKey, cursor, tag, vr, state.get('anat.vox_mm'), viewCentre, slabOpts);
@@ -2137,7 +2198,11 @@ function updateProbe(){
   // selMesh.material is now a compiled ShaderMaterial (one WebGL program
   // per instance) rather than the old shared-style LineBasicMaterial, so
   // it's worth disposing explicitly here too, not just the geometry.
-  if(selMesh){scene.remove(selMesh);selMesh.geometry.dispose();selMesh.material.dispose();selMesh=null;}
+  // Geometry only: the two streamline materials are kept for the whole
+  // session and handed back to makeRibbonLines (see ribbonMaterials) —
+  // disposing them made three.js recompile both shader programs on every
+  // rebuild, i.e. on every load step and bundle toggle.
+  if(selMesh){ scene.remove(selMesh); selMesh.geometry.dispose(); selMesh=null; }
   if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
   if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
   let ids;
@@ -2179,7 +2244,7 @@ function updateProbe(){
   // streamline whose bundle is currently toggled off, before the
   // thinning/rendering step below. Must stay index-aligned with
   // probedEnds (built in lock-step with ids above) when present.
-  if (isBundle && streamlineBundleId && hiddenBundleIndices.size) {
+  if (streamlineBundleId && hiddenBundleIndices.size) {
     if (probedEnds) {
       const keptIds = [], keptEnds = [];
       ids.forEach((id, idx) => {
@@ -2212,9 +2277,17 @@ function updateProbe(){
   _lastBundleInfo = renderBundleIds ? { idPerStreamline: renderBundleIds, palette: bundlePaletteRGB } : null;
   // Data-field coloring: for every rendered streamline whose geometry
   // file has an active .dqz data field, its normalized values (see
-  // activeFieldValues) — null for the rest, which keep LINE·COLOR.
+  // fieldNormValues) — null for the rest, which keep LINE·COLOR.
   const renderIds = isThinned ? renderPos.map(p => ids[p]) : ids;
   const fieldInfo = buildFieldInfo(renderIds);
+  // Which streamline file each rendered streamline belongs to — its row in
+  // fileStyleTex (width, opacity, field window).
+  writeFileStyles();
+  const styleInfo = {
+    tex: fileStyleTex,
+    fileIndex: Float32Array.from(renderIds, gi => streamlineBundleId ? streamlineBundleId[gi] : 0), // group (bundle) index
+    materials: ribbonMaterials,
+  };
 
   let selText=ids.length?ids.length.toLocaleString()+' selected':'';
   if (isThinned) selText += ' · ' + renderStreamlines.length.toLocaleString() + ' rendered';
@@ -2228,7 +2301,9 @@ function updateProbe(){
     else idxBtn.classList.add('disabled');
   }
   if(ids.length){
-    selMesh = makeRibbonLines(renderStreamlines, lineWidthPx, 0.5, _lastBundleInfo, fieldInfo);
+    selMesh = makeRibbonLines(renderStreamlines, lineWidthPx, 0.5, _lastBundleInfo, fieldInfo, styleInfo);
+    ribbonMaterials = { opaque: selMesh.material, faint: selMesh.faintMesh.material };
+    setRibbonFaintMode(selMesh, anyFaint());
     // Sync to the current LIGHT slider position immediately — otherwise a
     // freshly-rebuilt selMesh starts back at the default CENTER light
     // until the slider is next touched.
@@ -2250,6 +2325,15 @@ function updateProbe(){
   updateSlicesA(); updateSlicesB();
 }
 
+// Coalesces several updateProbe() requests made in the same task (e.g.
+// one per bundle when the bundle-set row is toggled) into a single call.
+let _probeUpdateQueued = false;
+function scheduleUpdateProbe() {
+  if (_probeUpdateQueued) return;
+  _probeUpdateQueued = true;
+  queueMicrotask(() => { _probeUpdateQueued = false; updateProbe(); });
+}
+
 function rebuildDots() {
   if (!renderStreamlines || !renderStreamlines.length) return;
   if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
@@ -2267,7 +2351,7 @@ function updateScene3d() {
   // ── Lines ──────────────────────────────────────────────
   // Visibility is WIDTH-gated now (0 = hidden), not a color-mode 'hide' —
   // see the LINE·COLOR radio, which no longer has a None option.
-  if (lineWidthPx > 0 && selMesh) {
+  if (anyLineWidth() > 0 && selMesh) {
     // selMesh's material is the shaded ShaderMaterial from
     // makeRibbonMaterial (scene3d.js) — same u_autoColor/u_lineColor
     // pattern the endpoint-dots shader already uses below. u_autoColor:
@@ -2332,9 +2416,9 @@ function saveTck(){
   // span streamlines from several original files with no per-streamline
   // record of which one. Good enough for V1; flag to the user rather than
   // silently guessing wrong.
-  const headerForExport = isBundle ? (trckHeader.files && trckHeader.files[0] && trckHeader.files[0].header) : trckHeader;
+  const headerForExport = trckHeader.files && trckHeader.files[0] && trckHeader.files[0].header;
   if (!headerForExport) { alert('No usable header to export with.'); return; }
-  if (isBundle && trckHeader.files.length > 1) {
+  if (trckHeader.files.length > 1) {
     if (!confirm(`This selection may span ${trckHeader.files.length} bundle files. Export will use "${trckHeader.files[0].name}"'s header for all of it — continue?`)) return;
   }
   const [cx,cy,cz]=state.get('src.cursor');
@@ -2409,51 +2493,201 @@ function initCamera(cx, cy, cz, volRadius=0, boxRadius=0) {
   controls.update();
 }
 
-// Anatomy candidates from the most recent load. Length 1 in the common
-// case (a single file dropped/picked, or a zip/multi-file drop that only
-// contained one anatomy file) — length >1 only when a zip or multi-file
-// drop delivered several anatomy files together, in which case they're
-// all listed in the FILE panel with a radio selector (see
-// registerAnatGroupItems) and only anatGroup[anatActiveIndex] is
-// actually loaded into the renderer at a time. A later single-file
-// load always replaces this array outright (see dispatchOpenedFiles).
-let anatGroup = [], anatActiveIndex = 0;
+// ── Volumes and lookup tables ─────────────────────────────
+// Every volume loaded so far, in load order. Volumes accumulate across
+// drops (a file with the same name as one already listed replaces it);
+// only activeVolume is actually in the renderer (radio select in the FILE
+// panel). Each volume is sorted into a category, shown as a FILE-panel
+// heading:
+//   'anatomy'      — anything that isn't a label volume
+//   'parcellation' — a label volume; shown in Label mode with its lookup
+//                    table (vol.lut), or automatic colors without one
+//   null           — not classified yet (listed under Anatomy meanwhile)
+// The category comes from, in order: the manifest's "type" ("label" =
+// parcellation), a lookup table attached to it, the user ("show as"), or
+// sniffing the voxel values (looksLikeParcellation) — for the volume being
+// loaded right away, for the others in the background, one at a time.
+// A lookup table record {file, name, map, maxIndex, volume} belongs to at
+// most one volume (see attachLut); `luts` also holds unattached ones,
+// which are listed under Parcellations with an "attach to" choice.
+let volumes = [], activeVolume = null, luts = [];
+
+function volumeBaseName(name) { return name.replace(/\.(nii\.gz|nii|mif\.gz|mif|webm)$/i, ''); }
+function lutBaseName(name)    { return name.replace(/\.(txt|lut)$/i, ''); }
+const isWebmName = name => /\.webm$/i.test(name);
+
+function makeVolume(file, { label = null, category = null, source = null } = {}) {
+  // .webm volumes are always RGB anatomy (nothing to sniff).
+  if (category == null && isWebmName(file.name)) { category = 'anatomy'; source = 'format'; }
+  return { file, label: label || file.name, category, categorySource: source,
+           lut: null, isColor: false, autoLut: null, uiSettingsOpen: false };
+}
+
+// Adds volumes to the list; one with the same file name as a listed
+// volume replaces it (and inherits its lookup table unless it has its own).
+function addVolumes(newVols) {
+  for (const v of newVols) {
+    const old = volumes.find(o => o.file.name === v.file.name);
+    if (old) {
+      if (old.lut && !v.lut) { const l = old.lut; old.lut = null; l.volume = null; attachLut(l, v); }
+      if (old.lut) { old.lut.volume = null; old.lut = null; }
+      volumes = volumes.filter(o => o !== old);
+      if (activeVolume === old) activeVolume = null;
+    }
+    volumes.push(v);
+  }
+}
+
+// The volume record for a file about to be loaded — found by identity or
+// name, or created (loads that don't come through dispatchOpenedFiles,
+// e.g. the demo loader).
+function volumeForFile(f) {
+  let v = volumes.find(o => o.file === f) || volumes.find(o => o.file.name === f.name);
+  if (!v) { v = makeVolume(f); addVolumes([v]); }
+  return v;
+}
+
+function attachLut(lut, vol) {
+  if (lut.volume) lut.volume.lut = null;
+  if (vol.lut && vol.lut !== lut) vol.lut.volume = null; // the volume's previous table becomes unattached
+  lut.volume = vol; vol.lut = lut;
+  vol.category = 'parcellation'; vol.categorySource = 'lut';
+}
+function detachLut(lut) {
+  if (lut.volume) lut.volume.lut = null;
+  lut.volume = null;
+}
+
+async function readLutFile(file) {
+  const { map, maxIndex } = await parseLUT(file);
+  const lut = { file, name: file.name, map, maxIndex, volume: null, uiSettingsOpen: false };
+  const old = luts.find(l => l.name === file.name);
+  if (old) { const v = old.volume; detachLut(old); luts = luts.filter(l => l !== old); if (v) attachLut(lut, v); }
+  luts.push(lut);
+  return lut;
+}
+
+// Does this volume hold labels (a parcellation/segmentation) rather than
+// intensities? Looks at up to 100,000 randomly sampled voxels (all of them
+// for a small volume), so it costs a few ms whatever the volume's size:
+//  - every sampled value must be a whole number,
+//  - at least 2 and at most 5,000 distinct non-zero values (a binary mask
+//    counts as anatomy),
+//  - and labels come in patches: for at least 75% of the non-zero samples
+//    the next voxel along the first axis has the same value. That's what
+//    separates labels from an integer-valued scan such as a uint8 T1,
+//    whose neighbouring voxels mostly differ.
+function looksLikeParcellation({ data, shape, channels }) {
+  if ((channels || 1) !== 1 || !data || !data.length) return false;
+  const n = data.length;
+  const samples = Math.min(100000, n);
+  const distinct = new Set();
+  let nonzero = 0, same = 0;
+  for (let k = 0; k < samples; k++) {
+    const i = samples === n ? k : Math.floor(Math.random() * n);
+    const v = data[i];
+    if (!Number.isInteger(v)) return false;
+    if (v === 0) continue;
+    nonzero++;
+    distinct.add(v);
+    if (distinct.size > 5000) return false;
+    if (data[i + 1 < n ? i + 1 : i - 1] === v) same++;
+  }
+  return distinct.size >= 2 && nonzero >= 50 && same >= 0.75 * nonzero;
+}
+
+async function parseVolumeFile(f) {
+  let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
+  if (ext == '.nii' || ext == '.nii.gz') return parseNifti(f);
+  if (ext == '.mif') return parseMif(f);
+  if (ext == '.webm') return parseWebm(f, { debugDumpFrame: 70 });
+  throw `Unsupported format ${ext}`;
+}
+
+// Classifies the volumes that aren't classified yet (and aren't being
+// loaded as the active one — loadAnat does that one itself), one at a
+// time after the active volume has finished loading, so it doesn't slow
+// that down. Each needs a full parse; nothing of it is kept.
+let _classifying = false, _loadingVolume = null;
+async function classifyPendingVolumes() {
+  if (_classifying) return;
+  _classifying = true;
+  try {
+    for (;;) {
+      const vol = volumes.find(v => v.category == null && v !== activeVolume && v !== _loadingVolume && !v.classifyFailed);
+      if (!vol) break;
+      await new Promise(r => setTimeout(r, 30)); // let the UI breathe between volumes
+      try {
+        const a = await parseVolumeFile(vol.file);
+        if (vol.category == null) { // may have been set meanwhile (LUT attached, "show as")
+          vol.isColor = (a.channels || 1) === 3;
+          vol.category = !vol.isColor && looksLikeParcellation(a) ? 'parcellation' : 'anatomy';
+          vol.categorySource = 'sniff';
+        }
+      } catch (e) {
+        console.warn('could not classify ' + vol.file.name, e);
+        vol.classifyFailed = true;
+        if (vol.category == null) { vol.category = 'anatomy'; vol.categorySource = 'error'; }
+      }
+      registerVolumeItems();
+    }
+  } finally { _classifying = false; }
+}
+
+// Makes the renderer's lookup table the active volume's: its own table,
+// or (lutMap = null) an automatic one made on demand by
+// ensureLutForSegmentation.
+function useVolumeLut(vol) {
+  if (vol && vol.lut) {
+    lutMap = vol.lut.map; lutMaxIndex = vol.lut.maxIndex; lutIsAutoGenerated = false;
+    vr.uploadLUT(lutMap, lutMaxIndex);
+  } else {
+    lutMap = null; lutMaxIndex = 0; lutIsAutoGenerated = false;
+  }
+}
+
+// After the active volume's category or lookup table changed (without
+// reloading it): Label mode for a parcellation, plain ANAT otherwise.
+function applyActiveVolumeDisplay() {
+  const vol = activeVolume;
+  if (!vol || !currentAnat) return;
+  useVolumeLut(vol);
+  if (vol.isColor) { registerVolumeItems(); return; }
+  setModality(vol.category === 'parcellation' ? 'seg' : 'anat');
+}
 
 async function loadAnat(f){
   const dzAnatP = document.getElementById('dz-anat-status');
   if (dzAnatP) { dzAnatP.textContent = 'loading…'; dzAnatP.className = 'is-loading'; }
   setProgress('reading '+f.name+'…'); await tick();
-  let [ baseName, ext ] = splitExt(f.name); ext = ext.toLowerCase();
+  const vol = volumeForFile(f);
+  _loadingVolume = vol;
   let anat;
-  if (ext == '.nii' || ext == '.nii.gz')  anat=await parseNifti(f);
-  else if (ext == '.mif') anat=await parseMif(f);
-  else if (ext == '.webm') anat=await parseWebm(f,{debugDumpFrame: 70});
-  else {
-      setProgress('Error.'); await tick();
-	  throw(`Unsupported format ${ext}`);
-  }
+  try { anat = await parseVolumeFile(f); }
+  catch (e) { setProgress('Error.'); await tick(); throw e; }
+  finally { if (_loadingVolume === vol) _loadingVolume = null; }
   const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels } = anat;
   loadedAnatRaw = data;
   loadedAnatShape = shape;
 
-  // An auto-generated LUT is specific to the PREVIOUS volume's actual
-  // label values and must not silently keep applying to this new one. A
-  // real user-loaded LUT is left alone — presumably meant to persist
-  // across files (e.g. the same FreeSurfer atlas LUT for several
-  // subjects).
-  resetAutoLutIfAny();
   const isColorData = channels === 3;
-  // Auto-pick MODALITY for the newly loaded volume: 3-channel data always
-  // means direction-encoded, scalar data is plain ANAT. Loading a volume
-  // never switches to Label (SEG) mode by itself, even if a LUT is
-  // already loaded: that only happens when a LUT is dropped on its own
-  // onto an already-loaded anatomy (see loadLUT), or when a manifest
-  // names a LUT for this volume (see registerAnatGroupItems). The LUT
-  // stays loaded, so the user can still pick Label mode by hand.
-  modality = isColorData ? 'dec' : 'anat';
+  vol.isColor = isColorData;
+  if (vol.category == null) {
+    vol.category = !isColorData && looksLikeParcellation(anat) ? 'parcellation' : 'anatomy';
+    vol.categorySource = 'sniff';
+  }
+  activeVolume = vol;
+  // The lookup table belongs to the volume: this one's own, or an
+  // automatic one (made below if needed).
+  useVolumeLut(vol);
+  // MODALITY for the newly loaded volume: 3-channel data is
+  // direction-encoded, a parcellation is shown in Label (SEG) mode, the
+  // rest in plain ANAT. The MODALITY control stays a manual override.
+  modality = isColorData ? 'dec' : vol.category === 'parcellation' ? 'seg' : 'anat';
   document.getElementById('modality-' + modality).checked = true;
   document.getElementById('modality-dec').disabled = !isColorData;
   document.getElementById('modality-seg').disabled = isColorData;
+  if (modality === 'seg') ensureLutForSegmentation(anat);
   vr.setApplyLUT(modality === 'seg');
   vr.setForceGray(modality === 'anat' && isColorData);
   updateLabelHud('src'); updateLabelHud('tgt');
@@ -2494,22 +2728,31 @@ async function loadAnat(f){
   checkShowHud();
   resizeAll();
   state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter });
-  registerAnatGroupItems();
+  registerVolumeItems();
   setProgress('');
   //updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
+  classifyPendingVolumes();
 }
 
 let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeader=null,trckFileName='tractogram';
-// Bundle-set tracking. allStreamlines stays ONE flat array (bundle files
-// are just concatenated into it, same as a single-file load) — GridIndex,
-// the probe, and slicing all work on it unmodified. streamlineBundleId is
-// the one new parallel piece: per-streamline index into bundlePaletteRGB.
-// null/false for a normal single-file load.
+// ── Streamlines: one tractogram, grouped into bundles ──
+// All loaded streamline files ("sources", trckParents) are concatenated
+// into ONE flat allStreamlines array — GridIndex, the probe and slicing
+// work on it unmodified. A bundle is simply a GROUP of those streamlines
+// (streamlineBundleId: per-streamline index into `groups`). Groups come
+// from the sources: each file is one group, unless it's split by one of
+// its per-streamline categorical .dqz fields (a bundle-assignment file,
+// e.g. from a clustering tool) — then each code of that field is a group,
+// named and colored by the field's legend. So 16 bundle .tck files, and
+// one whole-brain file + a 16-bundle assignment field, end up as the same
+// 16 groups. See regroupStreamlines.
+// isBundle: more than one group, or a split — i.e. groups are meaningful
+// and colored per bundle (LINE·COLOR etc. default to 'bundle').
 let isBundle=false, streamlineBundleId=null, bundlePaletteRGB=null, bundleNames=null, _lastBundleInfo=null;
-// Per-bundle on/off from the FILE panel's data tree — a set of hidden
-// bundle indices (into bundlePaletteRGB/streamlineBundleId), consulted
-// by updateProbe() when building the selection. Cleared on every fresh
-// tractogram load (see registerTrckItem).
+let groups = [];
+// Indices of groups switched off in the FILE panel, consulted by
+// updateProbe() when building the selection (rebuilt by regroupStreamlines
+// from each group's own `visible`).
 const hiddenBundleIndices = new Set();
 
 // Real bundle-palette hex colors now go through the same raw conversion
@@ -2591,26 +2834,19 @@ function autoGenerateLut(anat) {
   return { map, maxIndex };
 }
 
-// Makes sure a lutMap exists for SEGMENTATION display: keeps a real
-// user-loaded LUT as-is, generates one automatically otherwise. Safe to
-// call every time modality switches to 'seg' — a no-op once a suitable
-// map already exists.
+// Makes sure a lutMap exists for SEGMENTATION display: the active
+// volume's own lookup table if it has one (see useVolumeLut), otherwise
+// automatic colors, generated once per volume and kept on it. Safe to
+// call every time modality switches to 'seg' — a no-op once a map exists.
 function ensureLutForSegmentation(anat) {
-  if (lutMap && !lutIsAutoGenerated) return; // real LUT file already loaded — keep it
-  if (lutMap && lutIsAutoGenerated) return;  // already generated for the current anat — see resetAutoLut below
-  const { map, maxIndex } = autoGenerateLut(anat);
-  lutMap = map; lutMaxIndex = maxIndex; lutIsAutoGenerated = true;
-  vr.uploadLUT(map, maxIndex);
+  if (lutMap) return;
+  const vol = activeVolume; // loadAnat sets it before calling this
+  const auto = (vol && vol.autoLut) || autoGenerateLut(anat);
+  if (vol) vol.autoLut = auto;
+  lutMap = auto.map; lutMaxIndex = auto.maxIndex; lutIsAutoGenerated = true;
+  vr.uploadLUT(lutMap, lutMaxIndex);
   const dzLutP = document.getElementById('dz-lut-status');
-  if (dzLutP) { dzLutP.textContent = '✓ auto: ' + map.size.toLocaleString() + ' labels'; dzLutP.className = ''; }
-}
-// Called whenever a new anat volume loads — an auto-generated LUT is
-// specific to the PREVIOUS volume's actual label values, so it must not
-// silently keep applying to a new one. A real user-loaded LUT, by
-// contrast, is presumably meant to persist across files (e.g. a standard
-// FreeSurfer atlas LUT applied to several subjects), so that's left alone.
-function resetAutoLutIfAny() {
-  if (lutIsAutoGenerated) { lutMap = null; lutMaxIndex = 0; lutIsAutoGenerated = false; }
+  if (dzLutP) { dzLutP.textContent = '✓ auto: ' + lutMap.size.toLocaleString() + ' labels'; dzLutP.className = ''; }
 }
 
 // Sets MODALITY and pushes it through the whole rendering pipeline (2D
@@ -2629,31 +2865,6 @@ function setModality(newModality) {
   updateSlicesA(); updateSlicesB();
   updateLabelHud('src'); updateLabelHud('tgt');
   if (currentAnat) buildGlassBrainLocal(currentAnat);
-}
-
-async function loadLUT(f, { autoApply = true } = {}) {
-  const dzLutP = document.getElementById('dz-lut-status');
-  if (dzLutP) { dzLutP.textContent = 'loading…'; dzLutP.className = 'is-loading'; }
-  try {
-    const { map, maxIndex } = await parseLUT(f);
-    lutMap = map; lutMaxIndex = maxIndex; lutIsAutoGenerated = false;
-    vr.uploadLUT(map, maxIndex);
-    if (dzLutP) { dzLutP.textContent = '✓ '+map.size.toLocaleString()+' labels'; dzLutP.className = ''; }
-    // The ONE automatic route into Label (SEG) mode: a LUT dropped on its
-    // own (autoApply, i.e. a single-file drop — see dispatchOpenedFiles)
-    // AFTER an anatomy has loaded, and only for scalar data (SEG stays
-    // disabled for 3-channel/DEC data). A LUT arriving in a multi-file/
-    // zip drop, or before any anatomy, just gets loaded; loadAnat never
-    // switches to SEG on its own either. Manifest-claimed LUTs are applied
-    // separately (registerAnatGroupItems).
-    const isColorData = currentAnat && (currentAnat.channels || 1) === 3;
-    if (autoApply && currentAnat && !isColorData) setModality('seg');
-    registerLutItem(f.name);
-  } catch(e) {
-    alert('LUT error: '+e);
-    console.error(e.stack || e);
-    if (dzLutP) { dzLutP.textContent = 'drop or click'; dzLutP.className = ''; }
-  }
 }
 
 // Shows the region name under the src cursor when a LUT colormap is
@@ -2717,97 +2928,185 @@ function splitExt(fname) {
   return [base,ext]
 }
 
-async function loadTrck(f){
-  let [ baseName, ext ] = splitExt(f.name); ext = ext.toLowerCase();
-  trckFileName = baseName;
-  const dTrckP = document.getElementById('dz-trck-status');
-  if (dTrckP) { dTrckP.textContent = 'loading…'; dTrckP.className = 'is-loading'; }
-  setProgress(`parsing .${ext}…`); await tick();
-  let parsed;
-  try {
-	  parsed=( ext=='.tck' ? await parseTck(f) : ( ext=='.dqz' ? await parseDqz(f) : await parseTrk(f) ) )
-  } catch(e){
-	  alert(`${ext.toUpperCase()} error: `+e);if(dTrckP){dTrckP.textContent='drop or click';dTrckP.className=''}setProgress('');
-	  matchDqzChildren(); // a drop's data files still need placing (against whatever is still loaded)
-	  return;
-  }
-  trckHeader=parsed.header;
-  allStreamlines=parsed.streamlines; streamlineLookup=parsed.streamlineLookup;
-  trckParents = [{ name: f.name, uuid: parsed.header._dqz?.uuid ?? null, bundleIndex: null,
-                   firstStreamline: 0, streamlines: parsed.streamlines, item: null }];
-  isBundle=false; streamlineBundleId=null; bundlePaletteRGB=null; bundleNames=null;
-  await finishTrckLoad(dTrckP);
+async function parseStreamlineFile(f) {
+  let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
+  return ext=='.tck' ? parseTck(f) : ext=='.dqz' ? parseDqz(f) : parseTrk(f);
 }
 
-// Loads several .tck/.dqz/.trk files (dropped together, or unpacked from a
-// .zip) as one colored bundle set. descriptor: the { manifest, entries }
-// shape resolveBundleColors returns — entries[i] = { file, color, name }.
-// Streamlines from every file are concatenated into the SAME allStreamlines
-// array a single-file load would produce (GridIndex/probe/slicing don't
-// need to know bundles exist at all); streamlineBundleId is the one new
-// parallel array, giving each streamline's index into bundlePaletteRGB.
-async function loadTrckBundle(descriptor){
+// Loads streamline files — one, or a bundle set — as the tractogram
+// (mode 'replace') or appended to it (mode 'add'). descriptor: the
+// { manifest, entries } shape resolveBundleColors returns — entries[i] =
+// { file, color ('#rrggbb' or null), name }.
+async function loadTrckBundle(descriptor, mode = 'replace'){
   const { entries } = descriptor;
-  if (entries.length > MAX_TRACT_FILES) {
-    alert(`This drop has ${entries.length} streamline files; at most ${MAX_TRACT_FILES} can be loaded together.`);
-    return;
-  }
-  trckFileName = entries.length + (entries.length===1 ? ' file' : ' files');
+  const add = mode === 'add' && trckParents.length > 0;
   const dTrckP = document.getElementById('dz-trck-status');
   if (dTrckP) { dTrckP.textContent = 'loading…'; dTrckP.className = 'is-loading'; }
 
-  const perFileStreamlines = [];
-  const perFileHeaders = [];
-  const perFileBundleId = [];
-  for (let bi = 0; bi < entries.length; bi++) {
-    const f = entries[bi].file;
+  const parsedFiles = [];
+  for (const e of entries) {
+    const f = e.file;
     let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
     setProgress(`parsing ${f.name}…`); await tick();
-    let parsed;
     try {
-	  parsed=( ext=='.tck' ? await parseTck(f) : ( ext=='.dqz' ? await parseDqz(f) : await parseTrk(f) ) )
-    } catch(e) {
-      alert(`${ext.toUpperCase()} error in "${f.name}": `+e);
+      const parsed = await parseStreamlineFile(f);
+      parsedFiles.push({ entry: e, parsed });
+    } catch(err) {
+      alert(`${ext.toUpperCase()} error in "${f.name}": `+err);
       if (dTrckP) { dTrckP.textContent='drop or click'; dTrckP.className=''; }
       setProgress('');
       matchDqzChildren(); // a drop's data files still need placing (against whatever is still loaded)
       return;
     }
-    perFileStreamlines.push(parsed.streamlines);
-    perFileHeaders.push({ name: f.name, header: parsed.header });
-    perFileBundleId.push(bi);
+  }
+
+  const sources = add ? trckParents.slice() : [];
+  // A re-added file with the same name replaces the earlier copy.
+  for (const { entry } of parsedFiles) {
+    const i = sources.findIndex(p => p.name === entry.file.name);
+    if (i >= 0) sources.splice(i, 1);
+  }
+  for (const { entry, parsed } of parsedFiles) {
+    sources.push({ name: entry.file.name, label: entry.name || stripPathExt(entry.file.name),
+                   color: entry.color || null, header: parsed.header,
+                   uuid: parsed.header._dqz?.uuid ?? null, streamlines: parsed.streamlines,
+                   firstStreamline: 0, split: undefined });
+  }
+  if (!add) {
+    groups = []; // nothing to carry over
+    // Data files of the replaced streamlines go with them.
+    const old = new Set(trckParents);
+    dqzChildRecords = dqzChildRecords.filter(r => !(r.parent && old.has(r.parent)));
   }
 
   allStreamlines = [];
-  const bundleIdArr = [];
-  const lookupParts = [];
-  let lookupOffset = 0;
-  trckParents = [];
-  for (let bi = 0; bi < perFileStreamlines.length; bi++) {
-    const streams = perFileStreamlines[bi];
-    trckParents.push({ name: perFileHeaders[bi].name, uuid: perFileHeaders[bi].header._dqz?.uuid ?? null,
-                       bundleIndex: bi, firstStreamline: allStreamlines.length, streamlines: streams, item: null });
-    for (const t of streams) { allStreamlines.push(t); bundleIdArr.push(bi); }
+  for (const p of sources) {
+    p.firstStreamline = allStreamlines.length;
+    for (const t of p.streamlines) allStreamlines.push(t);
   }
+  trckParents = sources;
   // streamlineLookup maps a flat point index -> its streamline index,
-  // same convention parseTck/parseTrk already use — rebuild it fresh over
-  // the concatenated set rather than trying to splice the per-file ones.
+  // same convention parseTck/parseTrk use — rebuilt over the whole set.
   let totalPts = 0;
   for (const t of allStreamlines) totalPts += t.length / 3;
   streamlineLookup = new Int32Array(totalPts);
   { let pi = 0; for (let si = 0; si < allStreamlines.length; si++) { const np = allStreamlines[si].length/3; for (let k=0;k<np;k++) streamlineLookup[pi++] = si; } }
 
-  streamlineBundleId = Int32Array.from(bundleIdArr);
-  bundlePaletteRGB = entries.map(e => hexToRgbRaw(e.color));
-  // entries[i].name should already come pre-resolved with the right
-  // fallback (bundle-io.js's {file,color,name} shape) — this local
-  // fallback is just cheap insurance in case a name ever comes through
-  // empty, not a bet that bundle-io.js DOESN'T already handle it.
-  bundleNames = entries.map(e => e.name);
-  isBundle = true;
-  trckHeader = { indexJson: descriptor.manifest, files: perFileHeaders };
+  const manifest = add ? (trckHeader && trckHeader.indexJson) || null : descriptor.manifest || null;
+  trckHeader = { indexJson: manifest, files: sources.map(p => ({ name: p.name, header: p.header })) };
+  trckFileName = sources.length === 1 ? splitExt(sources[0].name)[0] : sources.length + ' files';
 
-  await finishTrckLoad(dTrckP);
+  const wasBundle = isBundle;
+  if (!regroupStreamlines()) { setProgress(''); return; }
+  await finishTrckLoad(dTrckP, { add, bundleModeChanged: isBundle !== wasBundle });
+}
+
+// Rebuilds `groups` and the per-streamline group index from trckParents
+// and each source's split field. Groups that still exist (same source,
+// same code) keep their object — and with it their on/off, color, width/
+// opacity and active data field. Returns false (and changes nothing) if
+// there would be more groups than the style/colormap textures have rows.
+function regroupStreamlines() {
+  const old = new Map(groups.map(g => [g.source.name + '\u0000' + (g.code ?? ''), g]));
+  const next = [];
+  const gid = new Int32Array(allStreamlines ? allStreamlines.length : 0);
+  for (const p of trckParents) {
+    const rec = p.split || null;
+    const n = p.streamlines.length;
+    if (!rec) {
+      const g = old.get(p.name + '\u0000') || { visible: true };
+      Object.assign(g, { source: p, code: null, name: p.label, sourceColor: p.color });
+      const k = next.push(g) - 1;
+      gid.fill(k, p.firstStreamline, p.firstStreamline + n);
+      continue;
+    }
+    // Split by a per-streamline categorical field: one group per code
+    // present, in legend order (codes missing from the legend last).
+    const codes = rec.parsed.codes, legend = fieldLegend(rec) || [];
+    const present = new Set(codes);
+    const ordered = [...legend.map(e => e.value).filter(v => present.has(v)),
+                     ...[...present].filter(v => !legend.some(e => e.value === v)).sort((a, b) => a - b)];
+    const index = new Map();
+    for (const code of ordered) {
+      const e = legend.find(l => l.value === code);
+      const g = old.get(p.name + '\u0000' + code) || { visible: true };
+      Object.assign(g, { source: p, code, name: e ? e.name : fieldName(rec) + ' ' + code,
+                         sourceColor: e ? rgbRawToHex(e.color.map(c => c / 255)) : null });
+      index.set(code, next.push(g) - 1);
+    }
+    for (let i = 0; i < n; i++) gid[p.firstStreamline + i] = index.get(codes[i]);
+  }
+  if (next.length > MAX_TRACT_FILES) {
+    alert(`That makes ${next.length} bundles; at most ${MAX_TRACT_FILES} can be shown together.`);
+    return false;
+  }
+  groups = next;
+  streamlineBundleId = gid;
+  isBundle = groups.length > 1 || groups.some(g => g.code !== null);
+  // Colors: a group's own (user-picked) color, else its file's/legend's,
+  // else one from the automatic palette.
+  const auto = autoBundlePalette(groups.length);
+  groups.forEach((g, i) => { if (!g.color) g.color = hexToRgbRaw(g.sourceColor || auto[i]); });
+  bundlePaletteRGB = groups.map(g => g.color);
+  bundleNames = groups.map(g => g.name);
+  hiddenBundleIndices.clear();
+  groups.forEach((g, i) => { if (!g.visible) hiddenBundleIndices.add(i); });
+  // An active field only colors streamlines of its own file.
+  for (const g of groups) if (g.activeField && g.activeField.parent !== g.source) g.activeField = null;
+  groups.forEach(g => { if (g.activeField) writeFieldColormapRow(g); });
+  return true;
+}
+
+// Splits source p by field rec (a matched per-streamline categorical
+// field of p), or undoes the split (rec null). userChoice: the user picked
+// this, so a default (see applyDefaultSplits) never overrides it again.
+function setSourceSplit(p, rec, userChoice = true) {
+  const prev = p.split;
+  p.split = rec || null;
+  if (userChoice) p.splitChosen = true;
+  const wasBundle = isBundle;
+  if (!regroupStreamlines()) { p.split = prev; regroupStreamlines(); return; }
+  if (isBundle !== wasBundle) applyColorDefaultsForLoad();
+  registerTrckItem();
+  updateProbe();
+}
+
+// Fields that can split source p into bundles: its matched per-streamline
+// categorical fields.
+function splitCandidates(p) {
+  return dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p && r.parsed
+    && r.parsed.scope === 'per_streamline' && r.header.kind === 'categorical');
+}
+
+// A source not split by the user gets split by a field whose header says
+// "role": "bundles" (a bundle-assignment file). Returns true if anything
+// changed.
+function applyDefaultSplits() {
+  let changed = false;
+  for (const p of trckParents) {
+    if (p.splitChosen) continue;
+    const want = splitCandidates(p).find(r => r.header.role === 'bundles') || null;
+    if (want !== (p.split || null)) { p.split = want; changed = true; }
+  }
+  return changed;
+}
+
+// Removes all streamlines (and their data-file attachments) from the viewer.
+function clearStreamlines() {
+  if (selMesh) { scene.remove(selMesh); selMesh.geometry.dispose(); selMesh = null; }
+  if (srcDots) { scene.remove(srcDots); srcDots.geometry.dispose(); srcDots = null; }
+  if (tgtDots) { scene.remove(tgtDots); tgtDots.geometry.dispose(); tgtDots = null; }
+  if (slabRenderer) slabRenderer.invalidate(null);
+  trckParents = []; groups = []; allStreamlines = null; streamlineLookup = null; allPts = null; gridIdx = null;
+  setStreamlines = null; renderStreamlines = null;
+  isBundle = false; streamlineBundleId = null; bundlePaletteRGB = null; bundleNames = null; _lastBundleInfo = null;
+  hiddenBundleIndices.clear();
+  trckHeader = null; trckHeaderReady = false;
+  state.set('trck.file', undefined);
+  document.getElementById('stat-total').textContent = '';
+  document.getElementById('stat-sel').textContent = '';
+  dataStore.setStreamlines([]);
+  updateScene3d(); updateSlicesA(); updateSlicesB();
 }
 
 // Shared tail for both a single-file and a bundle load: build the spatial
@@ -2815,7 +3114,7 @@ async function loadTrckBundle(descriptor){
 // NEAR·ENDS / FAR·ENDS defaults for whichever kind of load this was — see
 // applyColorDefaultsForLoad, same "auto-select then plain override"
 // pattern as MODALITY's DEC auto-select on 3-channel data.
-async function finishTrckLoad(dTrckP){
+async function finishTrckLoad(dTrckP, { add = false, bundleModeChanged = true } = {}){
   const np=streamlineLookup.length;
   setProgress(allStreamlines.length.toLocaleString()+' streamlines · building index…'); await tick();
   allPts=new Float32Array(np*3); let off=0;
@@ -2830,8 +3129,9 @@ async function finishTrckLoad(dTrckP){
   lastTrckBoxRadius = boxRadius;
   const [ex,ey,ez] = vr._ras_extent || [0,0,0];
   const volRadius = Math.sqrt(ex*ex+ey*ey+ez*ez) / 2;
-  initCamera(cx,cy,cz,volRadius,boxRadius);
-  updateProbeRadiusRange(true); // rescale + apply this load's default (Show All for a bundle, 1/5 diameter otherwise)
+  // Adding to the loaded streamlines keeps the camera and probe as they are.
+  if (!add) initCamera(cx,cy,cz,volRadius,boxRadius);
+  updateProbeRadiusRange(!add); // rescale + (new load) apply the default: Show All for bundles, 1/5 diameter otherwise
   // If no anatomy has been loaded, loadAnat's own probe-centering
   // (state.update({'src.cursor':probeCenter,...}) never ran, so the
   // cursor is still sitting at the schema default [0,0,0] — nowhere near
@@ -2854,7 +3154,7 @@ async function finishTrckLoad(dTrckP){
   // distance from an actual streamline), so the default-radius probe is
   // guaranteed to find at least one streamline regardless of how sparse
   // the data is near the mean.
-  if (!state.get('anat.file')) {
+  if (!state.get('anat.file') && !add) {
     let cursorPt = [cx, cy, cz];
     let r = Math.max(radius, 1), hits = [];
     for (let tries = 0; tries < 20 && hits.length === 0 && r < boxRadius * 2 + 1; tries++) {
@@ -2871,9 +3171,10 @@ async function finishTrckLoad(dTrckP){
   trckHeaderReady = true;
   setProgress(''); checkShowHud(); controls.update();
   probeEndsOnly = document.querySelector('input[name="probe-select"]:checked')?.value === 'ends';
-  applyColorDefaultsForLoad();
+  if (!add || bundleModeChanged) applyColorDefaultsForLoad();
   updateProbe(); updateLabelHud('src'); updateLabelHud('tgt');
-  registerTrckItem(trckFileName);
+  registerTrckItem();
+  matchDqzChildren();
 }
 
 function checkShowHud(){
@@ -3130,7 +3431,11 @@ function showAnatHeaderPanel() {
 }
 function showTrckHeaderPanel() {
   if (!trckHeaderReady || !trckHeader) return;
-  showHeaderPanel('TRACTS HEADER', JSON.stringify(trckHeader, null, 2));
+  // trckHeader is { indexJson, files: [{name, header}] }; one file without
+  // a manifest just shows that file's header.
+  const one = trckHeader.files && trckHeader.files.length === 1 && !trckHeader.indexJson;
+  showHeaderPanel(one ? 'TRACTS HEADER · ' + trckHeader.files[0].name : 'TRACTS HEADER',
+                  JSON.stringify(one ? trckHeader.files[0].header : trckHeader, null, 2));
 }
 document.getElementById('btn-show-indices').addEventListener('click', e => {
   e.stopPropagation();
@@ -3339,6 +3644,108 @@ function confirmManifestError(err, canRetry) {
   );
 }
 
+// ── Load dialogs ───────────────────────────────────────────
+// A small modal: title, paragraphs, optional extra element (e.g. a
+// select), and buttons. Resolves with the chosen button's id, or null for
+// Escape / Cancel. Enter picks the highlighted (default) button.
+function askChoice({ title, lines = [], extra = null, choices, defaultId }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'ld-overlay';
+    const box = document.createElement('div');
+    box.className = 'ld-box';
+    box.setAttribute('role', 'dialog');
+    const h = document.createElement('div');
+    h.className = 'ld-title';
+    h.textContent = title;
+    box.appendChild(h);
+    for (const t of lines) {
+      if (!t) continue;
+      const para = document.createElement('p');
+      para.textContent = t;
+      box.appendChild(para);
+    }
+    if (extra) box.appendChild(extra);
+    const btns = document.createElement('div');
+    btns.className = 'ld-btns';
+    const done = id => { document.removeEventListener('keydown', onKey, true); overlay.remove(); resolve(id); };
+    let focusBtn = null;
+    for (const c of [...choices, { id: null, label: 'Cancel' }]) {
+      const b = document.createElement('button');
+      b.className = 'ld-btn' + (c.id === defaultId ? ' ld-default' : '') + (c.id === null ? ' ld-cancel' : '');
+      b.textContent = c.label;
+      if (c.title) b.title = c.title;
+      b.addEventListener('click', () => done(c.id));
+      btns.appendChild(b);
+      if (c.id === defaultId) focusBtn = b;
+    }
+    box.appendChild(btns);
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    (focusBtn || btns.firstChild).focus();
+  });
+}
+
+// Removes all volumes from the list (and the lookup tables that belonged
+// to them; unattached ones stay). The renderer keeps showing the previous
+// volume until the next one is loaded (there's no "no anatomy" state
+// after one has been shown), so this is only used when one is on its way.
+function clearVolumes() {
+  luts = luts.filter(l => !l.volume);
+  volumes = []; activeVolume = null;
+  registerVolumeItems();
+}
+
+// Removes everything: volumes, lookup tables, streamlines, data files.
+// Same caveat as clearVolumes: only used when a new volume is on its way.
+function clearAll() {
+  clearVolumes();
+  luts = [];
+  dqzChildRecords = [];
+  clearStreamlines();
+  dataStore.setDataFiles([]);
+  registerVolumeItems();
+}
+
+// What a drop does to what's already loaded — kept simple and predictable:
+//  - a zip, or several files that include a volume: a complete dataset,
+//    replaces everything, no question;
+//  - otherwise, a volume or streamline file(s) when that kind of data is
+//    already loaded: Add (default — never throws anything away) or
+//    Replace, which replaces only that kind (volumes, or streamlines);
+//  - lookup tables and .dqz data files are always added.
+// Returns { replaceAll, replaceVolumes, trckMode } or null when cancelled.
+async function decideDropMode(r, rawFiles) {
+  const entries = r.entries || [];
+  const volEntries = entries.filter(e => e.kind === 'anat');
+  const tractFiles = r.bundle ? r.bundle.entries.map(e => e.file) : r.tract ? [r.tract] : [];
+  const out = { replaceAll: false, replaceVolumes: false, trckMode: 'replace' };
+  if (!volumes.length && !trckParents.length) return out;
+  const isZip = rawFiles.length === 1 && /\.zip$/i.test(rawFiles[0].name);
+  if (volEntries.length && (isZip || entries.length > 1)) return { ...out, replaceAll: true };
+
+  const ask = (title, what, kind) => askChoice({
+    title, lines: [what, `Add to the loaded ${kind}, or replace them?`],
+    choices: [{ id: 'add', label: 'Add' }, { id: 'replace', label: 'Replace' }], defaultId: 'add',
+  });
+  if (volEntries.length && volumes.length) {
+    const choice = await ask('LOAD VOLUME', volEntries[0].file.name, 'volumes');
+    if (!choice) return null;
+    out.replaceVolumes = choice === 'replace';
+  }
+  if (tractFiles.length && trckParents.length) {
+    const choice = await ask('LOAD STREAMLINES',
+      tractFiles.length === 1 ? tractFiles[0].name : tractFiles.length + ' streamline files', 'streamlines');
+    if (!choice) return null;
+    out.trckMode = choice;
+  }
+  return out;
+}
+
 async function dispatchOpenedFiles(rawFiles){
   let r;
   try {
@@ -3357,6 +3764,10 @@ async function dispatchOpenedFiles(rawFiles){
     const withoutManifest = rawFiles.filter(f => f.name.toLowerCase() !== MANIFEST_FILENAME);
     r = await MultiFileOpener.open(withoutManifest);
   }
+  const mode = await decideDropMode(r, rawFiles);
+  if (!mode) return false; // cancelled
+  if (mode.replaceAll) clearAll();
+  else if (mode.replaceVolumes) clearVolumes();
   let did = false;
   // .dqz child data files: queued BEFORE any tractogram load below
   // starts, since that load (async, not awaited by state.update) ends in
@@ -3371,14 +3782,14 @@ async function dispatchOpenedFiles(rawFiles){
     did = true;
     if (!r.bundle && !r.tract) await matchDqzChildren();
   }
-  if (r.bundle)      { state.update({ 'trck.file': { __bundle: true, ...r.bundle } }); did = true; }
-  else if (r.tract)  { state.update({ 'trck.file': r.tract }); did = true; }
+  if (r.bundle)      { state.update({ 'trck.file': { __bundle: true, ...r.bundle, mode: mode.trckMode } }); did = true; }
+  else if (r.tract)  {
+    state.update({ 'trck.file': { __bundle: true, manifest: null, mode: mode.trckMode,
+                                  entries: [{ file: r.tract, color: null, name: stripPathExt(r.tract.name) }] } });
+    did = true;
+  }
 
   const entries = r.entries || [];
-  // A multi-select drop, or a zip that unpacked to several files — as
-  // opposed to a single loose file dropped/picked on its own. Governs
-  // whether a loose LUT auto-applies below (see the r.lut block).
-  const isMultiFileLoad = entries.length > 1;
 
   // A manifest can describe this drop's volumes (type + an optional
   // per-volume LUT via "labels"), independent of whether it's ALSO a
@@ -3404,68 +3815,106 @@ async function dispatchOpenedFiles(rawFiles){
     }
   }
 
-  // Anatomy: a manifest's "volumes" section (if any) takes priority over
-  // the generic multi-anat fallback — it carries real names/types/LUTs
-  // instead of "whatever files happen to be classified anat". Multiple
-  // files arriving together with NO manifest still load as alternatives
-  // (see registerAnatGroupItems' radio selector); a single anat file —
-  // the common case, and also what a later separate drop/pick does even
-  // if several anatomy files were loaded together earlier — just
-  // replaces the group outright, same as before this feature existed.
+  // Volumes. Each one is added to the FILE panel's list (accumulating
+  // across drops, see addVolumes). A manifest's "volumes" section gives
+  // names and types ("label" = parcellation); without one, each volume is
+  // classified by sniffing its values (see looksLikeParcellation).
   const anatEntries = entries.filter(e => e.kind === 'anat');
+  const newVols = [];
+  const manifestLut = new Map(); // LUT File -> volume record (Rule 1)
   if (manifestVolumes && manifestVolumes.length) {
-    anatGroup = manifestVolumes.map(v => ({
-      file: v.file, label: v.name, volType: v.type, lutFile: v.lutFile || null,
-    }));
-    anatActiveIndex = 0;
-    state.update({ 'anat.file': anatGroup[0].file });
+    for (const v of manifestVolumes) {
+      const vol = makeVolume(v.file, { label: v.name, category: v.type === 'label' ? 'parcellation' : 'anatomy', source: 'manifest' });
+      if (v.lutFile) manifestLut.set(v.lutFile, vol);
+      newVols.push(vol);
+    }
+  } else {
+    for (const e of anatEntries) newVols.push(makeVolume(e.file));
+  }
+  addVolumes(newVols);
+
+  // Lookup tables. Each one is attached to a volume by the first rule
+  // that applies:
+  //  1. the manifest names it as a volume's "labels";
+  //  2. its name, without extension, is a volume's name without
+  //     extension (brain_seg.txt -> brain_seg.nii.gz) — this drop's
+  //     volumes first, then earlier ones;
+  //  3. it was dropped on its own: it goes with the active volume if
+  //     that's a parcellation, else the most recently loaded parcellation
+  //     that has no lookup table yet, else the active volume (unless it's
+  //     RGB, which then becomes a parcellation), else the most recent
+  //     scalar volume;
+  //  4. otherwise it stays unattached, listed under Parcellations, where
+  //     "attach to" picks its volume.
+  // A volume with a lookup table counts as a parcellation.
+  const lutEntries = entries.filter(e => e.kind === 'lut');
+  const loneLut = entries.length === 1 && lutEntries.length === 1;
+  let activeChanged = false;
+  for (const e of lutEntries) {
+    let lut;
+    try { lut = await readLutFile(e.file); }
+    catch (err) { alert('LUT error in "' + e.file.name + '": ' + err); console.error(err.stack || err); continue; }
     did = true;
-  } else if (anatEntries.length > 1) {
-    anatGroup = anatEntries.map(e => ({ file: e.file, label: e.file.name, volType: null, lutFile: null }));
-    anatActiveIndex = 0;
-    state.update({ 'anat.file': anatGroup[0].file });
-    did = true;
-  } else if (r.anat) {
-    anatGroup = [{ file: r.anat, label: r.anat.name, volType: null, lutFile: null }];
-    anatActiveIndex = 0;
-    state.update({ 'anat.file': r.anat });
-    did = true;
+    const base = lutBaseName(e.file.name).toLowerCase();
+    const byName = v => volumeBaseName(v.file.name).toLowerCase() === base;
+    let target = manifestLut.get(e.file)
+              || newVols.find(byName)
+              || [...volumes].reverse().find(byName)
+              || null;
+    if (!target && loneLut) {
+      const scalar = volumes.filter(v => !v.isColor);
+      const active = activeVolume && !activeVolume.isColor ? activeVolume : null;
+      const guess = (active && active.category === 'parcellation' ? active : null)
+            || [...scalar].reverse().find(v => v.category === 'parcellation' && !v.lut)
+            || active
+            || scalar[scalar.length - 1] || null;
+      if (guess) {
+        // Ask, with the rule-3 guess preselected.
+        const pick = makeChoiceRow('apply to', scalar.map((v, i) => [String(i), v.label]),
+          String(scalar.indexOf(guess)), () => {});
+        pick.classList.add('ld-choice');
+        const choice = await askChoice({
+          title: 'LOOKUP TABLE', lines: [e.file.name],
+          extra: pick,
+          choices: [{ id: 'apply', label: 'Apply' }, { id: 'keep', label: 'Keep unattached' }],
+          defaultId: 'apply',
+        });
+        if (choice === null) { luts = luts.filter(l => l !== lut); registerVolumeItems(); continue; } // cancelled: don't load it
+        if (choice === 'apply') target = scalar[+pick.querySelector('select').value];
+      }
+    }
+    if (target) {
+      attachLut(lut, target);
+      if (target === activeVolume) activeChanged = true;
+    }
   }
 
-  // A loose LUT: old single-file behavior — auto-applies to
-  // SEGMENTATION if the data allows (see loadLUT) — UNLESS this is a
-  // multi-file/zip drop, in which case it's only auto-applied when a
-  // manifest volume explicitly claimed it above (applied per-volume by
-  // registerAnatGroupItems/selectAnat instead, precisely when that
-  // volume becomes active). A bare LUT sitting loose in a multi-file
-  // drop with no manifest reference is registered as available but
-  // never force-applied — otherwise it lands on whichever anatomy
-  // happens to be active, which is exactly the "weird color patterns on
-  // a plain volume" glitch this is fixing.
-  if (r.lut) {
-    const claimedByManifest = manifestVolumes && manifestVolumes.some(v => v.lutFile === r.lut);
-    if (!claimedByManifest) {
-      loadLUT(r.lut, { autoApply: !isMultiFileLoad });
-      did = true;
-    }
+  if (newVols.length) {
+    // Load the first new volume; the rest are listed, classified in the
+    // background, and loaded when selected.
+    state.update({ 'anat.file': newVols[0].file });
+    did = true;
+  } else if (activeChanged) {
+    applyActiveVolumeDisplay();
+  } else if (lutEntries.length) {
+    registerVolumeItems();
   }
   return did;
 }
 
-// Switches the active anatomy within the current anatGroup (radio
-// select in the FILE panel) — re-runs the full loadAnat pipeline on the
-// newly-picked file, same as a fresh load, since the renderer only ever
-// holds one volume's texture/glass-brain at a time.
-async function selectAnat(i) {
-  if (i === anatActiveIndex || !anatGroup[i]) return;
-  anatActiveIndex = i;
-  const f = anatGroup[i].file;
+// Makes another listed volume the active one (radio select in the FILE
+// panel) — re-runs the full loadAnat pipeline on it, same as a fresh load,
+// since the renderer only ever holds one volume's texture/glass-brain at
+// a time.
+async function selectVolume(vol) {
+  if (vol === activeVolume || !volumes.includes(vol)) return;
   try {
-    await loadAnat(f);
-    state.set('anat.file', f.name);
+    await loadAnat(vol.file);
+    state.set('anat.file', vol.file.name);
   } catch (e) {
-    alert('Error loading anatomy from "'+f.name+'"');
+    alert('Error loading anatomy from "' + vol.file.name + '"');
     console.error(e.stack || e);
+    registerVolumeItems(); // put the radio back on the volume that's still shown
   }
 }
 
@@ -3486,8 +3935,8 @@ document.getElementById('fi-load').addEventListener('change', async e => {
 // ── Loaded-data tree (FILE panel) ──────────────────────────
 // One overall LoadedDataStore + file-type-specific item classes (see
 // js/loaded-data.js), rendered as a collapsible tree by DataTreeView.
-// The store only tracks what's loaded/visible; registerAnatItem/
-// registerTrckItem/registerLutItem below are the app-specific glue that
+// The store only tracks what's loaded/visible; registerVolumeItems/
+// registerTrckItem below are the app-specific glue that
 // wires each item's on/off checkbox to what little visibility control
 // the renderer currently exposes.
 const dataStore = new LoadedDataStore();
@@ -3498,108 +3947,239 @@ function rgbRawToHex([r, g, b]) {
   return '#' + c(r) + c(g) + c(b);
 }
 
-function registerAnatGroupItems() {
-  const items = anatGroup.map((g, i) => {
-    const item = new AnatomyItem(g.label);
-    const isActive = i === anatActiveIndex;
-    if (anatGroup.length > 1) {
-      // Multiple anatomy files loaded together: radio-select which one
-      // is active (mutually exclusive), rather than an on/off checkbox
-      // per file — only one can actually be in the renderer at a time.
+// Keeps a settings area open across tree rebuilds by storing its state
+// on the app record (volume / lookup table) rather than the row object.
+function proxySettingsOpen(item, rec) {
+  Object.defineProperty(item, 'settingsOpen', {
+    get: () => !!rec.uiSettingsOpen, set: v => { rec.uiSettingsOpen = v; }, configurable: true,
+  });
+}
+
+// A labelled <select> row for a settings area.
+function makeChoiceRow(labelText, options, value, onChange, title = null) {
+  const row = document.createElement('div');
+  row.className = 'dt-choice';
+  const lab = document.createElement('label');
+  lab.textContent = labelText;
+  const sel = document.createElement('select');
+  sel.className = 'inline-select';
+  if (title) sel.title = title;
+  for (const [v, text] of options) {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = text;
+    sel.appendChild(o);
+  }
+  sel.value = value;
+  sel.addEventListener('click', e => e.stopPropagation());
+  sel.addEventListener('change', () => onChange(sel.value));
+  row.append(lab, sel);
+  return row;
+}
+
+// Rebuilds the Anatomy and Parcellations parts of the FILE panel tree
+// from `volumes`/`luts`. All volumes share ONE radio group across both
+// categories — the renderer shows one volume at a time. (Once anatomy and
+// a parcellation can be overlaid, these become two independent choices.)
+// A single volume gets an on/off checkbox instead.
+function registerVolumeItems() {
+  const multi = volumes.length > 1;
+  const volumeItem = vol => {
+    const item = new AnatomyItem(vol.label);
+    const isActive = vol === activeVolume;
+    item.tooltip = vol.label === vol.file.name ? vol.file.name : vol.label + '\n' + vol.file.name;
+    if (multi) {
       item.selectorType = 'radio';
-      item.radioGroup = 'anat';
+      item.radioGroup = 'volume';
       item.selected = isActive;
-      item.onSelect = () => selectAnat(i);
-    }
-    if (isActive) {
+      item.onSelect = () => selectVolume(vol);
+    } else if (isActive) {
       item.onVisibilityChange = (_, visible) => {
         // Best-effort: hides the 3D glass brain. The 2D SAG/COR/AXI
         // anatomy slices (vol-renderer.js) aren't wired to a
-        // visibility flag at all yet — that needs a small change in
-        // that module.
+        // visibility flag at all yet.
         if (glassBrainMesh) glassBrainMesh.visible = visible;
         render3D();
       };
-      item.onMenu = () => showAnatHeaderPanel(); // stand-in for the real hamburger menu, TBD
     } else {
-      // Not currently loaded into the renderer — nothing to show/hide
-      // yet, so the on/off checkbox is disabled until it's selected.
       item.checkboxDisabled = true;
     }
-    return item;
-  });
-  dataStore.setAnatItems(items);
-
-  // Manifest-driven volumes carry explicit per-volume type/LUT info;
-  // override whatever loadAnat's own generic "a real LUT is presumably
-  // meant to persist across files" heuristic just guessed for THIS
-  // volume, so a plain anatomy volume in the same manifest group never
-  // inherits SEGMENTATION mode/coloring meant for a sibling label volume
-  // (the reported "weird color patterns" glitch) — and a label volume's
-  // own LUT is loaded+applied precisely when it becomes the active one.
-  // Only runs for manifest volumes (g.volType set); a plain multi-anat
-  // group with no manifest (volType null) is left exactly as before.
-  const active = anatGroup[anatActiveIndex];
-  if (active && active.volType != null) {
-    if (active.lutFile) {
-      loadLUT(active.lutFile, { autoApply: false }).then(() => setModality('seg'));
-    } else if (modality === 'seg') {
-      setModality('anat');
+    if (vol.category == null) item.tag = 'checking…';
+    else if (vol.category === 'parcellation') {
+      item.tag = vol.lut ? 'LUT' : 'auto colors';
+      if (vol.lut) item.tooltip += '\nlookup table: ' + vol.lut.name;
     }
-  }
+    item.buildSettings = (_, el) => buildVolumeSettings(vol, el);
+    proxySettingsOpen(item, vol);
+    return item;
+  };
+  const anatomy = volumes.filter(v => v.category !== 'parcellation').map(volumeItem);
+  const parcellations = volumes.filter(v => v.category === 'parcellation').map(volumeItem);
+  for (const l of luts) if (!l.volume) parcellations.push(lutItem(l));
+  dataStore.setVolumes(anatomy, parcellations);
 }
 
-function registerTrckItem(filename) {
-  const item = new TractogramItem(filename);
-  item.onVisibilityChange = (_, visible) => {
-    if (selMesh) selMesh.visible = visible;
-    if (srcDots) srcDots.visible = visible;
-    if (tgtDots) tgtDots.visible = visible;
-    if (slabRenderer) slabRenderer.invalidate(visible ? selMesh : null);
-    // This app renders on demand, not on a continuous RAF loop — every
-    // other place that changes the scene (updateProbe, updateScene3d,
-    // ...) explicitly calls render3D()/updateSlicesA()/updateSlicesB()
-    // afterward, so the toggle needs to as well, rather than waiting
-    // for the next unrelated interaction (e.g. orbiting the 3D view) to
-    // happen to trigger one.
-    updateSlicesA(); updateSlicesB();
-    render3D();
-  };
-  item.onMenu = () => showTrckHeaderPanel(); // stand-in for the real hamburger menu, TBD
-  hiddenBundleIndices.clear(); // a fresh tractogram load starts with every bundle on
-  if (isBundle && bundleNames) {
-    item.setBundles(bundleNames.map((name, i) => ({
-      name,
-      color: bundlePaletteRGB && bundlePaletteRGB[i] ? rgbRawToHex(bundlePaletteRGB[i]) : null,
-    })));
-    // Per-bundle on/off is real: it filters allStreamlines by
-    // streamlineBundleId before the probe selection/thinning step (see
-    // updateProbe) and rebuilds the mesh, rather than a shader-side
-    // discard — simpler, at the cost of a rebuild per toggle.
-    // updateProbe() already ends with its own
-    // updateScene3d()/updateSlicesA()/updateSlicesB() calls, so no
-    // separate render call is needed here the way it is above.
-    item.children.forEach(bundleItem => {
-      bundleItem.onVisibilityChange = (bi, visible) => {
-        if (visible) hiddenBundleIndices.delete(bi.bundleIndex);
-        else hiddenBundleIndices.add(bi.bundleIndex);
-        updateProbe();
-      };
-      // updateProbe() rebuilds selMesh/dots from bundlePaletteRGB every
-      // call (see _lastBundleInfo = {..., palette: bundlePaletteRGB}) —
-      // mutating that array in place before calling it is enough to
-      // recolor the bundle live, no separate shader/buffer update needed.
-      bundleItem.onColorChange = (bi, hex) => {
-        bundlePaletteRGB[bi.bundleIndex] = hexToRgbRaw(hex);
-        updateProbe();
-      };
-    });
+// A row for a lookup table that isn't attached to any volume (an attached
+// one is chosen in its parcellation's settings instead).
+function lutItem(lut) {
+  const item = new LutItem(lut.name);
+  item.tag = 'not attached';
+  item.selectorType = 'none';
+  item.dimmed = true;
+  item.tooltip = lut.name + ' · ' + lut.map.size.toLocaleString() + ' labels'
+               + '\nnot attached to a volume: open its settings (») to choose one';
+  item.buildSettings = (_, el) => buildLutSettings(lut, el);
+  proxySettingsOpen(item, lut);
+  return item;
+}
+
+function buildVolumeSettings(vol, el) {
+  if (vol.category === 'parcellation') {
+    // Which loaded lookup table names and colors this volume's labels.
+    // Picking one that belongs to another volume moves it here.
+    const options = [['', 'auto colors'], ...luts.map((l, i) => [String(i),
+      l.name + (l.volume && l.volume !== vol ? '  (now on ' + l.volume.label + ')' : '')])];
+    el.appendChild(makeChoiceRow('lookup table', options, vol.lut ? String(luts.indexOf(vol.lut)) : '', value => {
+      const prevOwner = value === '' ? null : luts[+value].volume;
+      if (value === '') { if (vol.lut) detachLut(vol.lut); }
+      else attachLut(luts[+value], vol);
+      if (vol === activeVolume || prevOwner === activeVolume) applyActiveVolumeDisplay();
+      registerVolumeItems();
+    }, 'the lookup table that names and colors this volume\'s labels'));
   }
-  // Each loaded geometry file's own tree row — where its .dqz data files
-  // hang: the bundle row in a bundle set, the tractogram row otherwise.
-  for (const p of trckParents) p.item = p.bundleIndex === null ? item : item.children[p.bundleIndex];
-  dataStore.setTrck(item);
-  matchDqzChildren();
+  if (!vol.isColor) {
+    el.appendChild(makeChoiceRow('show as', [['anatomy', 'anatomy'], ['parcellation', 'parcellation']],
+      vol.category || 'anatomy', value => {
+        vol.category = value; vol.categorySource = 'user';
+        if (value === 'anatomy' && vol.lut) detachLut(vol.lut); // a lookup table makes it a parcellation
+        if (vol === activeVolume) applyActiveVolumeDisplay();
+        registerVolumeItems();
+      }, 'which category this volume is listed and shown as'));
+  }
+  if (vol === activeVolume) el.appendChild(makeSettingsButton('show header', () => showAnatHeaderPanel()));
+  else el.appendChild(makeSettingsButton('remove', () => {
+    if (vol.lut) detachLut(vol.lut);
+    volumes = volumes.filter(v => v !== vol);
+    registerVolumeItems();
+  }, 'remove this volume from the list'));
+}
+
+function buildLutSettings(lut, el) {
+  const candidates = volumes.filter(v => !v.isColor);
+  const options = [['', '— none —'], ...candidates.map((v, i) => [String(i), v.label])];
+  const current = lut.volume ? String(candidates.indexOf(lut.volume)) : '';
+  el.appendChild(makeChoiceRow('attach to', options, current, value => {
+    const before = lut.volume;
+    const target = value === '' ? null : candidates[+value];
+    if (target) attachLut(lut, target); else detachLut(lut);
+    if (before === activeVolume || target === activeVolume) applyActiveVolumeDisplay();
+    registerVolumeItems();
+  }, 'the volume whose labels this lookup table names and colors'));
+  el.appendChild(makeSettingsButton('remove', () => {
+    const v = lut.volume;
+    detachLut(lut);
+    luts = luts.filter(l => l !== lut);
+    if (v && v === activeVolume) applyActiveVolumeDisplay();
+    registerVolumeItems();
+  }, 'remove this lookup table'));
+}
+
+// First row under "Streamline bundles": select [all] [none] · header,
+// and — once any data fields are attached — "color all by [field]",
+// which picks that field (by name) in every bundle that has it.
+function makeStreamlineToolbar() {
+  return new ToolbarItem((_, bar) => {
+    const lbl = document.createElement('span');
+    lbl.className = 'dt-toolbar-lbl';
+    lbl.textContent = 'select';
+    const setAll = on => {
+      for (const g of groups) if (g.item && g.item.visible !== on) g.item.visible = on;
+      dataStore.refresh();
+    };
+    const spacer = document.createElement('span');
+    spacer.style.flex = '1';
+    bar.append(lbl,
+      makeSettingsButton('all', () => setAll(true), 'switch all bundles on'),
+      makeSettingsButton('none', () => setAll(false), 'switch all bundles off'),
+      spacer,
+      makeSettingsButton('header', () => showTrckHeaderPanel(), trckParents.length > 1 ? 'headers of all streamline files' : 'tractogram header'));
+    const names = [...new Set(dqzChildRecords.filter(r => r.status === 'matched').map(fieldName))];
+    if (names.length && groups.length > 1) {
+      // Current choice: the one field name all colored bundles use, as
+      // long as every bundle that has a field of that name uses it; no
+      // colored bundle: none; anything else: mixed.
+      const active = new Set(groups.filter(g => g.activeField).map(g => fieldName(g.activeField)));
+      const hasField = (g, n) => dqzChildRecords.some(r => r.status === 'matched' && r.parent === g.source && fieldName(r) === n);
+      const current = active.size === 0 ? ''
+        : active.size === 1 && groups.every(g => !hasField(g, [...active][0]) || (g.activeField && fieldName(g.activeField) === [...active][0]))
+          ? [...active][0] : null; // null: mixed
+      const opts = [['', 'none'], ...names.map(n => [n, n])];
+      if (current === null) opts.unshift(['*', '(mixed)']);
+      const row = makeChoiceRow('color all by', opts, current === null ? '*' : current, value => {
+        if (value === '*') return;
+        for (const g of groups) {
+          g.activeField = value ? dqzChildRecords.find(r => r.status === 'matched' && r.parent === g.source && fieldName(r) === value) || null : null;
+          if (g.activeField) { fieldNormValues(g.activeField); writeFieldColormapRow(g); }
+        }
+        rebuildDqzChildItems();
+        updateProbe();
+      }, 'color every bundle by the data field of this name (bundles without it: none)');
+      row.classList.add('dt-toolbar-choice');
+      bar.appendChild(row);
+    }
+  });
+}
+
+// One tree row per group (bundle) — directly under the "Streamline
+// bundles" heading. A row's settings: WIDTH/OPACITY, "split by" (for its
+// file), its file's .dqz data fields (see buildFieldSettings) and its
+// file header. Called after every (re)grouping.
+function registerTrckItem() {
+  const rows = groups.map((g, i) => {
+    const bi = new BundleItem(g.name, i, isBundle ? rgbRawToHex(g.color) : null);
+    g.item = bi;
+    bi._visible = g.visible;
+    bi.tooltip = g.name + (g.name !== g.source.name ? '\n' + g.source.name : '')
+               + (g.code !== null ? '\n' + fieldName(g.source.split) + ' = ' + g.code : '');
+    // On/off filters allStreamlines by group before the probe selection/
+    // thinning step (see updateProbe) and rebuilds the mesh.
+    bi.onVisibilityChange = (_, visible) => {
+      g.visible = visible;
+      const k = groups.indexOf(g);
+      if (visible) hiddenBundleIndices.delete(k); else hiddenBundleIndices.add(k);
+      scheduleUpdateProbe(); // batched: "all"/"none" switch every group at once — one rebuild, not N
+    };
+    // updateProbe() rebuilds selMesh/dots from bundlePaletteRGB, so
+    // changing the group's color array in place is enough to recolor it.
+    bi.onColorChange = (_, hex) => {
+      g.color = hexToRgbRaw(hex);
+      bundlePaletteRGB[groups.indexOf(g)] = g.color;
+      updateProbe();
+    };
+    bi.buildSettings = (_, el) => {
+      buildFileStyleSettings(g, el);
+      buildSplitSettings(g.source, el);
+      buildFieldSettings(g, el);
+      el.appendChild(makeSettingsButton('show header', () =>
+        showHeaderPanel('TRACTS HEADER · ' + g.source.name, JSON.stringify(g.source.header, null, 2))));
+    };
+    proxySettingsOpen(bi, g);
+    return bi;
+  });
+  dataStore.streamlineToolbar = makeStreamlineToolbar();
+  dataStore.setStreamlines(rows);
+  rebuildDqzChildItems();
+}
+
+// "split by [none | field]" for streamline file p: turn one file into a
+// bundle per code of a per-streamline categorical field (e.g. a
+// bundle-assignment file), or back into one bundle.
+function buildSplitSettings(p, el) {
+  const cands = splitCandidates(p);
+  if (!cands.length) return;
+  const opts = [['', 'none (one bundle)'], ...cands.map((r, i) => [String(i), fieldName(r)])];
+  el.appendChild(makeChoiceRow('split by', opts, p.split ? String(cands.indexOf(p.split)) : '', value => {
+    setSourceSplit(p, value === '' ? null : cands[+value]);
+  }, 'split this file\'s streamlines into bundles by a per-streamline category'));
 }
 
 // ── .dqz child data files ──────────────────────────────────
@@ -3663,79 +4243,200 @@ async function matchDqzChildren() {
     rec.status = 'matched'; rec.reason = null; rec.parent = p;
   }
   if (run !== _dqzMatchRun) return;
+  // A bundle-assignment field ("role": "bundles") splits its file.
+  if (applyDefaultSplits()) {
+    const wasBundle = isBundle;
+    if (regroupStreamlines()) {
+      if (isBundle !== wasBundle) applyColorDefaultsForLoad();
+      registerTrckItem();
+      updateProbe();
+      return;
+    }
+  }
   rebuildDqzChildItems();
 }
 
+// Brings the tree up to date with the data files: each streamline row's
+// tag names its active field (or how many it has); data files that can't
+// be attached are listed as rows at the end of "Streamline bundles".
+// The field lists themselves are built on demand in the rows' settings.
 function rebuildDqzChildItems() {
-  // Drop previously attached field rows, then re-attach from scratch.
-  for (const p of trckParents) {
-    if (p.item) p.item.children = p.item.children.filter(c => c.kind !== 'field');
+  for (const g of groups) {
     // An active field that no longer belongs here (re-matched elsewhere,
     // or replaced by a re-dropped file) stops being active.
-    if (p.activeField && (p.activeField.parent !== p || !dqzChildRecords.includes(p.activeField))) p.activeField = null;
+    if (g.activeField && (g.activeField.parent !== g.source || !dqzChildRecords.includes(g.activeField))) g.activeField = null;
+    if (!g.item) continue;
+    const n = dqzChildRecords.filter(r => r.status === 'matched' && r.parent === g.source).length;
+    g.item.tag = g.activeField ? '● ' + fieldName(g.activeField) : n ? n + (n === 1 ? ' field' : ' fields') : null;
   }
-  let unmatched = null, invalid = null;
+  const loose = [];
   for (const rec of dqzChildRecords) {
-    const fi = makeDqzFieldItem(rec);
-    if (rec.status === 'matched' && rec.parent.item) {
-      const p = rec.parent;
-      fi.selectorType = 'radio';
-      fi.radioGroup = 'field-' + trckParents.indexOf(p);
-      fi.selected = p.activeField === rec;
-      fi.onSelect = () => setActiveField(p, p.activeField === rec ? null : rec);
-      p.item.addChild(fi);
-    } else if (rec.status === 'invalid') {
-      // A file that can't be read at all — kept apart from "unmatched"
-      // (a readable file whose parent just isn't loaded), and not dimmed.
+    if (rec.status === 'matched') continue;
+    const fi = new DataFieldItem(rec.file.name, rec);
+    proxySettingsOpen(fi, rec);
+    fi.tooltip = [rec.file.name, rec.header && rec.header.description, '⚠ ' + rec.reason].filter(Boolean).join('\n');
+    if (rec.status === 'invalid') {
+      // Can't be read at all — kept apart from "unmatched" (a readable
+      // file whose parent just isn't loaded), and not dimmed.
       fi.tag = '⚠ error';
       fi.isError = true;
-      if (!invalid) invalid = new DataGroupItem('Data files with errors');
-      invalid.addChild(fi);
     } else {
+      fi.tag = 'unmatched';
       fi.dimmed = true;
-      if (!unmatched) unmatched = new DataGroupItem('Unmatched data files');
-      unmatched.addChild(fi);
     }
+    fi.buildSettings = (_, el) => {
+      const why = document.createElement('div');
+      why.className = 'dt-note';
+      why.textContent = rec.reason || '';
+      el.appendChild(why);
+      el.appendChild(makeSettingsButton('show header', () => showDqzChildHeaderPanel(rec)));
+    };
+    loose.push(fi);
   }
-  if (unmatched) unmatched.tag = String(unmatched.children.length);
-  if (invalid) invalid.tag = String(invalid.children.length);
-  dataStore.setUnmatched(unmatched, invalid); // also re-renders the whole tree
+  loose.sort((a, b) => (b.isError ? 1 : 0) - (a.isError ? 1 : 0)); // errors first
+  dataStore.setDataFiles(loose); // also re-renders the whole tree
+}
+
+const fieldName = rec => (rec.header && rec.header.name) || rec.file.name;
+
+// The DATA part of a bundle row's settings: the matched .dqz fields of
+// its file as a plain list — a radio per field picks the one that colors
+// this bundle's streamlines (click the active one again for none) —
+// followed by the active field's colormap and APPLY FROM/TO window.
+function buildFieldSettings(p, el) {
+  const recs = dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p.source);
+  if (!recs.length) return;
+  const box = document.createElement('div');
+  box.className = 'dt-fields';
+  const title = document.createElement('div');
+  title.className = 'dt-fields-title';
+  title.textContent = 'DATA';
+  box.appendChild(title);
+  const group = 'dt-field-' + groups.indexOf(p);
+  for (const rec of recs) {
+    const h = rec.header;
+    const line = document.createElement('label');
+    line.className = 'dt-field-line';
+    line.title = [h.name, h.description, rec.file.name,
+                  (h.scope === 'per_vertex' ? 'per-vertex' : 'per-streamline') + ' · ' + h.kind + (parseFieldLegend(h) ? ' · legend' : '')]
+                 .filter(Boolean).join('\n') + '\n(click to color streamlines by this field; click again to turn off)';
+    const radio = document.createElement('input');
+    radio.type = 'radio'; radio.name = group; radio.className = 'dt-radio';
+    radio.checked = p.activeField === rec;
+    // Handled on click, not change: clicking the active field turns it off.
+    radio.addEventListener('click', e => { e.stopPropagation(); setActiveField(p, p.activeField === rec ? null : rec); });
+    const name = document.createElement('span');
+    name.className = 'dt-field-name';
+    name.textContent = fieldName(rec);
+    const tag = document.createElement('span');
+    tag.className = 'dt-tag';
+    tag.textContent = h.kind; // scope and legend are in the tooltip
+    const hdr = makeSettingsButton('hdr', () => showDqzChildHeaderPanel(rec), 'show this data file\'s header');
+    line.append(radio, name, tag, hdr);
+    box.appendChild(line);
+  }
+  el.appendChild(box);
+  if (p.activeField) {
+    el.appendChild(makeColormapPicker(p.activeField));
+    for (const r of makeFieldWindowRows(p.activeField)) el.appendChild(r);
+  }
 }
 
 // Makes `rec` (or nothing, for null) the field that colors parent file
 // p's streamlines, then rebuilds the streamline mesh. At most one field
 // per geometry file; files without one keep the global LINE·COLOR mode.
+// ── Per-file streamline style (FILE panel) ───────────────────
+// p.style = { width: null (= follow the global WIDTH slider) | px,
+//             opacity: 0..1 } for each loaded streamline file. Opacity
+// applies to the file's NON-highlighted parts (normal LINE·COLOR color):
+// 1 = opaque as always, <1 = drawn in the faint (translucent) pass, 0 =
+// not drawn. Parts inside the active data field's window are always drawn
+// opaque in the colormap. All of it lives in fileStyleTex, so sliders
+// only rewrite a texel and redraw — no streamline rebuild.
+function fileStyle(p) {
+  return p.style || (p.style = { width: null, opacity: 1 });
+}
+const fileWidth = p => fileStyle(p).width ?? lineWidthPx;
+// Any file drawn below full opacity? If not, the faint (translucent) pass
+// is skipped entirely, in 3D and in the 2D slab panels.
+const anyFaint = () => groups.some(g => fileStyle(g).opacity < 0.999);
+
+// The streamline mesh's two materials, created once and reused by every
+// rebuild (see makeRibbonLines' styleInfo.materials).
+let ribbonMaterials = null;
+function anyLineWidth() {
+  return groups.length ? Math.max(...groups.map(fileWidth)) : lineWidthPx;
+}
+function writeFileStyles() {
+  groups.forEach((p, i) => {
+    const st = fileStyle(p);
+    const [lo, hi] = p.activeField ? fieldWindowNorm(p.activeField) : [0, 1];
+    setFileStyle(fileStyleTex, i, fileWidth(p), st.opacity, lo, hi);
+  });
+}
+function restyleFiles() {
+  writeFileStyles();
+  setRibbonFaintMode(selMesh, anyFaint());
+  redrawAll();
+}
+
+// One "LABEL [slider] value" row for an inline settings area.
+function makeSliderRow(label, { min, max, step, value, format, onInput }) {
+  const row = document.createElement('div');
+  row.className = 'ctl-row dt-slider-row';
+  const lbl = document.createElement('label'); lbl.textContent = label;
+  const sl = document.createElement('input');
+  Object.assign(sl, { type: 'range', min, max, step, value });
+  const val = document.createElement('span'); val.className = 'slider-val';
+  val.textContent = format(+sl.value);
+  sl.addEventListener('click', e => e.stopPropagation());
+  sl.addEventListener('input', () => { onInput(+sl.value); val.textContent = format(+sl.value); });
+  row.append(lbl, sl, val);
+  return row;
+}
+
+// WIDTH + OPACITY for streamline file p (single tractogram or one bundle).
+function buildFileStyleSettings(p, el) {
+  const st = fileStyle(p);
+  el.appendChild(makeSliderRow('WIDTH', {
+    min: 0, max: 10, step: 0.5, value: fileWidth(p),
+    format: v => v.toFixed(1) + ' px' + (st.width === null ? ' ·global' : ''),
+    onInput: v => { st.width = v; restyleFiles(); },
+  }));
+  el.appendChild(makeSliderRow('OPACITY', {
+    min: 0, max: 100, step: 1, value: Math.round(st.opacity * 100),
+    format: v => v + '%',
+    onInput: v => { st.opacity = v / 100; restyleFiles(); },
+  }));
+}
+
 function setActiveField(p, rec) {
   p.activeField = rec;
-  if (rec) { activeFieldValues(rec); writeFieldColormapRow(p); } // not mid-rebuild
+  if (rec) { fieldNormValues(rec); writeFieldColormapRow(p); } // not mid-rebuild
   rebuildDqzChildItems();          // radio states
   updateProbe();
 }
 
-// Colormap row for geometry file p (row = its index in trckParents), from
-// its active field: the legend's colors when it has one (see
-// parseFieldLegend), else jet. Unused texels of a legend row, and texel
-// COLORMAP_SIZE-1 (codes not in the legend), are neutral gray.
-const LEGEND_FALLBACK_RGB = [0.5, 0.5, 0.5];
-function writeFieldColormapRow(p) {
-  const row = trckParents.indexOf(p), rec = p.activeField;
-  if (row < 0 || !rec) return;
-  if (rec.legend) {
-    const rgb = new Array(COLORMAP_SIZE).fill(LEGEND_FALLBACK_RGB);
-    rec.legend.entries.forEach((e, i) => { rgb[i] = e.rgb; });
-    setColormapRGB(lineColormapTex, rgb, row);
-  } else {
-    setColormap(lineColormapTex, 'jet', row);
-  }
-}
+// ── Field colormaps ─────────────────────────────────────────
+// rec.colormap is the user's CHOICE for a data field, stored as a
+// reference by origin — what a saved viewer state would record:
+//   { source: 'file' }                       the data file's own legend
+//   { source: 'builtin', id: 'viridis' }     BUILTIN_COLORMAPS (scene3d.js)
+//   { source: 'user', name, stops }          user-made (not built yet),
+//                                            stored inline: nothing else holds it
+// resolveFieldColormap() turns the reference into a plain definition
+// ({kind:'continuous', stops} or {kind:'categorical', entries}, see
+// scene3d.js), which is all the drawing code ever sees. The choice lives
+// on the FIELD, not on its geometry file's colormap row, so switching a
+// file between two fields brings back each field's own colormap.
+// Default: the file's legend when it has one, else jet.
+const LEGEND_FALLBACK_RGB = [128, 128, 128]; // codes missing from a legend
 
-// A field header's `legend` → { entries: [{value, name, rgb}], indexOf:
-// Map(value -> texel index) }, or null when there is no usable legend.
-// Entries are sorted by value and given texels 0, 1, 2, … (at most
-// COLORMAP_SIZE-1; the last texel is the "not in legend" fallback), so
-// codes of any dtype — negative, or above 255 — map onto one row.
-// Entries without a numeric value or a valid [r,g,b] color are skipped;
-// a missing name falls back to the code itself (per the spec).
+// A field header's `legend` → [{value, name, color: [r,g,b] 0..255}]
+// sorted by value, or null when there is no usable legend. Entries
+// without a numeric value or a valid [r,g,b] are skipped; a missing name
+// falls back to the code itself (per the spec). At most COLORMAP_SIZE-1
+// entries (the last texel is the "not in legend" fallback).
 function parseFieldLegend(header) {
   const L = header && header.legend;
   if (!Array.isArray(L)) return null;
@@ -3746,7 +4447,7 @@ function parseFieldLegend(header) {
     if (!Array.isArray(c) || c.length !== 3 || !c.every(Number.isFinite)) continue;
     seen.add(e.value);
     entries.push({ value: e.value, name: typeof e.name === 'string' && e.name ? e.name : String(e.value),
-                   rgb: c.map(x => Math.max(0, Math.min(255, x)) / 255) });
+                   color: c.map(x => Math.max(0, Math.min(255, x))) });
   }
   if (!entries.length) return null;
   entries.sort((a, b) => a.value - b.value);
@@ -3754,40 +4455,35 @@ function parseFieldLegend(header) {
     console.warn(`legend has ${entries.length} entries; only the first ${COLORMAP_SIZE - 1} get their own color`);
     entries.length = COLORMAP_SIZE - 1;
   }
-  return { entries, indexOf: new Map(entries.map((e, i) => [e.value, i])) };
+  return entries;
 }
+function fieldLegend(rec) {
+  if (rec._legend === undefined) rec._legend = parseFieldLegend(rec.header);
+  return rec._legend;
+}
+function fieldColormap(rec) {
+  if (!rec.colormap) rec.colormap = fieldLegend(rec) ? { source: 'file' } : { source: 'builtin', id: 'jet' };
+  return rec.colormap;
+}
+// The options offered for a field: "from file" first (only when it has a
+// legend), then every built-in.
+function fieldColormapChoices(rec) {
+  const out = [];
+  if (fieldLegend(rec)) out.push({ source: 'file', label: 'from file' });
+  for (const [id, def] of Object.entries(BUILTIN_COLORMAPS)) out.push({ source: 'builtin', id, label: def.name });
+  return out;
+}
+const sameColormapRef = (a, b) => a.source === b.source && (a.id || a.name || '') === (b.id || b.name || '');
 
-// A field's values normalized to [0,1] for colormap lookup, computed once
-// per record and cached: same layout as rec.parsed.values (per-vertex:
-// flat over all points, see parseDqzChild's offsets; per-streamline: one
-// per streamline). Also sets rec.legend and rec.categorical.
-//  - With a legend: each stored code maps to its legend entry's texel,
-//    t = texel / (COLORMAP_SIZE-1), so it hits that texel exactly;
-//    codes not in the legend get the fallback texel. Drawn categorical
-//    (no blending between neighbouring codes), whatever the kind.
-//  - Otherwise the range is the header's value_min/value_max when both
-//    are given — the generating scripts keep these identical across
-//    files, so the same color means the same value in every bundle —
-//    else the data's own finite min/max. kind "categorical" without a
-//    legend is spread over jet the same way, but still drawn categorical.
-// Non-finite values stay NaN (drawn in the global LINE·COLOR mode).
-function activeFieldValues(rec) {
-  if (rec.norm) return rec.norm;
-  const h = rec.header;
-  rec.legend = parseFieldLegend(h);
-  rec.categorical = !!rec.legend || h.kind === 'categorical';
-  if (rec.legend) {
-    const codes = rec.parsed.codes, idx = rec.legend.indexOf, fb = COLORMAP_SIZE - 1;
-    const norm = new Float32Array(codes.length);
-    for (let i = 0; i < codes.length; i++) {
-      const k = idx.get(codes[i]);
-      norm[i] = (k === undefined ? fb : k) / (COLORMAP_SIZE - 1);
-    }
-    rec.colorRange = null;
-    rec.norm = norm;
-    return norm;
-  }
-  const v = rec.parsed.values;
+// The value range colors are spread over: the header's value_min/value_max
+// when both are given (the generating scripts keep these identical across
+// files, so the same color means the same value in every bundle), else the
+// data's own finite min/max. For a categorical field always the range of
+// its CODES (its value_min/value_max, if any, describe what was binned, not
+// the codes).
+function fieldRange(rec) {
+  if (rec._range) return rec._range;
+  const h = rec.header, v = rec.parsed.values;
   let lo, hi;
   if (h.kind !== 'categorical' && Number.isFinite(h.value_min) && Number.isFinite(h.value_max) && h.value_max > h.value_min) {
     lo = h.value_min; hi = h.value_max;
@@ -3796,12 +4492,161 @@ function activeFieldValues(rec) {
     for (let i = 0; i < v.length; i++) { const x = v[i]; if (Number.isFinite(x)) { if (x < lo) lo = x; if (x > hi) hi = x; } }
     if (lo > hi) { lo = 0; hi = 1; } // no finite values at all
   }
-  const span = hi - lo;
-  const norm = new Float32Array(v.length);
-  for (let i = 0; i < v.length; i++) norm[i] = span > 0 ? (v[i] - lo) / span : 0.5;
-  rec.colorRange = [lo, hi];
-  rec.norm = norm;
+  return (rec._range = [lo, hi]);
+}
+
+// The field's value window [from, to], in data units: where the colormap
+// applies (highlight); outside it the file's own color/opacity shows.
+// Defaults to the full field range (= everything highlighted, as before).
+// to < from inverts a continuous colormap.
+function fieldWindow(rec) {
+  return rec.window || (rec.window = [...fieldRange(rec)]);
+}
+// The window in the SAME normalized space as the field's per-vertex values
+// (see fieldNormValues), for the shader. For a legend-colored categorical
+// field that space is legend texel index / (COLORMAP_SIZE-1), so the window
+// becomes the texel range of the legend entries whose codes fall inside it
+// (entries are sorted by code, so that range is contiguous).
+function fieldWindowNorm(rec) {
+  const [a, b] = fieldWindow(rec);
+  fieldNormValues(rec);
+  if (rec.normKey === 'legend') {
+    const L = resolveFieldColormap(rec).entries, lo = Math.min(a, b), hi = Math.max(a, b);
+    let i0 = L.findIndex(e => e.value >= lo), i1 = -1;
+    for (let i = L.length - 1; i >= 0; i--) if (L[i].value <= hi) { i1 = i; break; }
+    if (i0 < 0 || i1 < i0) return [2, 2]; // no code in the window: nothing highlighted
+    return [i0 / (COLORMAP_SIZE - 1), i1 / (COLORMAP_SIZE - 1)];
+  }
+  const [lo, hi] = fieldRange(rec), span = hi - lo || 1;
+  return [(a - lo) / span, (b - lo) / span];
+}
+
+function resolveFieldColormap(rec) {
+  const ref = fieldColormap(rec), L = fieldLegend(rec);
+  if (ref.source === 'file' && L) {
+    if (rec.header.kind === 'categorical') return { kind: 'categorical', entries: L };
+    // A legend on continuous data: its values are in data units, so they
+    // become stops at their position within the field's range.
+    const [lo, hi] = fieldRange(rec), span = hi - lo || 1;
+    return { kind: 'continuous', stops: L.map(e => [(e.value - lo) / span, e.color]) };
+  }
+  if (ref.source === 'user' && Array.isArray(ref.stops)) return { kind: 'continuous', stops: ref.stops };
+  return BUILTIN_COLORMAPS[ref.id] || BUILTIN_COLORMAPS.jet;
+}
+
+// A field's values normalized to [0,1] for colormap lookup: same layout as
+// rec.parsed.values (per-vertex: flat over all points, see parseDqzChild's
+// offsets; per-streamline: one per streamline). Two ways, cached by which
+// one (rec.normKey), since changing the colormap can switch between them:
+//  - 'legend' (a categorical legend is the colormap): each stored code
+//    maps to its legend entry's texel, t = texel / (COLORMAP_SIZE-1), so
+//    it hits that texel exactly; codes not in the legend get the last
+//    (fallback) texel.
+//  - 'range' (any continuous colormap): t = (value - lo) / (hi - lo) over
+//    fieldRange. For a categorical field that spreads its codes over the
+//    colormap.
+// Categorical fields are drawn without blending between neighbouring
+// codes either way (see buildFieldInfo). Non-finite values stay NaN
+// (drawn in the global LINE·COLOR mode).
+function fieldNormValues(rec) {
+  const def = resolveFieldColormap(rec);
+  const key = def.kind === 'categorical' ? 'legend' : 'range';
+  if (rec.norm && rec.normKey === key) return rec.norm;
+  let norm;
+  if (key === 'legend') {
+    const idx = new Map(def.entries.map((e, i) => [e.value, i]));
+    const codes = rec.parsed.codes, fb = COLORMAP_SIZE - 1;
+    norm = new Float32Array(codes.length);
+    for (let i = 0; i < codes.length; i++) {
+      const k = idx.get(codes[i]);
+      norm[i] = (k === undefined ? fb : k) / (COLORMAP_SIZE - 1);
+    }
+  } else {
+    const v = rec.parsed.values, [lo, hi] = fieldRange(rec), span = hi - lo;
+    norm = new Float32Array(v.length);
+    for (let i = 0; i < v.length; i++) norm[i] = span > 0 ? (v[i] - lo) / span : 0.5;
+  }
+  rec.norm = norm; rec.normKey = key;
   return norm;
+}
+
+// Colormap row for group (bundle) p (row = its index in groups), from its
+// active field's colormap.
+function writeFieldColormapRow(p) {
+  const row = groups.indexOf(p), rec = p.activeField;
+  if (row < 0 || !rec) return;
+  writeColormapRow(lineColormapTex, resolveFieldColormap(rec), row, LEGEND_FALLBACK_RGB);
+}
+
+// Changes a field's colormap. For the active field: a new colormap is
+// normally just a rewrite of its texture row plus a redraw; only when the
+// normalization itself changes (a categorical field switching between its
+// legend and a continuous map) do the streamline meshes get rebuilt.
+function setFieldColormap(rec, ref) {
+  rec.colormap = ref;
+  const using = groups.filter(g => g.activeField === rec);
+  if (using.length) {
+    const before = rec.normKey;
+    fieldNormValues(rec);
+    for (const g of using) writeFieldColormapRow(g);
+    if (rec.normKey !== before) updateProbe(); else restyleFiles(); // window's normalized form can change too
+  }
+  rebuildDqzChildItems(); // refresh the preview swatch
+}
+
+// "colormap [select] [swatch]" for a field's inline settings area.
+function makeColormapPicker(rec) {
+  const wrap = document.createElement('span');
+  wrap.className = 'dt-cmap';
+  const lbl = document.createElement('span');
+  lbl.className = 'dt-cmap-lbl';
+  lbl.textContent = 'colormap';
+  const sel = document.createElement('select');
+  sel.className = 'inline-select';
+  const choices = fieldColormapChoices(rec), cur = fieldColormap(rec);
+  choices.forEach((c, i) => {
+    const o = document.createElement('option');
+    o.value = String(i); o.textContent = c.label;
+    if (sameColormapRef(c, cur)) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('click', e => e.stopPropagation());
+  sel.addEventListener('change', () => {
+    const c = choices[+sel.value];
+    setFieldColormap(rec, c.source === 'file' ? { source: 'file' } : { source: c.source, id: c.id });
+  });
+  const sw = document.createElement('span');
+  sw.className = 'dt-cmap-swatch';
+  rec._swatch = sw;
+  updateFieldSwatch(rec);
+  wrap.append(lbl, sel, sw);
+  return wrap;
+}
+
+// Preview swatch: the colormap as applied, i.e. reversed when the window
+// is inverted (to < from) on a continuous map.
+function updateFieldSwatch(rec) {
+  if (!rec._swatch) return;
+  let def = resolveFieldColormap(rec);
+  const [a, b] = fieldWindow(rec);
+  if (def.kind === 'continuous' && b < a) def = { kind: 'continuous', stops: def.stops.map(([t, c]) => [1 - t, c]) };
+  rec._swatch.style.backgroundImage = colormapCSSGradient(def); // not .background: that shorthand would reset the CSS origin/repeat
+}
+
+// "Apply from / to" sliders (data units) for a field's settings area.
+function makeFieldWindowRows(rec) {
+  const [lo, hi] = fieldRange(rec), win = fieldWindow(rec);
+  const categorical = rec.header.kind === 'categorical';
+  const step = categorical ? 1 : (hi - lo) / 500 || 1;
+  const fmt = v => categorical ? String(Math.round(v)) : (+v.toPrecision(3)).toString();
+  const onChange = () => {
+    updateFieldSwatch(rec);
+    if (groups.some(g => g.activeField === rec)) restyleFiles();
+  };
+  return [
+    makeSliderRow('APPLY FROM', { min: lo, max: hi, step, value: win[0], format: fmt, onInput: v => { win[0] = v; onChange(); } }),
+    makeSliderRow('APPLY TO',   { min: lo, max: hi, step, value: win[1], format: fmt, onInput: v => { win[1] = v; onChange(); } }),
+  ];
 }
 
 // fieldInfo for makeRibbonLines: perTract[i] for global streamline index
@@ -3809,23 +4654,23 @@ function activeFieldValues(rec) {
 // number, or null. Returns null (no field arrays at all) when no file has
 // an active field, the common case.
 function buildFieldInfo(renderIds) {
-  if (!trckParents.some(p => p.activeField)) return null;
-  // Signed row coordinate per geometry file (see FIELD_COLOR_GLSL):
-  // negative = categorical.
-  const rowV = trckParents.map((p, i) => p.activeField
-    ? (activeFieldValues(p.activeField), (p.activeField.categorical ? -1 : 1) * colormapRowV(lineColormapTex, i))
+  if (!groups.some(g => g.activeField)) return null;
+  // Signed row coordinate per group (see FIELD_COLOR_GLSL):
+  // negative = categorical (no blending between codes along a segment).
+  const rowV = groups.map((p, i) => p.activeField
+    ? (fieldNormValues(p.activeField), (p.activeField.header.kind === 'categorical' ? -1 : 1) * colormapRowV(lineColormapTex, i))
     : 0);
   const perTract = new Array(renderIds.length);
   const perTractRow = new Float32Array(renderIds.length);
   for (let k = 0; k < renderIds.length; k++) {
     const gi = renderIds[k];
-    const pi = isBundle && streamlineBundleId ? streamlineBundleId[gi] : 0;
-    const p = trckParents[pi];
-    const rec = p && p.activeField;
+    const pi = streamlineBundleId ? streamlineBundleId[gi] : 0;
+    const g = groups[pi];
+    const rec = g && g.activeField;
     if (!rec) { perTract[k] = null; continue; }
     perTractRow[k] = rowV[pi];
-    const norm = activeFieldValues(rec);
-    const local = gi - p.firstStreamline;
+    const norm = fieldNormValues(rec);
+    const local = gi - rec.parent.firstStreamline; // the field's file = the group's file
     if (rec.parsed.scope === 'per_vertex') {
       const o = rec.parsed.offsets;
       perTract[k] = norm.subarray(o[local], o[local + 1]);
@@ -3834,20 +4679,6 @@ function buildFieldInfo(renderIds) {
     }
   }
   return { perTract, perTractRow, colormap: lineColormapTex };
-}
-
-function makeDqzFieldItem(rec) {
-  const h = rec.header;
-  const fi = new DataFieldItem(h && h.name ? h.name : rec.file.name, rec);
-  if (h) {
-    fi.tag = (h.scope === 'per_vertex' ? 'per-vertex' : 'per-streamline') + ' · ' + h.kind
-           + (parseFieldLegend(h) ? ' · legend' : '');
-    fi.tooltip = [h.name, h.description, rec.file.name].filter(Boolean).join('\n');
-  }
-  if (rec.reason) fi.tooltip = (fi.tooltip ? fi.tooltip + '\n' : '') + '⚠ ' + rec.reason;
-  else if (rec.status === 'matched') fi.tooltip = (fi.tooltip ? fi.tooltip + '\n' : '') + '(radio: color streamlines by this field; click again to turn off)';
-  fi.onMenu = () => showDqzChildHeaderPanel(rec);
-  return fi;
 }
 
 function showDqzChildHeaderPanel(rec) {
@@ -3861,21 +4692,13 @@ function showDqzChildHeaderPanel(rec) {
     for (let i = 0; i < v.length; i++) { const x = v[i]; if (x < mn) mn = x; if (x > mx) mx = x; }
     info.n_values = v.length;
     if (v.length) info.decoded_range = [+mn.toPrecision(6), +mx.toPrecision(6)];
-    info.coloring = rec.parent.activeField === rec ? 'active' : 'off';
-    if (rec.legend) info.colored_by = 'legend (' + rec.legend.entries.length + ' entries)';
-    else if (rec.colorRange) { info.colored_by = 'jet'; info.colormap_range = rec.colorRange.map(x => +x.toPrecision(6)); }
+    const using = groups.filter(g => g.activeField === rec).map(g => g.name);
+    info.coloring = using.length ? using : 'off';
+    info.colormap = fieldColormap(rec);
+    info.window = fieldWindow(rec).map(x => +x.toPrecision(6));
+    if (resolveFieldColormap(rec).kind === 'continuous') info.colormap_range = fieldRange(rec).map(x => +x.toPrecision(6));
   }
   showHeaderPanel('DATA FILE HEADER', JSON.stringify({ ...info, header }, null, 2));
-}
-
-function registerLutItem(filename) {
-  const item = new LutItem(filename);
-  item.onVisibilityChange = (_, visible) => {
-    // Lightweight on/off, independent of the MODALITY radio (SEG
-    // mode) — just toggles whether the LUT is actually applied.
-    vr.setApplyLUT(visible && modality === 'seg');
-  };
-  dataStore.setLut(item);
 }
 
 document.body.addEventListener('dragover',e=>e.preventDefault());
@@ -4123,28 +4946,56 @@ async function fetchWithProgress(url, label) {
       ? `${label} ${Math.min(100, Math.round(received/total*100))}% (${mb} / ${(total/1024/1024).toFixed(1)} MB)`
       : `${label} ${mb} MB…`);
   }
-  return new Blob(chunks);
+  return new Blob(chunks, { type: res.headers.get('Content-Type') || '' });
 }
 
 async function loadDemoFile(url, kind) {
   const name = url.split('/').pop();
   const label = kind === 'anat' ? 'downloading anatomy' : 'downloading tractogram';
   const blob = await fetchWithProgress(url, label);
+  // (An anatomy file loaded this way is added to the volume list by
+  // loadAnat itself — see volumeForFile.)
   const file = new File([blob], name);
-  if (kind === 'anat') {
-    // Demo loads bypass dispatchOpenedFiles (there's no real drop/pick
-    // here, just a fetched blob), so anatGroup — which
-    // registerAnatGroupItems reads from at the end of loadAnat — needs
-    // to be populated here too, the same way dispatchOpenedFiles does
-    // for a plain single-file load. Without this the anatomy loads and
-    // renders fine but never shows up in the FILE panel's tree.
-    anatGroup = [{ file, label: name, volType: null, lutFile: null }];
-    anatActiveIndex = 0;
-  }
   state.update({ [kind+'.file']: file });
 }
 
-if (window.location.search.includes('demo')) {
+// ?load=URL — opt-in loading of public data: a .zip (or any single file
+// the app can open) is fetched and goes through the same path as a drop.
+// Repeat the parameter to load several files as one drop:
+//   index.html?load=https://host/sub-01.zip
+//   index.html?load=https://host/T1.nii.gz&load=https://host/AF.tck
+// The server must allow cross-origin requests (CORS:
+// Access-Control-Allow-Origin) — otherwise the browser blocks the fetch.
+async function loadFromUrls(urls) {
+  const files = [];
+  for (const url of urls) {
+    let name;
+    try {
+      name = decodeURIComponent(new URL(url, location.href).pathname.split('/').pop()) || 'download';
+    } catch (e) { alert('Not a valid URL: ' + url); return; }
+    let blob;
+    try { blob = await fetchWithProgress(url, 'downloading ' + name); }
+    catch (e) {
+      setProgress('');
+      alert('Could not download\n' + url + '\n\n' + ((e && e.message) || e)
+            + '\n\nIf the file exists, its server may not allow loading from other sites (CORS).');
+      return;
+    }
+    // A URL without a recognizable extension (e.g. .../download?id=…):
+    // go by the content type for a zip.
+    if (!/\.[a-z0-9]+$/i.test(name) && /zip/i.test(blob.type)) name += '.zip';
+    files.push(new File([blob], name, { type: blob.type }));
+  }
+  setProgress('');
+  try { await dispatchOpenedFiles(files); }
+  catch (err) { alert('File load error: ' + err); }
+}
+{
+  const loadUrls = new URLSearchParams(location.search).getAll('load').filter(Boolean);
+  if (loadUrls.length) loadFromUrls(loadUrls);
+}
+
+if (new URLSearchParams(location.search).has('demo')) {
   const demoAnat = 'M01_T2w.nii.gz';
   const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
@@ -4156,7 +5007,7 @@ if (window.location.search.includes('demo')) {
   }
   tryDemoLoad();
 }
-if (window.location.search.includes('MacBNA_M03')) {
+if (new URLSearchParams(location.search).has('MacBNA_M03')) {
   const demoAnat = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/anat_dwireg.nii.gz';
   const demoTck = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/sub-M03_tractogram.tck';
   async function tryDemoLoad() {

@@ -18,10 +18,12 @@
 //    scrollbars, and anything marked [data-no-drag]. Pass
 //    dragAnywhere: false to restrict dragging to the titlebar.
 //  - Stacking: pressing anywhere in a panel (or tabbing into it, or
-//    opening it) brings it to the front of its group. The group owns
-//    the z-index values; the calling script doesn't need to manage them.
-//    The topmost open panel gets the group's focus class (default
-//    'focused') so the user can see which one is active.
+//    opening it) brings it to the front of ALL panels, whatever group
+//    they're in — one shared stack for the whole page (see PanelStack
+//    below). Groups only decide which panels replace each other and
+//    auto-close; they don't stack separately. The calling script doesn't
+//    manage z-indexes. The topmost open panel gets its group's focus
+//    class (default 'focused') so the user can see which one is active.
 //  - Trigger button is a three-way toggle: hidden → open, open but not
 //    focused → focused, focused → hidden. So pressing it for a panel
 //    buried under another one brings it up instead of hiding it.
@@ -109,15 +111,17 @@ class FloatingPanel {
     else this.close();
   }
 
-  // True when this is the topmost open panel of its group.
+  // True when this is the topmost open panel on the page.
   get isFocused() { return this.group.frontPanel() === this; }
 
   open() {
-    if (!this.pinned) {
-      this.group.closeUndocked(this);
-      this._positionAtDefault();
-    }
+    if (!this.pinned) this.group.closeUndocked(this);
+    // Visible BEFORE positioning: clampPanelPos needs the real width,
+    // and a display:none panel measures 0 wide, which pushed any default
+    // position left of the clamp margin (60px) out to x=60. Both happen
+    // before the next paint, so there's no flicker.
     this.el.classList.add('open');
+    if (!this.pinned) this._positionAtDefault();
     this.group.bringToFront(this);
     if (this.onOpen) this.onOpen();
   }
@@ -206,32 +210,16 @@ class FloatingPanel {
   }
 }
 
-// Coordinates the "replace each other while undocked" / "outside click
-// closes only the undocked ones" behavior across a set of panels, and
-// owns their stacking order and which one is focused.
-class PanelDockGroup {
-  // baseZ: z-index of the bottom-most panel; panels get baseZ, baseZ+1, …
-  // focusClass: class put on the topmost open panel (style it in CSS,
-  //   e.g. a blue border). Set it to whatever class your CSS already uses.
-  constructor({ baseZ = 1000, focusClass = 'focused' } = {}) {
-    this.panels = [];
-    this.stack = []; // bottom → top
-    this.baseZ = baseZ;
-    this.focusClass = focusClass;
-    document.addEventListener('click', () => {
-      for (const p of this.panels) if (p.isOpen && !p.pinned) p.close();
-    });
-  }
+// One stacking order for every FloatingPanel on the page, whatever
+// PanelDockGroup it belongs to. (Each group used to keep its own stack,
+// all numbered from the same base z-index, so panels in different groups
+// — e.g. FILE and the header viewer opened from it — tied on z-index and
+// whichever came later in the DOM won, regardless of which was clicked.)
+const PanelStack = {
+  baseZ: 1000,
+  stack: [], // bottom → top, every registered panel
 
-  register(panel) {
-    this.panels.push(panel);
-    this.stack.push(panel);
-    this.refresh();
-  }
-
-  closeUndocked(exceptPanel) {
-    for (const p of this.panels) if (p !== exceptPanel && p.isOpen && !p.pinned) p.close();
-  }
+  add(panel) { this.stack.push(panel); this.refresh(); },
 
   bringToFront(panel) {
     const i = this.stack.indexOf(panel);
@@ -241,25 +229,58 @@ class PanelDockGroup {
       this.stack.push(panel);
     }
     this.refresh();
-  }
+  },
 
-  // Topmost open panel, or null when none are open.
+  // Topmost open panel on the page, or null when none are open.
   frontPanel() {
     for (let i = this.stack.length - 1; i >= 0; i--) {
       if (this.stack[i].isOpen) return this.stack[i];
     }
     return null;
-  }
+  },
 
-  // Reapply z-indexes and the focus class. Reassigning compact values
-  // keeps z-index bounded instead of counting up forever.
+  // Reapply z-indexes and focus classes. Reassigning compact values keeps
+  // z-index bounded instead of counting up forever.
   refresh() {
     const front = this.frontPanel();
     this.stack.forEach((p, i) => {
       p.el.style.zIndex = String(this.baseZ + i);
-      p.el.classList.toggle(this.focusClass, p === front);
+      p.el.classList.toggle(p.group.focusClass, p === front);
+    });
+  },
+};
+
+// Coordinates the "replace each other while undocked" / "outside click
+// closes only the undocked ones" behavior across a set of panels.
+// Stacking and focus are page-wide (PanelStack); the stacking methods
+// here just forward to it, so FloatingPanel's calls stay the same.
+class PanelDockGroup {
+  // focusClass: class put on the page's topmost open panel when it's in
+  //   this group (style it in CSS, e.g. a blue border).
+  constructor({ focusClass = 'focused' } = {}) {
+    this.panels = [];
+    this.focusClass = focusClass;
+    document.addEventListener('click', () => {
+      for (const p of this.panels) if (p.isOpen && !p.pinned) p.close();
     });
   }
+
+  register(panel) {
+    this.panels.push(panel);
+    PanelStack.add(panel);
+  }
+
+  closeUndocked(exceptPanel) {
+    for (const p of this.panels) if (p !== exceptPanel && p.isOpen && !p.pinned) p.close();
+  }
+
+  bringToFront(panel) { PanelStack.bringToFront(panel); }
+
+  // Topmost open panel on the whole page (not just this group) — what a
+  // trigger button's "open but not in front → bring to front" test needs.
+  frontPanel() { return PanelStack.frontPanel(); }
+
+  refresh() { PanelStack.refresh(); }
 }
 
 export { FloatingPanel, PanelDockGroup, clampPanelPos, INTERACTIVE_SELECTOR };

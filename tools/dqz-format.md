@@ -300,6 +300,13 @@ offset  size      contents
   `[r, g, b]`, 0–255), mainly for `kind: "categorical"`. Partial or
   entirely absent legends are fine — a decoder falls back to the raw
   code for any value with no matching entry.
+- `role` — optional. `"bundles"` marks a `kind: "categorical"`,
+  `scope: "per_streamline"` file as the parent's **bundle assignment**: a
+  viewer splits the parent's streamlines into one bundle per code (named
+  and colored by the `legend`) as soon as both are loaded, instead of
+  showing them as a single tractogram. See *Bundle labels from whole-brain
+  tractography* below. Any other value, or no `role`, is an ordinary data
+  field (which a viewer may still offer to split by).
 
 ### Data records
 
@@ -335,3 +342,12 @@ A whole-brain tractogram classified into bundles after tracking is exactly
 a `kind: "categorical"`, `scope: "per_streamline"` child: one byte (or
 wider, past 255 bundles) per streamline, plus a `legend` mapping each code
 to a bundle name and display color.
+
+Give such a file `"role": "bundles"` to have it used as the bundle
+assignment automatically. The result is then the same as loading one
+`.tck`/`.dqz` file per bundle with an `index.json` manifest giving each
+bundle's name and color: in both cases a viewer ends up with one
+tractogram whose streamlines are grouped into named, colored bundles.
+Streamlines whose code has no legend entry form a bundle of their own
+(named after the code), so give "unassigned" streamlines an explicit
+entry, e.g. `{"value": 0, "name": "unassigned", "color": [128, 128, 128]}`.
