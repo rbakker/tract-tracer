@@ -3,13 +3,14 @@
 // Draw order: far lines → near lines → dots (src+tgt always on top).
 
 import * as THREE from 'three';
-import { DOTS_VS, DOTS_FS, hexToRgbRaw } from './scene3d.js';
+import { DOTS_VS, DOTS_FS, hexToRgbRaw, COLORMAP_SIZE, FIELD_COLOR_GLSL, FILE_STYLE_VS_GLSL } from './scene3d.js';
 
 // SLAB_VS does the same screen-space ribbon expansion as scene3d.js's
 // RIBBON_VS (see that file for the derivation), adapted for this
 // renderer's own orthographic camera and re-purposed to also emit
 // vSignedDist for the near/far slab discard test SLAB_FS already does.
-// Width here is a SINGLE CONSTANT (u_widthPx) rather than following the
+// Width here is constant along the line (half the file's 3D width, from the
+// file-style texture — see SLAB_VS) rather than following the
 // near/far depth taper the 3D view uses: an orthographic slice has no
 // meaningful "camera depth" the way the 3D perspective view does, so
 // depth-based tapering wouldn't mean anything here — see the earlier
@@ -25,18 +26,38 @@ attribute vec3 instanceColor;
 // bound (same geometry object is cloned from the 3D mesh — see
 // _ensureLineMeshes — so this attribute is already populated there).
 attribute vec3 instanceBundleColor;
+// Data-field value per segment — same attribute as RIBBON_VS, shared via
+// the cloned geometry. See FIELD_COLOR_GLSL in scene3d.js.
+attribute vec3 instanceField;
+attribute float instanceFile; // row in u_fileStyle (width, opacity, field window)
 // position.x = SIDE (-1/+1), position.y = END (0=start, 1=end) — same
 // template-quad convention as scene3d.js's RIBBON_VS.
 uniform vec2  u_resolution;
-uniform float u_widthPx;
 uniform vec3  u_sliceNormal;
 uniform vec3  u_slicePt;
 varying vec3  vColor;
 varying vec3  vBundleColor;
+varying vec2  vFieldSE;
+varying float vSegPos;
+varying float vFieldRow;
+varying vec4  vStyle;
 varying float vSignedDist;
+` + FILE_STYLE_VS_GLSL + `
 void main() {
   vColor       = instanceColor;
   vBundleColor = instanceBundleColor;
+  vFieldSE     = instanceField.xy;
+  vSegPos      = position.y;
+  vFieldRow    = instanceField.z;
+  vStyle       = fileStyle(instanceFile);
+  // Skip segments this pass can't draw (see segmentMayDraw in scene3d.js).
+#if defined(NEAR_PASS) && defined(FAINT_PASS)
+  if (!segmentMayDraw(instanceField, vStyle, 1)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+#elif defined(NEAR_PASS)
+  if (!segmentMayDraw(instanceField, vStyle, 0)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+#else
+  if (!segmentMayDraw(instanceField, vStyle, 2)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+#endif
 
   vec4 worldStart = modelMatrix * vec4(instanceStart, 1.0);
   vec4 worldEnd   = modelMatrix * vec4(instanceEnd,   1.0);
@@ -54,11 +75,21 @@ void main() {
   dirPx = (dirLen > 1e-4) ? (dirPx / dirLen) : vec2(1.0, 0.0);
   vec2 normalPx = vec2(-dirPx.y, dirPx.x);
 
-  float half_ = 0.5 * u_widthPx;
+  // 2D width: half the file's 3D width, at least 1px — except exactly 0,
+  // which stays 0 (lines off). Same rule index.html used for the old
+  // single global 2D width.
+  float widthPx = vStyle.x <= 0.0 ? 0.0 : max(1.0, 0.5 * vStyle.x);
+  float half_ = 0.5 * widthPx;
   // Square-cap join extension, same cheap approach as RIBBON_VS — see its
   // comment for the join-test-streamlines.tck caveat at sharp angles.
+  // No cap extension in the faint pass, see RIBBON_VS.
+#ifdef FAINT_PASS
+  float capK = 0.0;
+#else
+  float capK = 1.0;
+#endif
   vec2 offsetPx = normalPx * position.x * half_
-                + dirPx    * (position.y * 2.0 - 1.0) * half_;
+                + dirPx    * (position.y * 2.0 - 1.0) * half_ * capK;
 
   vec4 clip = mix(clipStart, clipEnd, position.y);
   clip.xy += (offsetPx / (0.5 * u_resolution)) * clip.w;
@@ -69,8 +100,16 @@ const SLAB_FS = `
 precision highp float;
 varying vec3  vColor;
 varying vec3  vBundleColor;
+varying vec2  vFieldSE;
+varying float vSegPos;
+varying float vFieldRow;
+varying vec4  vStyle;
 varying float vSignedDist;
 uniform float u_slabHalf;
+// The 3D mesh's own colormap texture (same object, see render()), so a
+// colormap change shows up in both views at once.
+uniform sampler2D u_colormap;
+` + FIELD_COLOR_GLSL + `
 // 0 = uniform u_lineColor, 1 = RAS (vColor), 2 = bundle (vBundleColor) —
 // same convention as scene3d.js's LINE_FS.
 uniform int   u_autoColor;
@@ -78,14 +117,26 @@ uniform vec3  u_lineColor;
 void main() {
   float d = vSignedDist;
   vec3 col = (u_autoColor == 1) ? vColor : ((u_autoColor == 2) ? vBundleColor : u_lineColor);
+  vec4 shade = fieldShade(col);
+  col = shade.rgb;
+  float alpha = shade.a;
+  if (alpha <= 0.001) discard;            // opacity 0: not drawn at all
   #ifdef NEAR_PASS
     if (d < 0.0 || d > u_slabHalf) discard;
+    // near half: opaque fragments in the opaque pass, the rest in the
+    // faint pass drawn after it (same split as the 3D view)
+    #ifdef FAINT_PASS
+      if (alpha >= 0.999) discard;
+    #else
+      if (alpha < 0.999) discard;
+      alpha = 1.0;
+    #endif
   #endif
   #ifdef FAR_PASS
     if (d >= 0.0 || d < -u_slabHalf) discard;
-    col = col * 0.7;
+    col = col * 0.7;                      // far half: dimmed, and blended (opaque = alpha 1)
   #endif
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, alpha);
 }`;
 
 export class SlabRenderer {
@@ -96,11 +147,11 @@ export class SlabRenderer {
     this._rtH    = 0;
     this._pixels = null;
 
-    this._matNear     = null;  this._matFar      = null;
+    this._matNear     = null;  this._matFar      = null;  this._matNearFaint = null;
     this._dmatSrcNear = null;  this._dmatSrcFar  = null;
     this._dmatTgtNear = null;  this._dmatTgtFar  = null;
 
-    this._meshNear    = null;  this._meshFar     = null;
+    this._meshNear    = null;  this._meshFar     = null;  this._meshNearFaint = null;
     this._dotsSrcNear = null;  this._dotsSrcFar  = null;
     this._dotsTgtNear = null;  this._dotsTgtFar  = null;
 
@@ -151,9 +202,11 @@ export class SlabRenderer {
       u_slabHalf:    { value: 1.0 },
       u_autoColor:   { value: 1 },
       u_lineColor:   { value: new THREE.Vector3(1, 0.4, 0) },
+      u_colormap:    { value: null }, // set per render from selMesh — see setLine
+      u_fileStyle:     { value: null }, // likewise
+      u_fileStyleSize: { value: 1 },
       // Ribbon-specific — see SLAB_VS.
       u_resolution:  { value: new THREE.Vector2(1, 1) },
-      u_widthPx:     { value: 2.0 },
     };
   }
 
@@ -172,8 +225,8 @@ export class SlabRenderer {
     if (this._matNear) return;
     const lineMat = (def) => new THREE.ShaderMaterial({
       vertexShader: SLAB_VS, fragmentShader: SLAB_FS,
-      uniforms: this._lineUniforms(), defines: def,
-      depthWrite: !!def.NEAR_PASS, depthTest: true, transparent: !!def.FAR_PASS,
+      uniforms: this._lineUniforms(), defines: { ...def, COLORMAP_SIZE },
+      depthWrite: !!def.NEAR_PASS && !def.FAINT_PASS, depthTest: true, transparent: !!def.FAR_PASS || !!def.FAINT_PASS,
       // Same reasoning as scene3d.js's makeRibbonMaterial: screen-space
       // ribbon construction makes triangle winding easy to get backwards
       // for a given camera's handedness without it being obvious by
@@ -190,6 +243,7 @@ export class SlabRenderer {
     });
     this._matNear     = lineMat({ NEAR_PASS: 1 });
     this._matFar      = lineMat({ FAR_PASS:  1 });
+    this._matNearFaint = lineMat({ NEAR_PASS: 1, FAINT_PASS: 1 });
     this._dmatSrcNear = dotMat({ NEAR_PASS: 1 });
     this._dmatSrcFar  = dotMat({ FAR_PASS:  1 });
     this._dmatTgtNear = dotMat({ NEAR_PASS: 1 });
@@ -197,7 +251,7 @@ export class SlabRenderer {
   }
 
   invalidate(selMesh) {
-    this._meshNear = null; this._meshFar = null;
+    this._meshNear = null; this._meshFar = null; this._meshNearFaint = null;
     this._dotsSrcNear = null; this._dotsSrcFar = null;
     this._dotsTgtNear = null; this._dotsTgtFar = null;
     this._cachedSelMesh = null;
@@ -208,9 +262,12 @@ export class SlabRenderer {
   _ensureLineMeshes(selMesh) {
     if (this._meshNear && this._cachedSelMesh === selMesh) return;
     this._ensureMats();
-    const mk = (mat) => { const m = selMesh.clone(); m.geometry = selMesh.geometry; m.material = mat; return m; };
+    // clone(false): not the 3D faint-pass child (see makeRibbonLines) —
+    // this renderer does its own passes on the shared geometry.
+    const mk = (mat) => { const m = selMesh.clone(false); m.geometry = selMesh.geometry; m.material = mat; return m; };
     this._meshNear = mk(this._matNear);
     this._meshFar  = mk(this._matFar);
+    this._meshNearFaint = mk(this._matNearFaint);
     this._cachedSelMesh = selMesh;
   }
 
@@ -295,7 +352,13 @@ export class SlabRenderer {
       u.u_autoColor.value = lc.auto;
       u.u_lineColor.value.set(lc.col[0], lc.col[1], lc.col[2]);
       u.u_resolution.value.set(W, H);
-      u.u_widthPx.value = opts.lineWidthPx2D ?? 2.0;
+      // Borrow the 3D mesh's colormap and file-style textures (shared,
+      // never disposed here). Line width now comes per file from the
+      // style texture; opts.lineWidthPx2D only gates "lines on at all".
+      const su = selMesh.material.uniforms;
+      u.u_colormap.value = su.u_colormap?.value ?? null;
+      u.u_fileStyle.value = su.u_fileStyle?.value ?? null;
+      u.u_fileStyleSize.value = su.u_fileStyleSize?.value ?? 1;
     };
     const setDot = (mat, c) => {
       const u = mat.uniforms;
@@ -306,7 +369,7 @@ export class SlabRenderer {
       u.u_dotColor.value.set(c.col[0], c.col[1], c.col[2]);
       u.u_pointSize.value = opts.endsPx ?? 6;
     };
-    setLine(this._matNear); setLine(this._matFar);
+    setLine(this._matNear); setLine(this._matFar); setLine(this._matNearFaint);
     setDot(this._dmatSrcNear, sc); setDot(this._dmatSrcFar, sc);
     setDot(this._dmatTgtNear, tc); setDot(this._dmatTgtFar, tc);
 
@@ -330,8 +393,12 @@ export class SlabRenderer {
 
     // Pass 0 — far lines
     if (showLines) { this._scene.add(this._meshFar);  r.render(this._scene, cam); this._scene.remove(this._meshFar); }
-    // Pass 1 — near lines
+    // Pass 1 — near lines, opaque parts
     if (showLines) { this._scene.add(this._meshNear); r.render(this._scene, cam); this._scene.remove(this._meshNear); }
+    // Pass 1b — near lines, faint (translucent) parts, over the opaque ones.
+    // Skipped when no file is below full opacity (opts.hasFaint false).
+    const hasFaint = opts.hasFaint !== false;
+    if (showLines && hasFaint) { this._scene.add(this._meshNearFaint); r.render(this._scene, cam); this._scene.remove(this._meshNearFaint); }
     // Pass 2 — dots on top (far sub-pass)
     if (showSrc) this._scene.add(this._dotsSrcFar);
     if (showTgt) this._scene.add(this._dotsTgtFar);
@@ -358,6 +425,18 @@ export class SlabRenderer {
     for (let y = 0; y < H; y++) {
       const srcRow = (H - 1 - y) * W * 4;
       imgData.data.set(this._pixels.subarray(srcRow, srcRow + W * 4), y * W * 4);
+    }
+    // Blending into the cleared (0,0,0,0) target leaves translucent pixels
+    // with color already multiplied by alpha; putImageData expects straight
+    // (unmultiplied) color and would multiply again, drawing faint lines too
+    // dark over the anatomy. Undo it for partly transparent pixels only.
+    const px = imgData.data;
+    if (hasFaint) for (let i = 0; i < px.length; i += 4) {
+      const a = px[i + 3];
+      if (a > 0 && a < 255) {
+        const k = 255 / a;
+        px[i] = Math.min(255, px[i] * k); px[i + 1] = Math.min(255, px[i + 1] * k); px[i + 2] = Math.min(255, px[i + 2] * k);
+      }
     }
     offCtx.putImageData(imgData, 0, 0);
     canvas2d.getContext('2d', {colorSpace: 'srgb'}).drawImage(this._offCanvas, 0, 0);

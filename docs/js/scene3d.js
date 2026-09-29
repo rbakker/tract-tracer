@@ -824,8 +824,14 @@ void main() {
   if (hit.y < hit.x || hit.y < 0.0) discard;
   float tStart   = max(hit.x, 0.0);
   float tEnd     = hit.y;
+  // Where the ray starts BEFORE clipping: the bounding-box entry, or the
+  // camera itself (t = 0) when the camera is inside the volume box. Clip
+  // planes only ever move tStart forward, so tStart > tBoxStart afterward
+  // means "this ray starts at a clip plane".
+  float tBoxStart = tStart;
 
 ${CLIP_SETUP_GLSL}
+  bool startAtClip = tStart > tBoxStart + 1e-4;
   float stepSize = (tEnd - tStart) / float(u_steps);
   bool labelMode = (u_applyLUT > 0.5) && (u_isColor < 0.5);
 
@@ -873,7 +879,24 @@ ${CLIP_SETUP_GLSL}
   float classifyThresh = labelMode ? 0.5 : (u_bgInvert > 0.5 ? 1.0 - u_background : u_background);
   bool startInside = occupancyAndGradient(ro + tStart * rd).w >= classifyThresh;
 
-  if (startInside) {
+  if (startInside && !startAtClip) {
+    // The CAMERA itself is inside tissue (zoomed into the brain), not a
+    // clip plane cutting into it. Every ray then starts at the same point,
+    // so treating it as a cut face (the branch below) painted one flat,
+    // fully opaque color over the whole screen, which no OPACITY setting
+    // could affect. There is no cut face here: what's genuinely visible
+    // from inside is the brain's outer envelope, seen from within. Find it
+    // the same way the "look inside" stage 2 below does, searching
+    // backward from the far end (background, unless a clip plane or SLICE
+    // put the far end inside tissue — then show nothing rather than risk
+    // a wrong detection). It gets the interior (startInside) shading, and
+    // in GLASS mode the usual Fresnel rim alpha and OPACITY, since it is a
+    // real curved surface rather than a cap.
+    bool farIsBackground = occupancyAndGradient(ro + tEnd * rd).w < classifyThresh;
+    if (farIsBackground) {
+      haveHit = findOuterBoundaryBackward(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
+    }
+  } else if (startInside) {
     // Real tissue right at the clip cut. COVER (u_fillIn) decides
     // whether to paint a flat cap when that tissue is ALSO on the KEEP
     // side of isoThresh (i.e. not the side CUTOUT hides).
@@ -1406,10 +1429,95 @@ export function makePlaneMesh(planeKey, vr, viewCentre) {
 // as "lit fiber" rather than flat color, but it is NOT the same as true
 // roundness — a real round-tube look needs actual cross-section shading
 // (true cylinder geometry), which even the ribbon doesn't have.
+// ── Per-file style + data-field coloring, shared by LINE_FS and
+//    slab-renderer.js's SLAB_FS ──
+// Per segment (instanceField attribute, see makeRibbonLines):
+//   x, y = field value at the segment's start / end, normalized to [0,1]
+//   z    = which colormap row, as the texture's v coordinate of that row's
+//          centre; SIGN = mode: > 0 continuous (interpolate along the
+//          segment, linear colormap lookup), < 0 categorical (no
+//          interpolation: each half of the segment takes its own end's
+//          code, looked up at an exact texel centre so neighbouring
+//          categories never blend), 0 = no field.
+// Per FILE (u_fileStyle texture, one texel per streamline file, fetched in
+// the vertex shader into vStyle — see makeRibbonLines' styleInfo):
+//   x = line width (px), y = opacity of the file's NON-highlighted parts,
+//   z, w = the active field's window [lo, hi] in the same normalized space
+//          as x/y above (hi < lo inverts a continuous colormap).
+// fieldShade() returns the segment's color and alpha: inside the window,
+// the colormap color at full opacity (the highlight); anywhere else — no
+// field, outside the window — the normal LINE·COLOR color at the file's
+// opacity. The opaque pass keeps alpha >= 0.999, the faint pass the rest
+// (alpha 0 = not drawn at all).
+// A vertex shader using this passes vFieldSE = instanceField.xy,
+// vSegPos = position.y, vFieldRow = instanceField.z, vStyle = file style.
+export const FIELD_COLOR_GLSL = `
+vec4 fieldShade(vec3 base) {
+  vec4 plain = vec4(base, vStyle.y);
+  if (abs(vFieldRow) < 1e-5) return plain;
+  float n = float(COLORMAP_SIZE);
+  float lo = vStyle.z, hi = vStyle.w;
+  float u;
+  if (vFieldRow < 0.0) {
+    // categorical: the window only selects codes; colors never remap
+    float t = vSegPos < 0.5 ? vFieldSE.x : vFieldSE.y;
+    if (t < min(lo, hi) - 1e-4 || t > max(lo, hi) + 1e-4) return plain;
+    u = (floor(clamp(t, 0.0, 1.0) * (n - 1.0) + 0.5) + 0.5) / n;
+  } else {
+    float t = mix(vFieldSE.x, vFieldSE.y, vSegPos);
+    float d = hi - lo;
+    float tw = abs(d) < 1e-6 ? (abs(t - lo) < 1e-4 ? 0.5 : -1.0) : (t - lo) / d;
+    if (tw < -1e-4 || tw > 1.0 + 1e-4) return plain;
+    // texel centres: tw=0 -> first texel's centre, tw=1 -> last's
+    u = (clamp(tw, 0.0, 1.0) * (n - 1.0) + 0.5) / n;
+  }
+  return vec4(texture2D(u_colormap, vec2(u, abs(vFieldRow))).rgb, 1.0);
+}
+`;
+
+// Fetches a file's style texel (see FIELD_COLOR_GLSL) in a vertex shader.
+export const FILE_STYLE_VS_GLSL = `
+uniform sampler2D u_fileStyle;
+uniform float     u_fileStyleSize;
+vec4 fileStyle(float fileIndex) {
+  return texture2D(u_fileStyle, vec2((fileIndex + 0.5) / u_fileStyleSize, 0.5));
+}
+// Can this segment produce any fragment in a given pass? Decided once per
+// segment in the vertex shader, so a pass skips segments it would only
+// discard (moved off-screen: no pixels, no fragment work) — e.g. files at
+// 100% in the faint pass, or faded files without a highlight in the
+// opaque pass. Conservative: when in doubt it says yes and fieldShade()
+// in the fragment shader decides, as before.
+//   f  = instanceField (x, y = field value at the ends, z != 0: has field)
+//   st = the file's style texel (y = opacity, z, w = window)
+//   pass 0 = opaque parts (alpha 1), 1 = faint parts (0 < alpha < 1),
+//        2 = anything visible at all
+bool segmentMayDraw(vec3 f, vec4 st, int pass) {
+  float o = st.y;
+  bool anyIn = false, allIn = false;
+  if (abs(f.z) > 1e-5) {
+    float a = min(f.x, f.y), b = max(f.x, f.y);
+    float wlo = min(st.z, st.w), whi = max(st.z, st.w);
+    anyIn = b >= wlo - 1e-3 && a <= whi + 1e-3;   // some part may be highlighted (loose)
+    allIn = a >= wlo && b <= whi;                 // the whole segment is highlighted (strict)
+  }
+  if (pass == 0) return anyIn || o >= 0.999;
+  if (pass == 1) return o > 0.001 && o < 0.999 && !allIn;
+  return anyIn || o > 0.001;
+}
+`;
+
 export const LINE_FS = `
 precision highp float;
 varying vec3  vColor;
 varying vec3  vBundleColor;
+// Data-field coloring (.dqz child files) — see FIELD_COLOR_GLSL.
+varying vec2  vFieldSE;
+varying float vSegPos;
+varying float vFieldRow;
+varying vec4  vStyle;
+uniform sampler2D u_colormap;
+` + FIELD_COLOR_GLSL + `
 varying vec3  vTangent;
 varying vec3  vWorldPos;
 uniform vec3  u_lightDir;
@@ -1437,6 +1545,15 @@ uniform int   u_depthAttenEnabled;
 uniform float u_reflectance; // 0 = flat base color, 1 = normal strength, >1 exaggerated
 void main() {
   vec3 base = (u_autoColor == 1) ? vColor : ((u_autoColor == 2) ? vBundleColor : u_lineColor);
+  vec4 shade = fieldShade(base);
+  base = shade.rgb;
+#ifdef FAINT_PASS
+  if (shade.a >= 0.999 || shade.a <= 0.001) discard;
+#else
+#ifndef NO_FAINT
+  if (shade.a < 0.999) discard;
+#endif
+#endif
   vec3 T = normalize(vTangent);
   vec3 L = normalize(u_lightDir);
   vec3 V = normalize(cameraPosition - vWorldPos);
@@ -1504,7 +1621,11 @@ void main() {
   float atten = (u_depthAttenEnabled > 0)
     ? clamp(1.0 - (depth - nearDepth) / max(farDepth - nearDepth, 1e-4), 0.0, 1.0)
     : 1.0;
+#ifdef FAINT_PASS
+  gl_FragColor = vec4(lit * atten, shade.a);
+#else
   gl_FragColor = vec4(lit * atten, 1.0);
+#endif
 }`;
 
 // Per-frame shading state for the ribbon mesh (makeRibbonLines, below) —
@@ -1600,6 +1721,12 @@ attribute vec3 instanceColor;
 // default color the uniform picker would use; only consulted when
 // u_autoColor==2 selects it below.
 attribute vec3 instanceBundleColor;
+// Data-field value per segment — see FIELD_COLOR_GLSL for x/y/z.
+// All zeros when no field is active.
+attribute vec3 instanceField;
+// Index of the streamline FILE this segment belongs to: its row in the
+// u_fileStyle texture (width, opacity, field window — see FIELD_COLOR_GLSL).
+attribute float instanceFile;
 // The shared per-instance template quad's own attribute, reusing the
 // built-in "position" rather than adding a redundant custom one:
 // position.x = SIDE (-1/+1, which edge of the ribbon this corner is on),
@@ -1613,11 +1740,25 @@ uniform vec3  u_depthTarget;
 uniform float u_depthRadius;
 varying vec3  vColor;
 varying vec3  vBundleColor;
+varying vec2  vFieldSE;
+varying float vSegPos;
+varying float vFieldRow;
+varying vec4  vStyle;
 varying vec3  vTangent;
 varying vec3  vWorldPos;
+` + FILE_STYLE_VS_GLSL + `
 void main() {
   vColor       = instanceColor;
   vBundleColor = instanceBundleColor;
+  vFieldSE     = instanceField.xy;
+  vSegPos      = position.y;
+  vFieldRow    = instanceField.z;
+  vStyle       = fileStyle(instanceFile);
+#ifdef FAINT_PASS
+  if (!segmentMayDraw(instanceField, vStyle, 1)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+#else
+  if (!segmentMayDraw(instanceField, vStyle, 0)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+#endif
   vTangent = normalize(mat3(modelMatrix) * instanceTangent);
 
   vec4 worldStart = modelMatrix * vec4(instanceStart, 1.0);
@@ -1651,7 +1792,9 @@ void main() {
   float farDepth  = nearDepth + 2.0 * u_depthRadius;
   float depth   = dot(vWorldPos - u_depthTarget, u_camFwd);
   float depthT  = clamp((depth - nearDepth) / max(farDepth - nearDepth, 1e-4), 0.0, 1.0);
-  float widthPx = mix(u_widthNearPx, u_widthFarPx, depthT);
+  // Near width is the segment's FILE width (u_fileStyle.x); the far end
+  // tapers to u_widthFarPx, but never wider than the near end.
+  float widthPx = mix(vStyle.x, min(u_widthFarPx, vStyle.x), depthT);
 
   float half_ = 0.5 * widthPx;
   // Square-cap join fix (the cheap Line2-style approach from the #2 plan):
@@ -1659,8 +1802,15 @@ void main() {
   // instead of true mitering — closes most gaps at bends for negligible
   // extra cost, at the cost of visible artifacts at very sharp turns (see
   // hairpin_170deg / exact_180_reversal in join-test-streamlines.tck).
+  // FAINT_PASS drops the cap extension: overlapping caps would be blended
+  // twice and show as beads at every joint of a translucent line.
+#ifdef FAINT_PASS
+  float capK = 0.0;
+#else
+  float capK = 1.0;
+#endif
   vec2 offsetPx = normalPx * position.x * half_
-                + dirPx    * (position.y * 2.0 - 1.0) * half_;
+                + dirPx    * (position.y * 2.0 - 1.0) * half_ * capK;
 
   vec4 clip = mix(clipStart, clipEnd, position.y);
   // Converting a pixel-space offset back to clip space: an NDC delta d
@@ -1672,12 +1822,31 @@ void main() {
   gl_Position = clip;
 }`;
 
-export function makeRibbonMaterial() {
+// faint: the translucent pass (see FIELD_COLOR_GLSL) — blended, no depth
+// writes. uniforms: pass the opaque material's uniforms object to share
+// it (makeRibbonLines does), so one per-frame update covers both passes.
+export function makeRibbonMaterial(colormapTex = null, styleTex = null, faint = false, uniforms = null) {
+  const defines = { COLORMAP_SIZE: COLORMAP_SIZE };
+  // NO_FAINT (opaque pass only): compiled without the discard while no
+  // file is below full opacity — a shader that CAN discard makes some GPUs
+  // (tile-based: Apple, Mali, Adreno) drop their early hidden-surface
+  // removal for everything it draws. Toggle with setRibbonFaintMode().
+  if (faint) defines.FAINT_PASS = 1; else defines.NO_FAINT = 1;
   return new THREE.ShaderMaterial({
     vertexShader:   RIBBON_VS,
     fragmentShader: LINE_FS,
-    uniforms: {
+    defines,
+    transparent: faint,
+    depthWrite:  !faint,
+    depthTest:   true,
+    uniforms: uniforms || {
       ...sharedLineUniforms(),
+      // Shared BY REFERENCE across every rebuilt ribbon mesh (see
+      // makeColormapTexture / makeFileStyleTexture) — never disposed with
+      // the material.
+      u_colormap:     { value: colormapTex || defaultColormapTexture() },
+      u_fileStyle:     { value: styleTex },
+      u_fileStyleSize: { value: styleTex ? styleTex.image.width : 1 },
       u_resolution:   { value: new THREE.Vector2(1, 1) },
       u_widthNearPx:  { value: 3.0 },
       u_widthFarPx:   { value: 1.0 },
@@ -1688,6 +1857,179 @@ export function makeRibbonMaterial() {
     // ribbon from one side rather than something worth debugging by eye.
     side: THREE.DoubleSide,
   });
+}
+
+// ── Colormaps (data-field coloring) ─────────────────────────────────────
+// A colormap texture is COLORMAP_SIZE wide and one ROW per colormap:
+// index.html gives every loaded streamline file its own row (so each
+// file's active field can have its own map or legend), capped at
+// MAX_COLORMAP_ROWS. It's kept as a texture (not baked into per-vertex
+// colors) so it can be swapped on the fly: setColormap()/setColormapRGB()
+// rewrite one row in place and every mesh holding the texture picks the
+// change up on its next render, with no geometry rebuild. Values are raw [0,1] display values, same convention
+// as hexToRgbRaw below (no sRGB<->linear conversion: the texture's
+// colorSpace stays NoColorSpace, and LINE_FS never re-encodes on output).
+export const COLORMAP_SIZE = 256;
+export const MAX_COLORMAP_ROWS = 256;
+
+// ── Colormap definitions ──
+// Every colormap, whatever its origin (built-in, derived from a data
+// file's legend, or user-made later), is one of two plain-data shapes:
+//   { kind: 'continuous',  stops:   [[t, [r,g,b]], ...] }
+//       t in [0,1] (field min..max), colors 0..255, linearly interpolated
+//       between stops (in raw display values, like every color here);
+//       stops needn't be evenly spaced, and t outside [0,1] is allowed
+//       (clipped when sampled).
+//   { kind: 'categorical', entries: [{ value, name, color: [r,g,b] }, ...] }
+//       keyed by the field's stored CODE, never interpolated.
+// writeColormapRow() turns either into one texture row. Built-ins are
+// referenced by id (see BUILTIN_COLORMAPS) so a saved viewer state can
+// just say { source: 'builtin', id: 'viridis' }.
+export const BUILTIN_COLORMAPS = {
+  // MATLAB-style jet (same curve as the earlier formula-based version).
+  jet: { name: 'jet', kind: 'continuous', stops: [
+    [0, [0, 0, 128]], [0.125, [0, 0, 255]], [0.375, [0, 255, 255]],
+    [0.625, [255, 255, 0]], [0.875, [255, 0, 0]], [1, [128, 0, 0]] ] },
+  // Perceptually uniform; also reads in grayscale and for most color-blind viewers.
+  viridis: { name: 'viridis', kind: 'continuous', stops: [
+    [0, [68, 1, 84]], [0.125, [71, 44, 122]], [0.25, [59, 81, 139]], [0.375, [44, 113, 142]],
+    [0.5, [33, 144, 141]], [0.625, [39, 173, 129]], [0.75, [92, 200, 99]], [0.875, [170, 220, 50]],
+    [1, [253, 231, 37]] ] },
+  gray: { name: 'gray', kind: 'continuous', stops: [[0, [0, 0, 0]], [1, [255, 255, 255]]] },
+  // black -> red -> yellow -> white
+  hot: { name: 'hot', kind: 'continuous', stops: [
+    [0, [11, 0, 0]], [0.365, [255, 0, 0]], [0.746, [255, 255, 0]], [1, [255, 255, 255]] ] },
+  // Diverging (Moreland's cool-warm): blue - light gray - red, for signed data around 0.
+  coolwarm: { name: 'coolwarm', kind: 'continuous', stops: [
+    [0, [59, 76, 192]], [0.25, [141, 176, 254]], [0.5, [221, 221, 221]],
+    [0.75, [244, 154, 123]], [1, [180, 4, 38]] ] },
+};
+
+// Color at t of a continuous definition, as [r,g,b] in 0..255.
+export function sampleStops(stops, t) {
+  const s = stops;
+  if (!s.length) return [128, 128, 128];
+  if (t <= s[0][0]) return s[0][1];
+  for (let i = 1; i < s.length; i++) {
+    if (t <= s[i][0]) {
+      const [t0, c0] = s[i - 1], [t1, c1] = s[i];
+      const f = t1 > t0 ? (t - t0) / (t1 - t0) : 1;
+      return [0, 1, 2].map(k => c0[k] + f * (c1[k] - c0[k]));
+    }
+  }
+  return s[s.length - 1][1];
+}
+
+// Writes a colormap definition into one texture row.
+//  continuous:  texel i = color at t = i/(COLORMAP_SIZE-1).
+//  categorical: texel i = entries[i].color (entries in the order the
+//    caller normalizes codes to, i.e. code -> texel i -> t = i/(SIZE-1));
+//    remaining texels, including the last one (reserved for "code not in
+//    the legend"), get `fallback`.
+export function writeColormapRow(tex, def, row = 0, fallback = [128, 128, 128]) {
+  const rgb = new Array(COLORMAP_SIZE);
+  if (def.kind === 'categorical') {
+    for (let i = 0; i < COLORMAP_SIZE; i++) {
+      const e = i < COLORMAP_SIZE - 1 ? def.entries[i] : null;
+      rgb[i] = (e ? e.color : fallback).map(v => v / 255);
+    }
+  } else {
+    const stops = [...def.stops].sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < COLORMAP_SIZE; i++) rgb[i] = sampleStops(stops, i / (COLORMAP_SIZE - 1)).map(v => v / 255);
+  }
+  setColormapRGB(tex, rgb, row);
+}
+
+// CSS linear-gradient() of a definition, for a small preview swatch.
+export function colormapCSSGradient(def) {
+  const css = c => `rgb(${c.map(v => Math.round(v)).join(',')})`;
+  if (def.kind === 'categorical') {
+    const n = def.entries.length;
+    if (!n) return 'none';
+    return 'linear-gradient(to right,' + def.entries.map((e, i) =>
+      `${css(e.color)} ${(100 * i / n).toFixed(2)}% ${(100 * (i + 1) / n).toFixed(2)}%`).join(',') + ')';
+  }
+  const stops = [...def.stops].sort((a, b) => a[0] - b[0]);
+  return 'linear-gradient(to right,' + stops.map(([t, c]) => `${css(c)} ${(100 * t).toFixed(2)}%`).join(',') + ')';
+}
+
+// Every row starts as `name`. Linear filtering along a row (smooth
+// continuous maps); rows never bleed into each other because lookups
+// always hit a row's centre (see colormapRowV) and filtering between
+// texel centres of the same row only.
+export function makeColormapTexture(name = 'jet', rows = 1) {
+  if (rows < 1 || rows > MAX_COLORMAP_ROWS) throw `colormap rows must be 1..${MAX_COLORMAP_ROWS}`;
+  const data = new Uint8Array(COLORMAP_SIZE * rows * 4);
+  const tex = new THREE.DataTexture(data, COLORMAP_SIZE, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.generateMipmaps = false;
+  for (let r = 0; r < rows; r++) setColormap(tex, name, r);
+  return tex;
+}
+
+// v texture coordinate of a row's centre — what makeRibbonLines' fieldInfo
+// .perTractRow carries (negated for categorical, see FIELD_COLOR_GLSL).
+export function colormapRowV(tex, row) {
+  return (row + 0.5) / tex.image.height;
+}
+
+// Rewrites one row of a colormap texture in place with a built-in.
+export function setColormap(tex, name, row = 0) {
+  const def = BUILTIN_COLORMAPS[name];
+  if (!def) throw `unknown colormap "${name}"`;
+  writeColormapRow(tex, def, row);
+}
+
+// Rewrites one row of a colormap texture in place from COLORMAP_SIZE
+// [r,g,b] entries in [0,1] — the hook for custom and legend-derived maps.
+export function setColormapRGB(tex, rgb, row = 0) {
+  const d = tex.image.data;
+  const o = row * COLORMAP_SIZE * 4;
+  for (let i = 0; i < COLORMAP_SIZE; i++) {
+    const [r, g, b] = rgb[i];
+    d[o+4*i]   = Math.round(r * 255);
+    d[o+4*i+1] = Math.round(g * 255);
+    d[o+4*i+2] = Math.round(b * 255);
+    d[o+4*i+3] = 255;
+  }
+  tex.needsUpdate = true;
+}
+
+// Switches a ribbon mesh (from makeRibbonLines) between "nothing is faint"
+// (faint pass hidden, opaque shader without discard) and "some file is
+// below full opacity". Changing it recompiles the opaque shader, so call
+// it when the answer changes, not per frame (index.html does).
+export function setRibbonFaintMode(mesh, anyFaint) {
+  if (!mesh) return;
+  if (mesh.faintMesh) mesh.faintMesh.visible = anyFaint;
+  const d = mesh.material.defines, has = 'NO_FAINT' in d;
+  if (has === !anyFaint) return;
+  if (anyFaint) delete d.NO_FAINT; else d.NO_FAINT = 1;
+  mesh.material.needsUpdate = true;
+}
+
+// ── Per-file style texture ──
+// One RGBA float texel per streamline file: [width px, opacity, window lo,
+// window hi] — see FIELD_COLOR_GLSL. NEAREST-sampled in the vertex shader;
+// rewrite a texel with setFileStyle() + needsUpdate, no geometry rebuild.
+export function makeFileStyleTexture(files = 1) {
+  const tex = new THREE.DataTexture(new Float32Array(files * 4), files, 1, THREE.RGBAFormat, THREE.FloatType);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.generateMipmaps = false;
+  for (let i = 0; i < files; i++) setFileStyle(tex, i, 2.0, 1, 0, 1);
+  return tex;
+}
+export function setFileStyle(tex, i, widthPx, opacity, lo, hi) {
+  tex.image.data.set([widthPx, opacity, lo, hi], i * 4);
+  tex.needsUpdate = true;
+}
+
+let _defaultColormapTex = null;
+function defaultColormapTexture() {
+  return _defaultColormapTex || (_defaultColormapTex = makeColormapTexture('jet'));
 }
 
 // bundleInfo (optional): { idPerStreamline: Int32Array|null, palette: [r,g,b][] }
@@ -1720,7 +2062,29 @@ export function hexToRgbRaw(hex) {
   return [ ((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255 ];
 }
 
-export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bundleInfo = null) {
+// fieldInfo (optional): { perTract: Array, perTractRow: Float32Array,
+// colormap: DataTexture|null } —
+// perTract[i] is the data-field value for tracts[i], ALREADY normalized
+// to [0,1]: a Float32Array with one value per point (per-vertex field),
+// a single number (per-streamline field), or null (no active field for
+// this streamline: it keeps the global LINE·COLOR mode). A non-finite
+// value (NaN) also means "no value" for the segments touching it.
+// perTractRow[i] is that streamline's colormap row as colormapRowV(),
+// negated for a categorical field (see FIELD_COLOR_GLSL).
+// styleInfo (optional): { fileIndex: per-tract file index (row of tex),
+// tex: makeFileStyleTexture(), materials: {opaque, faint} }. Omitted:
+// every tract is file 0 of a private 1-texel texture with width
+// widthNearPx, opacity 1.
+// materials: pass the previous mesh's pair (mesh.material and
+// mesh.faintMesh.material) to REUSE them. Creating fresh
+// materials per rebuild and disposing the old ones makes three.js delete
+// and recompile the shader programs every time — costly on some drivers,
+// and a rebuild happens on every load step and bundle toggle. Reused
+// materials keep their uniforms; the caller re-applies its own settings
+// after each rebuild as before.
+// The returned mesh draws the opaque parts; its child mesh.faintMesh
+// (same geometry, translucent material) draws the faint ones.
+export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bundleInfo = null, fieldInfo = null, styleInfo = null) {
   let segCount = 0;
   for (const t of tracts) { const n = t.length / 3; if (n >= 2) segCount += n - 1; }
 
@@ -1729,6 +2093,11 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
   const instTan   = new Float32Array(segCount * 3);
   const instCol   = new Float32Array(segCount * 3);
   const instBCol  = new Float32Array(segCount * 3);
+  const instField = new Float32Array(segCount * 3); // zeros = no field
+  const instFile  = new Float32Array(segCount);     // file index per segment
+  const fileIdx   = styleInfo && styleInfo.fileIndex;
+  const perTract  = fieldInfo && fieldInfo.perTract;
+  const perRow    = fieldInfo && fieldInfo.perTractRow;
   let si = 0;
   for (let ti2 = 0; ti2 < tracts.length; ti2++) {
     const t = tracts[ti2];
@@ -1738,6 +2107,11 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
       const pal = bundleInfo.palette[bundleInfo.idPerStreamline[ti2]];
       if (pal) bc = pal;
     }
+    const fv = perTract ? perTract[ti2] : null;
+    const fRow = perRow ? perRow[ti2] : 0;
+    const fIdx = fileIdx ? fileIdx[ti2] : 0;
+    const fvIsArray = fv != null && typeof fv !== 'number';
+    const fvConstOk = typeof fv === 'number' && Number.isFinite(fv);
     for (let i = 0; i < n - 1; i++) {
       const x0 = t[3*i], y0 = t[3*i+1], z0 = t[3*i+2];
       const x1 = t[3*i+3], y1 = t[3*i+4], z1 = t[3*i+5];
@@ -1752,6 +2126,15 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
       instBCol[3*si]   = bc[0];
       instBCol[3*si+1] = bc[1];
       instBCol[3*si+2] = bc[2];
+      if (fvIsArray) {
+        const a = fv[i], b = fv[i + 1];
+        if (Number.isFinite(a) && Number.isFinite(b)) {
+          instField[3*si] = a; instField[3*si+1] = b; instField[3*si+2] = fRow;
+        }
+      } else if (fvConstOk) {
+        instField[3*si] = fv; instField[3*si+1] = fv; instField[3*si+2] = fRow;
+      }
+      instFile[si] = fIdx;
       si++;
     }
   }
@@ -1776,9 +2159,22 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
   geo.setAttribute('instanceTangent', new THREE.InstancedBufferAttribute(instTan,   3));
   geo.setAttribute('instanceColor',   new THREE.InstancedBufferAttribute(instCol,   3));
   geo.setAttribute('instanceBundleColor', new THREE.InstancedBufferAttribute(instBCol, 3));
+  geo.setAttribute('instanceField', new THREE.InstancedBufferAttribute(instField, 3));
+  geo.setAttribute('instanceFile',  new THREE.InstancedBufferAttribute(instFile, 1));
   geo.instanceCount = si;
 
-  const material = makeRibbonMaterial();
+  let styleTex = styleInfo && styleInfo.tex, ownStyleTex = null;
+  if (!styleTex) {
+    styleTex = ownStyleTex = makeFileStyleTexture(1);
+    setFileStyle(styleTex, 0, widthNearPx, 1, 0, 1);
+  }
+  const reuse = styleInfo && styleInfo.materials;
+  const material = reuse ? reuse.opaque : makeRibbonMaterial(fieldInfo && fieldInfo.colormap, styleTex);
+  if (reuse) {
+    if (fieldInfo && fieldInfo.colormap) material.uniforms.u_colormap.value = fieldInfo.colormap;
+    material.uniforms.u_fileStyle.value = styleTex;
+    material.uniforms.u_fileStyleSize.value = styleTex.image.width;
+  }
   material.uniforms.u_widthNearPx.value = widthNearPx;
   material.uniforms.u_widthFarPx.value  = widthFarPx;
 
@@ -1788,6 +2184,23 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
   // brain's full-screen quad needing this.
   mesh.frustumCulled = false;
   attachStreamlineShading(mesh);
+
+  // Faint (translucent) pass: a child sharing geometry AND the uniforms
+  // object, so the parent's per-frame onBeforeRender update covers it.
+  // three.js draws opaque objects before transparent ones, so every opaque
+  // segment — and any opaque anatomy — is already in the depth buffer and
+  // correctly hides the faint parts behind it.
+  const faint = new THREE.Mesh(geo, reuse ? reuse.faint : makeRibbonMaterial(null, null, true, material.uniforms));
+  faint.frustumCulled = false;
+  faint.renderOrder = 1;
+  mesh.add(faint);
+  // Plain properties, deliberately NOT in userData: Object3D.clone() (used
+  // by slab-renderer.js) deep-copies userData via JSON.stringify, and a
+  // Mesh in there gets serialized geometry and all — millions of numbers
+  // as text, per clone. That made every 2D redraw after a rebuild take
+  // seconds.
+  mesh.faintMesh = faint;
+  mesh.ownStyleTex = ownStyleTex; // dispose with the mesh when set
   return mesh;
 }
 

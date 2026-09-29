@@ -3,21 +3,27 @@
 //
 // Shape is deliberately similar to graphxtree.js (parent/child nodes,
 // a `visible` getter/setter that fires a callback, a `root` getter) but
-// adapted to what this app actually loads: one Anatomy slot, one
-// Tractogram slot (optionally exploded into per-bundle children), one
-// LUT slot. LoadedDataStore is the one overall data class; LoadedItem
+// adapted to what this app actually loads. The tree has exactly two
+// levels: three category headings — Anatomy (volumes), Parcellations
+// (label volumes, plus lookup tables not attached to any volume yet) and
+// Streamline bundles (one row per streamline file: each bundle of a
+// bundle set, or the single tractogram; plus .dqz data files that can't
+// be attached) — with one row per item under them. Anything that belongs
+// to a row (its lookup table, its .dqz data fields) lives in that row's
+// settings area, not in a deeper level. LoadedDataStore is the one
+// overall data class; LoadedItem
 // is the shared base, with AnatomyItem / TractogramItem / BundleItem /
 // LutItem as the file-type-specific subclasses the app asked for.
 //
 // This module knows nothing about Three.js, WebGL, or app state — it
 // only tracks "what's loaded" and "is it on/off", and calls back into
-// whatever the app wires up via onVisibilityChange/onMenu. That keeps
+// whatever the app wires up via onVisibilityChange/buildSettings. That keeps
 // it testable and reusable independent of the renderer.
 // ═══════════════════════════════════════════════════════════
 
 class LoadedItem {
   constructor(kind, label) {
-    this.kind = kind;     // 'anat' | 'trck' | 'bundle' | 'lut'
+    this.kind = kind;     // 'anat' | 'trck' | 'bundle' | 'lut' | 'field' | 'group'
     this.label = label;   // filename / display name
     this.children = [];
     this.parent = null;
@@ -31,15 +37,33 @@ class LoadedItem {
     this.selectorType = 'checkbox';
     this.radioGroup = null;   // shared name string for a radio's siblings
     this.selected = false;    // radio state, independent of `visible`
+    this.radioDeselectable = false; // clicking the already-selected radio
+                                    // de-selects it (onSelect fires again;
+                                    // the handler toggles) — for "at most
+                                    // one", as opposed to "exactly one" 
     this.checkboxDisabled = false; // greys out the checkbox (e.g. an
                                     // anatomy file not currently active,
                                     // so there's nothing to show/hide yet)
+                                    // selectorType 'none' = no selector at
+                                    // all (just a same-width spacer).
+
+    // Optional row decorations:
+    this.tag = null;      // short dim text after the label (e.g. 'per-vertex · scaled')
+    this.tooltip = null;  // row hover text; defaults to the label
+    this.dimmed = false;  // greyed-out row (e.g. an unmatched data file)
+    this.isError = false; // error-styled tag (e.g. an unreadable data file)
 
     // Wired up by the app after construction:
     this.onVisibilityChange = null; // (item, visible) => void
     this.onSelect = null;           // (item) => void — radio selection
     this.onColorChange = null;      // (item, hex) => void — swatch edit (bundles)
-    this.onMenu = null;             // (item, anchorEl) => void — hamburger stub
+    // Per-item settings, shown INLINE under the row when its settings
+    // toggle (» at the row's right end) is open. The app fills the area:
+    // (item, containerEl) => void, called on every render while open —
+    // makeSettingsButton() below builds a standard button for it. Items
+    // without buildSettings get no toggle.
+    this.buildSettings = null;
+    this.settingsOpen = false;
   }
 
   addChild(child) {
@@ -52,13 +76,29 @@ class LoadedItem {
     return this.parent ? this.parent.root : this;
   }
 
+  // Items of the same category are "the same type of thing" for the
+  // purpose of on/off cascading: a tractogram row and its bundle rows are
+  // both 'streamlines' even though their kinds differ. Defaults to the
+  // kind; subclasses override where kinds should be grouped.
+  get category() {
+    return this.kind;
+  }
+
   get visible() {
     return this._visible;
   }
 
+  // Switching an item on/off also switches every descendant of the SAME
+  // category, recursively (e.g. a bundle-set row -> all its bundle rows),
+  // each through its own setter, so each child's onVisibilityChange runs.
+  // Children of another category (e.g. a bundle's data-field rows) are
+  // left alone, and the cascade doesn't descend into them.
   set visible(v) {
     this._visible = v;
     if (this.onVisibilityChange) this.onVisibilityChange(this, v);
+    for (const c of this.children) {
+      if (c.category === this.category && c.selectorType === 'checkbox' && c._visible !== v) c.visible = v;
+    }
   }
 }
 
@@ -71,6 +111,7 @@ class LutItem extends LoadedItem {
 }
 
 class BundleItem extends LoadedItem {
+  get category() { return 'streamlines'; }
   constructor(label, bundleIndex, colorHex) {
     super('bundle', label);
     this.bundleIndex = bundleIndex; // index into bundlePaletteRGB/streamlineBundleId
@@ -78,7 +119,50 @@ class BundleItem extends LoadedItem {
   }
 }
 
+// One .dqz child data file (a named per-vertex or per-streamline field).
+// Hangs under the tree item of the geometry file it belongs to — a
+// TractogramItem for a single-file load, or that file's BundleItem in a
+// bundle set — or, while it has no matching parent, under the store's
+// "unmatched" group (dimmed). `record` is the app's own bookkeeping
+// object for the file (header, parsed data, match status); this class
+// doesn't interpret it. A matched field gets a de-selectable radio (the
+// app sets selectorType/radioGroup): at most one field per geometry file
+// is the active one used to color its streamlines.
+class DataFieldItem extends LoadedItem {
+  constructor(label, record) {
+    super('field', label);
+    this.record = record;
+    this.selectorType = 'none';
+    this.radioDeselectable = true;
+  }
+}
+
+// A plain grouping row with no file of its own. isCategory marks the
+// three top-level category headings (see LoadedDataStore), which the view
+// styles as headings; selectAll gives a heading a checkbox that switches
+// all its rows on/off (checked = all on, indeterminate = some on).
+class DataGroupItem extends LoadedItem {
+  constructor(label, isCategory = false) {
+    super('group', label);
+    this.selectorType = 'none';
+    this.isCategory = isCategory;
+    this.selectAll = false;
+  }
+}
+
+// A row of controls rather than a data item (e.g. "select all / none ·
+// header" at the top of Streamline bundles): the app fills the row via
+// build(item, rowEl). No caret, selector or settings toggle.
+class ToolbarItem extends LoadedItem {
+  constructor(build) {
+    super('toolbar', '');
+    this.selectorType = 'none';
+    this.build = build;
+  }
+}
+
 class TractogramItem extends LoadedItem {
+  get category() { return 'streamlines'; }
   constructor(label) { super('trck', label); }
 
   // entries: [{name, color}] — color is a '#rrggbb' string or null.
@@ -90,30 +174,49 @@ class TractogramItem extends LoadedItem {
   }
 }
 
-// The one overall data class: tracks what's loaded per file type and
-// notifies the view when the tree's shape changes (a load/replace/clear
-// — not a plain visibility toggle, which items report individually via
-// onVisibilityChange). Anatomy is a list rather than a single slot
-// because a zip/multi-file drop can deliver several anatomy files at
-// once (radio-selected — see registerAnatGroupItems in index.html);
-// it's length 1 in the common single-file case.
+// The one overall data class: tracks what's loaded and notifies the view
+// when the tree's shape changes (a load/replace/clear — not a plain
+// visibility toggle, which items report individually via
+// onVisibilityChange). The tree always has the same three category rows
+// (kept here, so their collapsed state survives rebuilds of what's under
+// them); a category with nothing in it isn't shown.
 class LoadedDataStore {
   constructor() {
-    this.anatItems = [];
-    this.types = { trck: null, lut: null };
+    this.categories = {
+      anatomy:       new DataGroupItem('Anatomy', true),
+      parcellations: new DataGroupItem('Parcellations', true),
+      streamlines:   new DataGroupItem('Streamline bundles', true),
+    };
+    this.anatomyItems = [];       // volume rows (see registerVolumeItems in index.html)
+    this.parcellationItems = [];  // label-volume rows + unattached lookup-table rows
+    this.streamlineItems = [];    // one row per streamline file (bundle, or the single tractogram)
+    this.dataFileItems = [];      // .dqz data files with no parent to attach to, or unreadable
+    this.streamlineToolbar = null; // ToolbarItem shown first under Streamline bundles while it has rows
     this.onChange = null; // () => void
   }
 
-  setAnatItems(items) { this.anatItems = items; this._fire(); }
-  setTrck(item) { this.types.trck = item; this._fire(); }
-  setLut(item)  { this.types.lut  = item; this._fire(); }
+  setVolumes(anatomyItems, parcellationItems) {
+    this.anatomyItems = anatomyItems; this.parcellationItems = parcellationItems; this._fire();
+  }
+  setStreamlines(items) { this.streamlineItems = items; this._fire(); }
+  setDataFiles(items) { this.dataFileItems = items; this._fire(); }
+  // Something shown in the tree changed (a tag, a settings area) — re-render.
+  refresh() { this._fire(); }
 
-  clearAnat() { this.anatItems = []; this._fire(); }
-  clearTrck() { this.types.trck = null; this._fire(); }
-  clearLut()  { this.types.lut  = null; this._fire(); }
+  clearVolumes() { this.setVolumes([], []); }
+  clearStreamlines() { this.streamlineItems = []; this._fire(); }
 
   get roots() {
-    return [...this.anatItems, this.types.trck, this.types.lut].filter(Boolean);
+    const { anatomy, parcellations, streamlines } = this.categories;
+    const fill = (group, items) => {
+      group.children = [];
+      for (const it of items) if (it) group.addChild(it);
+      return group;
+    };
+    fill(anatomy, this.anatomyItems);
+    fill(parcellations, this.parcellationItems);
+    fill(streamlines, [this.streamlineItems.length ? this.streamlineToolbar : null, ...this.streamlineItems, ...this.dataFileItems]);
+    return [anatomy, parcellations, streamlines].filter(g => g.children.length);
   }
 
   _fire() {
@@ -121,13 +224,25 @@ class LoadedDataStore {
   }
 }
 
+// A standard button for an item's settings area (see buildSettings).
+function makeSettingsButton(label, onClick, title = null) {
+  const b = document.createElement('button');
+  b.className = 'accent-link dt-set-btn';
+  b.textContent = label;
+  if (title) b.title = title;
+  b.addEventListener('click', e => { e.stopPropagation(); onClick(e); });
+  return b;
+}
+
 // Renders a LoadedDataStore into a container element as a collapsible
 // tree: caret (if it has children) · checkbox (on/off) · label ·
-// hamburger (per-type menu, stubbed for now — just calls item.onMenu if
-// set). Re-renders whenever the store reports a structural change.
+// settings toggle (» — opens/closes the item's inline settings area, see
+// buildSettings). Re-renders whenever the store reports a structural
+// change.
 class DataTreeView {
   constructor(container, store) {
     this.container = container;
+    this.container.classList.add('dt-root'); // CSS hook, see .dt-row's separator rule
     this.store = store;
     store.onChange = () => this.render();
     this.render();
@@ -143,14 +258,26 @@ class DataTreeView {
       this.container.appendChild(empty);
       return;
     }
-    for (const item of roots) this.container.appendChild(this._renderNode(item, 0));
+    for (const item of roots) this.container.appendChild(this._renderNode(item, 0, item.isCategory ? 1 : 0));
   }
 
-  _renderNode(item, depth) {
+  // topDepth: the depth of the tree's "main" rows — 1 under a category
+  // heading — which get the brighter top-level label style; deeper rows
+  // are sub-rows.
+  _renderNode(item, depth, topDepth = 0) {
     const wrap = document.createElement('div');
+    if (item.kind === 'toolbar') {
+      const bar = document.createElement('div');
+      bar.className = 'dt-row dt-toolbar';
+      bar.style.paddingLeft = (8 + depth * 14) + 'px';
+      item.build(item, bar);
+      wrap.appendChild(bar);
+      return wrap;
+    }
 
     const row = document.createElement('div');
-    row.className = 'dt-row' + (depth > 0 ? ' dt-sub' : '');
+    row.className = 'dt-row' + (item.isCategory ? ' dt-cat' : depth > topDepth ? ' dt-sub' : '')
+                  + (item.dimmed ? ' dt-dim' : '') + (item.isError ? ' dt-err' : '');
     row.style.paddingLeft = (8 + depth * 14) + 'px';
 
     const hasChildren = item.children.length > 0;
@@ -163,18 +290,53 @@ class DataTreeView {
         item.collapsed = !item.collapsed;
         this.render();
       });
+      // A category heading has nothing else to click on, so its whole
+      // row expands/collapses it.
+      if (item.isCategory) row.addEventListener('click', () => { item.collapsed = !item.collapsed; this.render(); });
     }
 
     let selector;
-    if (item.selectorType === 'radio') {
+    if (item.isCategory && item.selectAll) {
+      // Select/deselect all: checked when every switchable row is on,
+      // indeterminate when only some are.
+      const rows = item.children.filter(c => c.selectorType === 'checkbox' && !c.checkboxDisabled);
+      const on = rows.filter(c => c.visible).length;
+      selector = document.createElement('input');
+      selector.type = 'checkbox';
+      selector.className = 'dt-check';
+      selector.checked = rows.length > 0 && on === rows.length;
+      selector.indeterminate = on > 0 && on < rows.length;
+      selector.disabled = !rows.length;
+      selector.title = 'all on / off';
+      selector.addEventListener('click', e => e.stopPropagation());
+      selector.addEventListener('change', () => {
+        for (const c of rows) if (c.visible !== selector.checked) c.visible = selector.checked;
+        this.render();
+      });
+    } else if (item.selectorType === 'none') {
+      selector = document.createElement('span');
+      selector.className = 'dt-noselect';
+    } else if (item.selectorType === 'radio') {
       selector = document.createElement('input');
       selector.type = 'radio';
       selector.className = 'dt-radio';
       selector.name = 'dt-radio-' + (item.radioGroup || 'default');
       selector.checked = !!item.selected;
-      selector.addEventListener('click', e => e.stopPropagation());
       selector.addEventListener('change', () => {
         if (item.onSelect) item.onSelect(item);
+      });
+      // A native radio can't be un-checked by clicking it (no 'change'
+      // fires), so for a de-selectable radio, remember whether it was
+      // already checked when the press started and handle that case here.
+      let wasChecked = false;
+      selector.addEventListener('pointerdown', () => { wasChecked = selector.checked; });
+      selector.addEventListener('click', e => {
+        e.stopPropagation();
+        if (item.radioDeselectable && wasChecked) {
+          selector.checked = false;
+          if (item.onSelect) item.onSelect(item);
+        }
+        wasChecked = false;
       });
     } else {
       selector = document.createElement('input');
@@ -183,7 +345,12 @@ class DataTreeView {
       selector.checked = item.visible;
       selector.disabled = !!item.checkboxDisabled;
       selector.addEventListener('click', e => e.stopPropagation());
-      selector.addEventListener('change', () => { item.visible = selector.checked; });
+      selector.addEventListener('change', () => {
+        item.visible = selector.checked;
+        // Redraw so the heading's all-on/off checkbox (and any
+        // same-category children, see the visible setter) show it.
+        this.render();
+      });
     }
 
     let swatch = null;
@@ -207,34 +374,51 @@ class DataTreeView {
     const label = document.createElement('span');
     label.className = 'dt-label';
     label.textContent = item.label;
-    label.title = item.label;
+    label.title = item.tooltip || item.label;
 
-    const menuBtn = document.createElement('button');
-    menuBtn.className = 'dt-menu-btn';
-    menuBtn.textContent = '☰';
-    menuBtn.title = 'options';
-    if (!item.onMenu) {
-      menuBtn.disabled = true;
-      menuBtn.title = 'options — coming soon';
-    } else {
+    let tag = null;
+    if (item.tag) {
+      tag = document.createElement('span');
+      tag.className = 'dt-tag';
+      tag.textContent = item.tag;
+    }
+
+    // Settings toggle: » turned to point down (closed) / up (open) via
+    // CSS. A row with nothing to configure gets an empty, same-width
+    // placeholder so labels and tags stay aligned.
+    const menuBtn = document.createElement(item.buildSettings ? 'button' : 'span');
+    menuBtn.className = 'dt-menu-btn' + (item.settingsOpen ? ' dt-open' : '');
+    if (item.buildSettings) {
+      menuBtn.textContent = '»';
+      menuBtn.title = item.settingsOpen ? 'hide settings' : 'settings';
       menuBtn.addEventListener('click', e => {
         e.stopPropagation();
-        item.onMenu(item, menuBtn);
+        item.settingsOpen = !item.settingsOpen;
+        this.render();
       });
     }
 
     row.appendChild(caret);
-    row.appendChild(selector);
+    if (!item.isCategory || item.selectAll) row.appendChild(selector);
     if (swatch) row.appendChild(swatch);
     row.appendChild(label);
+    if (tag) row.appendChild(tag);
     row.appendChild(menuBtn);
     wrap.appendChild(row);
 
+    if (item.buildSettings && item.settingsOpen) {
+      const panel = document.createElement('div');
+      panel.className = 'dt-settings';
+      panel.style.paddingLeft = (8 + (depth + 1) * 14 + 20) + 'px';
+      item.buildSettings(item, panel);
+      wrap.appendChild(panel);
+    }
+
     if (hasChildren && !item.collapsed) {
-      for (const child of item.children) wrap.appendChild(this._renderNode(child, depth + 1));
+      for (const child of item.children) wrap.appendChild(this._renderNode(child, depth + 1, topDepth));
     }
     return wrap;
   }
 }
 
-export { LoadedItem, AnatomyItem, TractogramItem, BundleItem, LutItem, LoadedDataStore, DataTreeView };
+export { LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton };

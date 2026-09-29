@@ -195,6 +195,13 @@ export function parseDqzHeader(buf) {
   header._dqz = {
     divisor: dqzHeader.divisor,
     n_streamlines: dqzHeader.n_streamlines,
+    // Optional per the spec — null for files encoded before uuid
+    // existed; such a parent simply can't have children matched to it.
+    // An opaque string (typically the source .tck's timestamp), compared
+    // exactly, never validated as a real UUID. A number is stringified
+    // in case a writer ever emits a timestamp unquoted.
+    uuid: (typeof dqzHeader.uuid === 'string' && dqzHeader.uuid) ? dqzHeader.uuid
+        : (typeof dqzHeader.uuid === 'number' ? String(dqzHeader.uuid) : null),
     dataOffset: 12 + headerLen,
   };
 
@@ -298,6 +305,178 @@ export async function parseDqz(file, maxNumTracts = 0) {
   }
 
   return { streamlines, streamlineLookup: lookup, header };
+}
+
+
+// -- .dqz child data files (DQZDATA1) ------------------------------
+// One named per-vertex or per-streamline field belonging to a parent
+// .dqz geometry file, referenced by the parent's uuid — see the
+// "Per-vertex and per-streamline data files" section of dqz-format.md.
+// A child shares the .dqz extension with geometry files, so the ONLY
+// reliable way to tell them apart is the magic: sniffDqzKind() below
+// reads just the first 8 bytes (no full-file read) for that purpose.
+
+export const DQZ_CHILD_MAGIC = 'DQZDATA1';
+
+// maxCode is set only for the dtypes allowed with kind "scaled" (the
+// spec restricts scaled to unsigned integers).
+const DQZ_DTYPES = {
+  uint8:   { size: 1, Arr: Uint8Array,   get: 'getUint8',   maxCode: 255 },
+  int8:    { size: 1, Arr: Int8Array,    get: 'getInt8',    maxCode: null },
+  uint16:  { size: 2, Arr: Uint16Array,  get: 'getUint16',  maxCode: 65535 },
+  int16:   { size: 2, Arr: Int16Array,   get: 'getInt16',   maxCode: null },
+  float32: { size: 4, Arr: Float32Array, get: 'getFloat32', maxCode: null },
+};
+const DQZ_KINDS  = ['raw', 'scaled', 'categorical'];
+const DQZ_SCOPES = ['per_vertex', 'per_streamline'];
+
+/**
+ * Cheap magic-byte sniff of a .dqz-extension File.
+ * @param {File|Blob} file
+ * @returns {Promise<'geometry'|'child'|null>} null = neither magic.
+ */
+export async function sniffDqzKind(file) {
+  if (file.size < 12) return null;
+  const magic = String.fromCharCode(...new Uint8Array(await file.slice(0, 8).arrayBuffer()));
+  if (magic === DQZ_MAGIC) return 'geometry';
+  if (magic === DQZ_CHILD_MAGIC) return 'child';
+  return null;
+}
+
+/**
+ * Reads just the JSON header of a .dqz child file (magic + length +
+ * header bytes only — never the data records), validated for shape.
+ * Throws a short user-facing string on anything malformed.
+ * @param {File|Blob|ArrayBuffer} src
+ * @returns {Promise<Object>} the header, plus _dataOffset
+ */
+export async function readDqzChildHeader(src) {
+  const head = src instanceof ArrayBuffer ? src : await src.slice(0, 12).arrayBuffer();
+  const magic = String.fromCharCode(...new Uint8Array(head, 0, 8));
+  if (magic !== DQZ_CHILD_MAGIC) throw 'Not a .dqz data file (bad magic)';
+  const headerLen = new DataView(head).getUint32(8, true);
+  const hbuf = src instanceof ArrayBuffer
+    ? new Uint8Array(src, 12, headerLen)
+    : new Uint8Array(await src.slice(12, 12 + headerLen).arrayBuffer());
+  let h;
+  try { h = JSON.parse(new TextDecoder('utf-8').decode(hbuf)); }
+  catch (e) {
+    // By far the likeliest cause: the header was edited in a text editor
+    // and its length changed, but the 4-byte length before it didn't, so
+    // the JSON is cut off early or runs into the binary data.
+    throw `header is not valid JSON (${e.message || e}). The file records a ${headerLen}-byte header; ` +
+          'if it was edited in a text editor and its length changed, that no longer matches. ' +
+          'Edit headers with tools/dqz_header.py instead.';
+  }
+
+  if (typeof h.parent === 'number') h.parent = String(h.parent);
+  if (typeof h.parent !== 'string' || !h.parent) throw '.dqz data file has no "parent" uuid (required)';
+  if (!Number.isInteger(h.n_streamlines) || h.n_streamlines < 0) throw '.dqz data file has no valid "n_streamlines"';
+  if (!DQZ_DTYPES[h.dtype]) throw `.dqz data file has unsupported dtype "${h.dtype}"`;
+  if (!DQZ_KINDS.includes(h.kind)) throw `.dqz data file has unsupported kind "${h.kind}"`;
+  if (!DQZ_SCOPES.includes(h.scope)) throw `.dqz data file has unsupported scope "${h.scope}"`;
+  if (h.kind === 'scaled') {
+    if (DQZ_DTYPES[h.dtype].maxCode === null)
+      throw `.dqz data file is kind "scaled" with dtype "${h.dtype}" (scaled requires uint8 or uint16)`;
+    if (!(Number.isFinite(h.value_min) && Number.isFinite(h.value_max)))
+      throw '.dqz data file is kind "scaled" but lacks numeric value_min/value_max';
+  }
+
+  h._dataOffset = 12 + headerLen;
+  return h;
+}
+
+/**
+ * Parse a full .dqz child data file.
+ * @param {File} file
+ * @returns {Promise<{header: Object, scope: string, values: TypedArray,
+ *   codes: TypedArray, pointCounts: Uint32Array|null,
+ *   offsets: Uint32Array|null}>}
+ *   values — decoded values: Float32Array for kind "scaled" (the linear
+ *     transform already applied), otherwise the stored array itself
+ *     (same object as `codes`) — categorical codes stay integers.
+ *   codes — the raw stored values, in the file's dtype.
+ *   per_vertex: values is one flat array over all vertices, streamline
+ *     i's values at [offsets[i], offsets[i] + pointCounts[i]) — the same
+ *     order and count as the parent's own points, once
+ *     checkDqzChildAgainst has passed.
+ *   per_streamline: values[i] belongs to streamline i; pointCounts and
+ *     offsets are null.
+ */
+export async function parseDqzChild(file) {
+  const buf = await file.arrayBuffer();
+  const header = await readDqzChildHeader(buf);
+  const { n_streamlines: n, scope, kind } = header;
+  const dt = DQZ_DTYPES[header.dtype];
+  const dv = new DataView(buf);
+  const start = header._dataOffset;
+
+  let codes, pointCounts = null, offsets = null;
+
+  if (scope === 'per_streamline') {
+    const need = n * dt.size;
+    if (buf.byteLength - start < need)
+      throw `.dqz data file is truncated (${buf.byteLength - start} bytes of data, ${need} expected)`;
+    codes = new dt.Arr(n);
+    for (let i = 0; i < n; i++) codes[i] = dv[dt.get](start + i * dt.size, true);
+  } else {
+    // per_vertex — first pass: record framing only, to size one flat array.
+    pointCounts = new Uint32Array(n);
+    offsets = new Uint32Array(n + 1);
+    const recStart = new Array(n);
+    let off = start, total = 0;
+    for (let i = 0; i < n; i++) {
+      if (off + 4 > buf.byteLength) throw `.dqz data file is truncated at streamline ${i}`;
+      const np = dv.getUint32(off, true);
+      off += 4;
+      recStart[i] = off;
+      pointCounts[i] = np;
+      offsets[i] = total;
+      total += np;
+      off += np * dt.size;
+      if (off > buf.byteLength) throw `.dqz data file is truncated at streamline ${i}`;
+    }
+    offsets[n] = total;
+    codes = new dt.Arr(total);
+    let p = 0;
+    for (let i = 0; i < n; i++) {
+      let o = recStart[i];
+      for (let k = 0; k < pointCounts[i]; k++, o += dt.size) codes[p++] = dv[dt.get](o, true);
+    }
+  }
+
+  let values = codes;
+  if (kind === 'scaled') {
+    // value = value_min + (code / max_code) * (value_max - value_min);
+    // unsigned dtypes only (enforced in readDqzChildHeader).
+    const vmin = header.value_min, span = header.value_max - header.value_min;
+    values = new Float32Array(codes.length);
+    for (let i = 0; i < codes.length; i++) values[i] = vmin + (codes[i] / dt.maxCode) * span;
+  }
+
+  return { header, scope, values, codes, pointCounts, offsets };
+}
+
+/**
+ * Checks a parsed child against the parent geometry it claims to belong
+ * to. Returns null if consistent, or a short reason string if not.
+ * @param {Object} parsed - parseDqzChild() result
+ * @param {Float32Array[]} parentStreamlines - the parent file's own
+ *   streamlines, in file order (flat xyz per streamline)
+ */
+export function checkDqzChildAgainst(parsed, parentStreamlines) {
+  const n = parsed.header.n_streamlines;
+  if (n !== parentStreamlines.length)
+    return `n_streamlines ${n} ≠ parent's ${parentStreamlines.length}`;
+  if (parsed.scope === 'per_vertex') {
+    for (let i = 0; i < n; i++) {
+      const np = parsed.pointCounts[i];
+      const want = parentStreamlines[i].length / 3;
+      if (np !== want)
+        return `streamline ${i}: ${np} values but parent has ${want} points`;
+    }
+  }
+  return null;
 }
 
 
