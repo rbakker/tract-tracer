@@ -3098,7 +3098,7 @@ function clearStreamlines() {
   if (tgtDots) { scene.remove(tgtDots); tgtDots.geometry.dispose(); tgtDots = null; }
   if (slabRenderer) slabRenderer.invalidate(null);
   trckParents = []; groups = []; allStreamlines = null; streamlineLookup = null; allPts = null; gridIdx = null;
-  setStreamlines = null; renderStreamlines = null;
+  setStreamlines = []; renderStreamlines = []; renderProbedEnds = null; // their 'nothing loaded' values (see their declarations)
   isBundle = false; streamlineBundleId = null; bundlePaletteRGB = null; bundleNames = null; _lastBundleInfo = null;
   hiddenBundleIndices.clear();
   trckHeader = null; trckHeaderReady = false;
