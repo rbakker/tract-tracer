@@ -110,6 +110,11 @@ class LutItem extends LoadedItem {
   constructor(label) { super('lut', label); }
 }
 
+// One markers file (markers-format.md).
+class MarkersItem extends LoadedItem {
+  constructor(label) { super('markers', label); }
+}
+
 class BundleItem extends LoadedItem {
   get category() { return 'streamlines'; }
   constructor(label, bundleIndex, colorHex) {
@@ -186,12 +191,14 @@ class LoadedDataStore {
       anatomy:       new DataGroupItem('Anatomy', true),
       parcellations: new DataGroupItem('Parcellations', true),
       streamlines:   new DataGroupItem('Streamline bundles', true),
+      markers:       new DataGroupItem('Markers', true),
     };
     this.anatomyItems = [];       // volume rows (see registerVolumeItems in index.html)
     this.parcellationItems = [];  // label-volume rows + unattached lookup-table rows
     this.streamlineItems = [];    // one row per streamline file (bundle, or the single tractogram)
     this.dataFileItems = [];      // .dqz data files with no parent to attach to, or unreadable
     this.streamlineToolbar = null; // ToolbarItem shown first under Streamline bundles while it has rows
+    this.markerItems = [];        // one row per markers file
     this.onChange = null; // () => void
   }
 
@@ -200,6 +207,7 @@ class LoadedDataStore {
   }
   setStreamlines(items) { this.streamlineItems = items; this._fire(); }
   setDataFiles(items) { this.dataFileItems = items; this._fire(); }
+  setMarkers(items) { this.markerItems = items; this._fire(); }
   // Something shown in the tree changed (a tag, a settings area) — re-render.
   refresh() { this._fire(); }
 
@@ -207,7 +215,7 @@ class LoadedDataStore {
   clearStreamlines() { this.streamlineItems = []; this._fire(); }
 
   get roots() {
-    const { anatomy, parcellations, streamlines } = this.categories;
+    const { anatomy, parcellations, streamlines, markers } = this.categories;
     const fill = (group, items) => {
       group.children = [];
       for (const it of items) if (it) group.addChild(it);
@@ -216,7 +224,8 @@ class LoadedDataStore {
     fill(anatomy, this.anatomyItems);
     fill(parcellations, this.parcellationItems);
     fill(streamlines, [this.streamlineItems.length ? this.streamlineToolbar : null, ...this.streamlineItems, ...this.dataFileItems]);
-    return [anatomy, parcellations, streamlines].filter(g => g.children.length);
+    fill(markers, this.markerItems);
+    return [anatomy, parcellations, streamlines, markers].filter(g => g.children.length);
   }
 
   _fire() {
@@ -421,4 +430,4 @@ class DataTreeView {
   }
 }
 
-export { LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton };
+export { LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton };

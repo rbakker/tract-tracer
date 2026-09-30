@@ -106,12 +106,15 @@ export function makeMarkerMaterial(defines = { FULL_PASS: 1 }, uniforms = null) 
 
 // Builds a THREE.Group with one instanced mesh per shape in use.
 // resolved: resolveMarkerStyle()'s { color, shape, size, sizeUnit }.
+// material: pass the previous group's material when rebuilding (a style
+// change), so three.js keeps its compiled shader program — disposing a
+// material and making a new one would recompile it every time.
 // Returns the group; group.userData.material is the shared material (its
 // uniforms: u_sizeScale, u_opacity, ... — see setMarkerDisplay), and each
 // mesh's userData.markerIndex maps instance → marker index (for picking).
-export function makeMarkerGroup(set, resolved) {
+export function makeMarkerGroup(set, resolved, material = null) {
   const { n, pos } = set.markers;
-  const material = makeMarkerMaterial();
+  material = material || makeMarkerMaterial();
   material.uniforms.u_sizeInPx.value = resolved.sizeUnit === 'px' ? 1 : 0;
   const group = new THREE.Group();
   group.userData.material = material;
@@ -161,7 +164,7 @@ export function setMarkerDisplay(group, { sizeScale = 1, opacity = 1 } = {}) {
   if (m.transparent !== transparent) { m.transparent = transparent; m.needsUpdate = true; }
 }
 
-export function disposeMarkerGroup(group) {
+export function disposeMarkerGroup(group, keepMaterial = false) {
   for (const mesh of group.children) {
     // dispose() frees the GPU buffers of the attributes still attached; the
     // base glyph's position/normal/index are shared between all groups, so
@@ -171,7 +174,7 @@ export function disposeMarkerGroup(group) {
     mesh.geometry.index = null;
     mesh.geometry.dispose();
   }
-  group.userData.material.dispose();
+  if (!keepMaterial) group.userData.material.dispose();
 }
 
 export function markerBoundingSphere(pos) {

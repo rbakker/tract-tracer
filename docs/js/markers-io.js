@@ -239,8 +239,8 @@ export function propertyRange(p) {
 }
 
 // A style's size spec → { unit: 'mm'|'px', min, max } (min === max for a
-// single number), or the default.
-function sizeSpec(st, key) {
+// single number), or the default. key: 'size' (markers) or 'width' (links).
+export function sizeSpec(st, key = 'size') {
   const mm = st[key + '_mm'], px = st[key + '_px'];
   const spec = v => (isNum(v) ? [v, v] : Array.isArray(v) && v.length === 2 && v.every(isNum) ? v : null);
   if (spec(mm)) { const [a, b] = spec(mm); return { unit: 'mm', min: a, max: b }; }
@@ -278,18 +278,28 @@ export function resolveMarkerStyle(set, st, colormap) {
     shape[i] = s;
   }
 
-  // color
+  // color. A numeric color_by spreads the colormap over st.window
+  // [from, to] (default: the property's range; to < from inverts it);
+  // values outside the window keep the fixed color, like streamlines keep
+  // their bundle color outside a data field's window.
   const fixed = rgb255(st.color) || DEFAULT_RGB;
   const cp = prop(st.color_by);
   const cv = cp && values[cp.name];
+  const win = cp && (cp.type === 'number' || cp.type === 'integer')
+    ? (Array.isArray(st.window) && st.window.length === 2 && st.window.every(isNum) ? st.window : propertyRange(cp)) : null;
   for (let i = 0; i < n; i++) {
     let c = fixed;
     if (cp && cp.type === 'categorical') {
       const v = cv ? cv[i] : null;
       c = v == null ? MISSING_RGB : cp.legend[cp.index.get(v)].color;
-    } else if (cp && (cp.type === 'number' || cp.type === 'integer')) {
-      const t = cv ? norm01(cp, cv[i]) : NaN;
-      c = Number.isNaN(t) ? MISSING_RGB : colormap(t);
+    } else if (win) {
+      const v = cv ? cv[i] : NaN;
+      if (!Number.isFinite(v)) c = MISSING_RGB;
+      else {
+        const [a, b] = win, lo = Math.min(a, b), hi = Math.max(a, b);
+        const eps = 1e-9 * Math.max(1, Math.abs(hi - lo));
+        if (v >= lo - eps && v <= hi + eps) c = colormap(a === b ? 0.5 : Math.max(0, Math.min(1, (v - a) / (b - a))));
+      }
     }
     color[3 * i] = c[0]; color[3 * i + 1] = c[1]; color[3 * i + 2] = c[2];
   }

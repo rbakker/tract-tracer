@@ -174,6 +174,10 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .ld-btn.ld-cancel{color:var(--dim);margin-right:auto;order:-1;}
 .dt-toolbar{flex-wrap:wrap;}
 .dt-toolbar-choice{margin-left:20px;}
+.dt-color{width:34px;height:16px;padding:0;border:1px solid rgba(255,255,255,0.18);border-radius:2px;
+  background:none;cursor:pointer;}
+.dt-color::-webkit-color-swatch-wrapper{padding:0;}
+.dt-color::-webkit-color-swatch{border:none;}
 .dt-note{flex-basis:100%;color:var(--dim);font-size:9px;line-height:1.5;}
 .dt-menu-btn{flex:none;width:16px;text-align:center;background:none;border:none;color:var(--dim);font-size:13px;
   cursor:pointer;padding:0;font-family:inherit;line-height:1;transform:rotate(90deg);transition:transform 0.15s;}
@@ -188,6 +192,20 @@ button.dt-menu-btn:hover{color:var(--accent);}
 .dt-settings .dt-slider-row{flex-basis:100%;margin:0;}
 .dt-settings .dt-slider-row label{min-width:72px;}
 .dt-settings .slider-val{min-width:58px;font-size:9px;color:var(--text);text-align:right;}
+/* scrub field: slider + editable value in one (see makeSliderRow) */
+.dt-scrub{position:relative;flex:1;min-width:0;height:17px;border:1px solid rgba(255,255,255,0.14);
+  border-radius:2px;background:rgba(255,255,255,0.04);cursor:ew-resize;overflow:hidden;
+  touch-action:none;user-select:none;outline:none;}
+.dt-scrub:hover,.dt-scrub:focus-visible{border-color:var(--accent);}
+.dt-scrub-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(72,136,255,0.32);pointer-events:none;}
+.dt-scrub.dt-scrubbing .dt-scrub-fill{background:rgba(72,136,255,0.45);}
+.dt-scrub-input{position:relative;display:block;width:100%;height:100%;box-sizing:border-box;
+  background:transparent;border:none;outline:none;padding:0 6px;margin:0;
+  color:var(--bright);font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.04em;
+  text-align:center;pointer-events:none;cursor:inherit;}
+.dt-scrub.dt-editing{cursor:text;border-color:var(--accent);background:rgba(0,0,0,0.35);}
+.dt-scrub.dt-editing .dt-scrub-fill{opacity:0.25;}
+.dt-scrub.dt-editing .dt-scrub-input{pointer-events:auto;text-align:left;}
 .dt-cmap-swatch{flex:1;min-width:40px;height:9px;border-radius:2px;border:1px solid rgba(255,255,255,0.15);
   /* gradient spans the border box and doesn't tile: the default (sized to
      the padding box, repeating) showed the gradient's far end in the 1px
@@ -815,7 +833,7 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
          BUILTIN_COLORMAPS, writeColormapRow, colormapCSSGradient, sampleStops,
          makeFileStyleTexture, setFileStyle, setRibbonFaintMode } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
-import { parseMarkers, resolveMarkerStyle } from './js/markers-io.js';
+import { parseMarkers, resolveMarkerStyle, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
 import { makeMarkerGroup, setMarkerDisplay, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
 
 'use strict';
@@ -2150,15 +2168,18 @@ const MAX_RENDER_POINTS = { low: 300000, high: 1500000, ultra: 20000000 };
 // Picks which selected streamlines to actually render when the full
 // selection would exceed the point budget. Returns POSITIONS into `ids`
 // (not streamline indices directly) so the caller can filter any other
-// per-selection parallel array — e.g. probedEnds — the same way. Thins by
-// an even stride across the whole selection rather than always keeping
-// whichever streamlines happen to come first in `ids`, so the rendered
-// subset stays visually representative instead of biased toward one
-// region (ids' own order reflects grid-scan/Set-insertion order, not
-// anything meaningful to preserve). Doesn't hit the point budget exactly —
-// it estimates a streamline count from the selection's average length —
-// but that's a fine trade for staying a cheap single pass over lengths
-// only, rather than a second full accounting pass.
+// per-selection parallel array — e.g. probedEnds — the same way. Keeps the
+// same fraction of every bundle, spread evenly through it (a per-bundle
+// running tally: each streamline adds `keep` to its bundle's tally and is
+// kept whenever the tally reaches 1), so the rendered subset stays
+// representative — and every bundle with a selected streamline keeps at
+// least one: its tally starts at 1, so its first streamline is always
+// kept. A single stride over the whole selection used to drop tiny
+// bundles (a 1-streamline bundle almost always fell between two stride
+// steps). Still one cheap pass over lengths plus one over ids. Doesn't hit
+// the budget exactly — the fraction is estimated from the selection's
+// average length, and the guaranteed first streamlines can add at most one
+// per bundle — which is fine.
 function pickRenderPositions(ids, maxPoints) {
   let total = 0;
   const counts = new Array(ids.length);
@@ -2170,14 +2191,19 @@ function pickRenderPositions(ids, maxPoints) {
     return { positions: null, renderedPoints: total }; // null = no thinning needed, use ids as-is
   }
   const avgPts = total / ids.length;
-  const keepCount = Math.max(1, Math.floor(maxPoints / avgPts));
-  const stride = ids.length / keepCount;
+  const keep = Math.max(1, Math.floor(maxPoints / avgPts)) / ids.length; // fraction to keep, < 1
+  const gid = streamlineBundleId;
+  const tally = new Float64Array(gid ? Math.max(1, groups.length) : 1).fill(1);
   const positions = [];
   let renderedPoints = 0;
-  for (let k = 0; k < keepCount; k++) {
-    const pos = Math.min(ids.length - 1, Math.floor(k * stride));
-    positions.push(pos);
-    renderedPoints += counts[pos];
+  for (let i = 0; i < ids.length; i++) {
+    const g = gid ? gid[ids[i]] : 0;
+    if (tally[g] >= 1) {
+      tally[g] -= 1;
+      positions.push(i);
+      renderedPoints += counts[i];
+    }
+    tally[g] += keep;
   }
   return { positions, renderedPoints };
 }
@@ -4384,18 +4410,109 @@ function restyleFiles() {
   redrawAll();
 }
 
-// One "LABEL [slider] value" row for an inline settings area.
-function makeSliderRow(label, { min, max, step, value, format, onInput }) {
+// One "LABEL [value field]" row for an inline settings area. The field is
+// a slider and a text box in one (a "scrub field"): its fill shows where
+// the value lies between min and max, and it shows the value that is
+// actually applied.
+//  - drag across it: set the value by position (snapped to step);
+//  - click it: type an exact value; Enter applies, Escape cancels;
+//  - arrow keys while it has focus: one step (Shift: ten).
+// Typed values are clamped to [min, max]. format(v) gives the display
+// text; parse(text) reads typed text back (default: the first number in
+// it, so "40%" or "2.0 px" work too) and returns NaN for nonsense.
+function makeSliderRow(label, { min, max, step, value, format, onInput, parse = null }) {
   const row = document.createElement('div');
   row.className = 'ctl-row dt-slider-row';
   const lbl = document.createElement('label'); lbl.textContent = label;
-  const sl = document.createElement('input');
-  Object.assign(sl, { type: 'range', min, max, step, value });
-  const val = document.createElement('span'); val.className = 'slider-val';
-  val.textContent = format(+sl.value);
-  sl.addEventListener('click', e => e.stopPropagation());
-  sl.addEventListener('input', () => { onInput(+sl.value); val.textContent = format(+sl.value); });
-  row.append(lbl, sl, val);
+  const field = document.createElement('div');
+  field.className = 'dt-scrub';
+  field.tabIndex = 0;
+  const fill = document.createElement('div');
+  fill.className = 'dt-scrub-fill';
+  const input = document.createElement('input');
+  input.className = 'dt-scrub-input';
+  input.type = 'text';
+  input.readOnly = true;
+  input.tabIndex = -1;
+  input.spellcheck = false;
+  field.append(fill, input);
+  row.append(lbl, field);
+
+  const span = max - min || 1;
+  const snap = v => {
+    v = Math.max(min, Math.min(max, v));
+    if (step > 0) v = min + Math.round((v - min) / step) * step;
+    return +Math.max(min, Math.min(max, v)).toPrecision(12);
+  };
+  const readText = parse || (t => { const m = String(t).replace(',', '.').match(/-?\d*\.?\d+(e[-+]?\d+)?/i); return m ? +m[0] : NaN; });
+  let editing = false;
+  const show = () => {
+    fill.style.width = (100 * (value - min) / span) + '%';
+    if (!editing) input.value = format(value);
+  };
+  const set = (v, fromText = false) => {
+    v = fromText ? Math.max(min, Math.min(max, v)) : snap(v); // typed: exact, only clamped
+    if (!Number.isFinite(v) || v === value) { show(); return; }
+    value = v;
+    show();
+    onInput(v);
+  };
+  show();
+
+  // Drag to scrub; a press that doesn't move starts text editing.
+  let down = null;
+  field.addEventListener('pointerdown', e => {
+    if (editing || e.button !== 0) return;
+    e.stopPropagation();
+    down = { x: e.clientX, moved: false };
+    field.setPointerCapture(e.pointerId);
+  });
+  field.addEventListener('pointermove', e => {
+    if (!down) return;
+    if (!down.moved && Math.abs(e.clientX - down.x) < 3) return;
+    down.moved = true;
+    field.classList.add('dt-scrubbing');
+    const r = field.getBoundingClientRect();
+    set(min + span * (e.clientX - r.left) / r.width);
+  });
+  field.addEventListener('pointerup', e => {
+    if (!down) return;
+    const moved = down.moved;
+    down = null;
+    field.classList.remove('dt-scrubbing');
+    if (!moved) startEditing();
+  });
+  field.addEventListener('click', e => e.stopPropagation());
+
+  function startEditing() {
+    editing = true;
+    field.classList.add('dt-editing');
+    input.readOnly = false;
+    input.value = String(+(+value).toPrecision(6));
+    input.focus();
+    input.select();
+  }
+  function stopEditing(apply) {
+    if (!editing) return;
+    editing = false;
+    field.classList.remove('dt-editing');
+    input.readOnly = true;
+    if (apply) set(readText(input.value), true);
+    show();
+  }
+  input.addEventListener('keydown', e => {
+    e.stopPropagation(); // keep typing out of the app's own shortcuts
+    if (e.key === 'Enter') { stopEditing(true); field.focus(); }
+    else if (e.key === 'Escape') { stopEditing(false); field.focus(); }
+  });
+  input.addEventListener('blur', () => stopEditing(true));
+  field.addEventListener('keydown', e => {
+    if (editing) return;
+    const k = e.shiftKey ? 10 : 1, st = step > 0 ? step : span / 100;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); set(value + k * st); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); set(value - k * st); }
+    else if (e.key === 'Enter') { e.preventDefault(); startEditing(); }
+  });
   return row;
 }
 
@@ -4642,7 +4759,15 @@ function makeFieldWindowRows(rec) {
   const [lo, hi] = fieldRange(rec), win = fieldWindow(rec);
   const categorical = rec.header.kind === 'categorical';
   const step = categorical ? 1 : (hi - lo) / 500 || 1;
-  const fmt = v => categorical ? String(Math.round(v)) : (+v.toPrecision(3)).toString();
+  // Categorical: the code and, when the field's legend is the colormap, its
+  // name (for a binned field the bin's value range) — the value actually
+  // compared against. Otherwise the number itself, to 4 significant digits.
+  const legend = categorical && resolveFieldColormap(rec).kind === 'categorical' ? fieldLegend(rec) : null;
+  const fmt = v => {
+    if (!categorical) return String(+v.toPrecision(4));
+    const code = Math.round(v), e = legend && legend.find(l => l.value === code);
+    return e && e.name !== String(code) ? code + ' · ' + e.name : String(code);
+  };
   const onChange = () => {
     updateFieldSwatch(rec);
     if (groups.some(g => g.activeField === rec)) restyleFiles();
@@ -4750,9 +4875,10 @@ function addMarkerFiles(list) {
 
 // (Re)builds a markers file's 3D meshes from its current style.
 function buildMarkerGroup(rec) {
-  if (rec.group) { scene.remove(rec.group); disposeMarkerGroup(rec.group); }
+  let material = null;
+  if (rec.group) { material = rec.group.userData.material; scene.remove(rec.group); disposeMarkerGroup(rec.group, true); }
   const resolved = resolveMarkerStyle(rec.set, rec.style, markerColormap(rec.style.colormap));
-  rec.group = makeMarkerGroup(rec.set, resolved);
+  rec.group = makeMarkerGroup(rec.set, resolved, material);
   rec.group.visible = rec.visible;
   setMarkerDisplay(rec.group, rec);
   scene.add(rec.group);
@@ -4783,16 +4909,17 @@ function registerMarkerItems() {
       render3D();
     };
     item.buildSettings = (_, el) => {
-      el.appendChild(makeSliderRow('SIZE', {
-        min: 0.25, max: 4, step: 0.05, value: rec.sizeScale,
-        format: v => '×' + v.toFixed(2),
-        onInput: v => { rec.sizeScale = v; setMarkerDisplay(rec.group, rec); render3D(); },
-      }));
+      buildMarkerStyleSettings(rec, el);
       el.appendChild(makeSliderRow('OPACITY', {
         min: 0, max: 100, step: 1, value: Math.round(rec.opacity * 100),
         format: v => v + '%',
         onInput: v => { rec.opacity = v / 100; setMarkerDisplay(rec.group, rec); render3D(); },
       }));
+      el.appendChild(makeSettingsButton('reset', () => {
+        rec.style = { ...rec.set.style.markers };
+        rec.opacity = 1;
+        buildMarkerGroup(rec); render3D(); dataStore.refresh();
+      }, 'undo the changes above: back to the style the file specifies'));
       el.appendChild(makeSettingsButton('show header', () => showMarkersHeaderPanel(rec)));
       el.appendChild(makeSettingsButton('remove', () => removeMarkerSet(rec)));
     };
@@ -4800,6 +4927,129 @@ function registerMarkerItems() {
     return item;
   });
   dataStore.setMarkers(items);
+}
+
+// "color by / shape by / size by" for a markers file. The choices edit
+// rec.style — the same shape as the file's style.markers (see
+// markers-format.md) — and rebuild the meshes; a change that alters which
+// controls apply re-renders the settings area.
+function buildMarkerStyleSettings(rec, el) {
+  const { set } = rec, st = rec.style;
+  const props = [...set.props.values()].filter(p => set.markers.values[p.name]);
+  const isNumeric = p => p && (p.type === 'number' || p.type === 'integer');
+  const restyle = (relayout = false) => { buildMarkerGroup(rec); render3D(); if (relayout) dataStore.refresh(); };
+  const propLabel = p => p.name + (p.type === 'categorical' ? '' : ' (' + p.type + ')');
+
+  // ── color
+  const colorable = props.filter(p => p.type !== 'text');
+  const colorProp = set.props.get(st.color_by) || null;
+  el.appendChild(makeChoiceRow('color by', [['', 'one color'], ...colorable.map(p => [p.name, propLabel(p)])],
+    colorProp ? colorProp.name : '', v => {
+      if (v) st.color_by = v; else delete st.color_by;
+      delete st.window; // a new property: its own full range
+      restyle(true);
+    }));
+  if (!colorProp) {
+    const row = document.createElement('div');
+    row.className = 'dt-choice';
+    const lab = document.createElement('label');
+    lab.textContent = 'color';
+    const pick = document.createElement('input');
+    pick.type = 'color';
+    pick.className = 'dt-color';
+    const c = Array.isArray(st.color) ? st.color : [255, 255, 255];
+    pick.value = '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+    pick.addEventListener('click', e => e.stopPropagation());
+    pick.addEventListener('input', () => {
+      st.color = [1, 3, 5].map(i => parseInt(pick.value.slice(i, i + 2), 16));
+      restyle();
+    });
+    row.append(lab, pick);
+    el.appendChild(row);
+  } else if (isNumeric(colorProp)) {
+    const cmapId = BUILTIN_COLORMAPS[st.colormap] ? st.colormap : 'viridis';
+    const [lo, hi] = propertyRange(colorProp);
+    if (!Array.isArray(st.window)) st.window = [lo, hi];
+    const win = st.window;
+    const wrap = document.createElement('span');
+    wrap.className = 'dt-cmap';
+    const lbl = document.createElement('span');
+    lbl.className = 'dt-cmap-lbl';
+    lbl.textContent = 'colormap';
+    const sel = document.createElement('select');
+    sel.className = 'inline-select';
+    for (const [id, def] of Object.entries(BUILTIN_COLORMAPS)) {
+      const o = document.createElement('option');
+      o.value = id; o.textContent = def.name;
+      sel.appendChild(o);
+    }
+    sel.value = cmapId;
+    const sw = document.createElement('span');
+    sw.className = 'dt-cmap-swatch';
+    const paintSwatch = () => {
+      let def = BUILTIN_COLORMAPS[st.colormap] || BUILTIN_COLORMAPS.viridis;
+      if (win[1] < win[0]) def = { kind: 'continuous', stops: def.stops.map(([t, c]) => [1 - t, c]) };
+      sw.style.backgroundImage = colormapCSSGradient(def);
+    };
+    sel.addEventListener('click', e => e.stopPropagation());
+    sel.addEventListener('change', () => { st.colormap = sel.value; paintSwatch(); restyle(); });
+    paintSwatch();
+    wrap.append(lbl, sel, sw);
+    el.appendChild(wrap);
+    const step = colorProp.type === 'integer' ? 1 : (hi - lo) / 500 || 1;
+    const fmt = v => String(+v.toPrecision(4)) + (colorProp.unit ? ' ' + colorProp.unit : '');
+    el.appendChild(makeSliderRow('APPLY FROM', { min: lo, max: hi, step, value: win[0], format: fmt,
+      onInput: v => { win[0] = v; paintSwatch(); restyle(); } }));
+    el.appendChild(makeSliderRow('APPLY TO', { min: lo, max: hi, step, value: win[1], format: fmt,
+      onInput: v => { win[1] = v; paintSwatch(); restyle(); } }));
+  }
+
+  // ── shape
+  const shapeProps = props.filter(p => p.type === 'categorical');
+  const shapeProp = set.props.get(st.shape_by) || null;
+  if (shapeProps.length) {
+    el.appendChild(makeChoiceRow('shape by', [['', 'one shape'], ...shapeProps.map(p => [p.name, p.name])],
+      shapeProp ? shapeProp.name : '', v => { if (v) st.shape_by = v; else delete st.shape_by; restyle(true); }));
+  }
+  if (!shapeProp) {
+    el.appendChild(makeChoiceRow('shape', MARKER_SHAPES.map(s => [s, s]),
+      MARKER_SHAPES.includes(st.shape) ? st.shape : 'sphere', v => { st.shape = v; restyle(); }));
+  }
+
+  // ── size
+  const sizeProps = props.filter(p => p.type !== 'text');
+  const sizeProp = set.props.get(st.size_by) || null;
+  const spec = sizeSpec(st, 'size');
+  const setSize = (unit, min, max) => {
+    delete st.size_mm; delete st.size_px;
+    st['size_' + unit] = min === max ? min : [min, max];
+  };
+  el.appendChild(makeChoiceRow('size by', [['', 'one size'], ...sizeProps.map(p => [p.name, propLabel(p)])],
+    sizeProp ? sizeProp.name : '', v => {
+      if (v) st.size_by = v; else delete st.size_by;
+      const p = set.props.get(v);
+      // A number spreads over [min, max]; anything else uses one size.
+      if (isNumeric(p) && spec.min === spec.max) setSize(spec.unit, spec.max / 2, spec.max);
+      else if (!isNumeric(p) && spec.min !== spec.max) setSize(spec.unit, spec.max, spec.max);
+      restyle(true);
+    }));
+  el.appendChild(makeChoiceRow('size in', [['px', 'screen pixels'], ['mm', 'mm (brain)']], spec.unit, v => {
+    const lim = v === 'px' ? [1, 60] : [0.1, 30];
+    const c = x => Math.max(lim[0], Math.min(lim[1], x));
+    setSize(v, c(spec.min), c(spec.max));
+    restyle(true);
+  }, 'pixels: the same size at any zoom; mm: a real size in the brain'));
+  const [smin, smax, sstep] = spec.unit === 'px' ? [1, 60, 0.5] : [0.1, 30, 0.1];
+  const sfmt = v => String(+v.toFixed(2)) + ' ' + spec.unit;
+  if (isNumeric(sizeProp)) {
+    el.appendChild(makeSliderRow('SIZE MIN', { min: smin, max: smax, step: sstep, value: spec.min, format: sfmt,
+      onInput: v => { spec.min = v; setSize(spec.unit, spec.min, spec.max); restyle(); } }));
+    el.appendChild(makeSliderRow('SIZE MAX', { min: smin, max: smax, step: sstep, value: spec.max, format: sfmt,
+      onInput: v => { spec.max = v; setSize(spec.unit, spec.min, spec.max); restyle(); } }));
+  } else {
+    el.appendChild(makeSliderRow('SIZE', { min: smin, max: smax, step: sstep, value: spec.max, format: sfmt,
+      onInput: v => { setSize(spec.unit, v, v); restyle(); } }));
+  }
 }
 
 // The file's description minus the tables: properties (with what the
