@@ -178,6 +178,15 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
   background:none;cursor:pointer;}
 .dt-color::-webkit-color-swatch-wrapper{padding:0;}
 .dt-color::-webkit-color-swatch{border:none;}
+.dt-filters{flex-basis:100%;display:flex;flex-direction:column;gap:3px;margin-top:4px;
+  padding-top:4px;border-top:1px dashed rgba(255,255,255,0.08);}
+.dt-filters .dt-slider-row label{min-width:40px;}
+.dt-filter-head{display:flex;align-items:center;gap:8px;margin-top:2px;}
+.dt-filter-name{flex:1;color:var(--bright);font-size:9px;letter-spacing:0.06em;}
+.dt-filter-values{display:flex;flex-wrap:wrap;gap:1px 10px;padding-left:4px;}
+.dt-filter-scroll{max-height:96px;overflow-y:auto;}
+.dt-filter-value{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text);cursor:pointer;white-space:nowrap;}
+.dt-filter-swatch{width:8px;height:8px;border-radius:2px;flex:none;}
 .dt-note{flex-basis:100%;color:var(--dim);font-size:9px;line-height:1.5;}
 .dt-menu-btn{flex:none;width:16px;text-align:center;background:none;border:none;color:var(--dim);font-size:13px;
   cursor:pointer;padding:0;font-family:inherit;line-height:1;transform:rotate(90deg);transition:transform 0.15s;}
@@ -455,7 +464,7 @@ input[type=file]{display:none;}
   <!-- Top-left buttons -->
   <div id="top-btns">
     <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
-    <button class="top-btn" id="load-btn"><span class="icon">⊞</span>FILE</button>
+    <button class="top-btn" id="load-btn"><span class="icon">⊞</span>DATA</button>
     <button class="top-btn" id="settings-btn"><span class="icon">⚙</span>SETTINGS</button>
     <button class="top-btn" id="about-btn"><span class="icon">ⓘ</span>ABOUT</button>
   </div>
@@ -463,7 +472,7 @@ input[type=file]{display:none;}
   <!-- Floating panel: FILE -->
   <div id="panel-file" class="app-panel">
     <div class="app-panel-titlebar">
-      <span class="grip">⠿</span><span class="app-panel-title">FILE</span>
+      <span class="grip">⠿</span><span class="app-panel-title">DATA</span>
       <button class="app-panel-close" title="close">×</button>
     </div>
     <div class="app-panel-body">
@@ -742,7 +751,7 @@ input[type=file]{display:none;}
   <!-- Welcome screen (shown when no data loaded) -->
   <div id="welcome">
     <h2>TRACTOGRAM OBSERVER</h2>
-    <p>Use the FILE menu to get started</p>
+    <p>Use the DATA menu to get started</p>
     <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">10k MacBNA M01 demo</a><br/>or <a id="demo-btn" class="accent-link" href="?MacBNA_M03">1M MacBNA M03 demo</a></p>
   </div>
 
@@ -831,9 +840,9 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
          makeRibbonLines, makeEndpointDots, hexToRgbRaw, makeColormapTexture,
          setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE,
          BUILTIN_COLORMAPS, writeColormapRow, colormapCSSGradient, sampleStops,
-         makeFileStyleTexture, setFileStyle, setRibbonFaintMode } from './js/scene3d.js';
+         makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
-import { parseMarkers, resolveMarkerStyle, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
+import { parseMarkers, resolveMarkerStyle, markerFilterMask, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
 import { makeMarkerGroup, setMarkerDisplay, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
 
 'use strict';
@@ -1090,8 +1099,7 @@ window._vr = vr;  // debug access
 // driver-level crash this whole quality system exists to avoid; a wrong
 // 'low' guess just costs some unnecessary blur/step-count headroom.
 function estimateGpuTier(gl) {
-  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-  const renderer = (dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '';
+  const renderer = gpuInfo(gl).renderer;
   const r = renderer.toLowerCase();
 
   // Software rasterizers: no real GPU acceleration at all.
@@ -4853,7 +4861,7 @@ function addMarkerFiles(list) {
     // Re-dropping a file with the same name replaces it.
     const old = markerSets.find(m => m.file.name === file.name);
     if (old) removeMarkerSet(old, false);
-    const rec = { file, set, style: { ...set.style.markers }, group: null,
+    const rec = { file, set, style: { ...set.style.markers }, filters: [], mask: null, group: null,
                   visible: true, sizeScale: 1, opacity: 1, uiSettingsOpen: false };
     markerSets.push(rec);
     buildMarkerGroup(rec);
@@ -4877,7 +4885,8 @@ function addMarkerFiles(list) {
 function buildMarkerGroup(rec) {
   let material = null;
   if (rec.group) { material = rec.group.userData.material; scene.remove(rec.group); disposeMarkerGroup(rec.group, true); }
-  const resolved = resolveMarkerStyle(rec.set, rec.style, markerColormap(rec.style.colormap));
+  rec.mask = markerFilterMask(rec.set, rec.filters);
+  const resolved = resolveMarkerStyle(rec.set, rec.style, markerColormap(rec.style.colormap), rec.mask);
   rec.group = makeMarkerGroup(rec.set, resolved, material);
   rec.group.visible = rec.visible;
   setMarkerDisplay(rec.group, rec);
@@ -4900,7 +4909,8 @@ function registerMarkerItems() {
     const { set } = rec;
     const item = new MarkersItem(set.name);
     item._visible = rec.visible;
-    item.tag = set.markers.n.toLocaleString() + (set.markers.n === 1 ? ' marker' : ' markers')
+    const shown = rec.mask ? rec.mask.reduce((a, v) => a + v, 0) : set.markers.n;
+    item.tag = (rec.mask ? shown.toLocaleString() + ' of ' : '') + set.markers.n.toLocaleString() + (set.markers.n === 1 ? ' marker' : ' markers')
              + (set.links.n ? ' · ' + set.links.n.toLocaleString() + (set.links.n === 1 ? ' link' : ' links') : '');
     item.tooltip = [set.name, rec.file.name, set.space ? 'space: ' + set.space : null].filter(Boolean).join('\n');
     item.onVisibilityChange = (_, visible) => {
@@ -4915,10 +4925,12 @@ function registerMarkerItems() {
         format: v => v + '%',
         onInput: v => { rec.opacity = v / 100; setMarkerDisplay(rec.group, rec); render3D(); },
       }));
+      buildMarkerFilterSettings(rec, el);
       el.appendChild(makeSettingsButton('reset', () => {
         rec.style = { ...rec.set.style.markers };
+        rec.filters = [];
         rec.opacity = 1;
-        buildMarkerGroup(rec); render3D(); dataStore.refresh();
+        buildMarkerGroup(rec); render3D(); registerMarkerItems();
       }, 'undo the changes above: back to the style the file specifies'));
       el.appendChild(makeSettingsButton('show header', () => showMarkersHeaderPanel(rec)));
       el.appendChild(makeSettingsButton('remove', () => removeMarkerSet(rec)));
@@ -4943,7 +4955,7 @@ function buildMarkerStyleSettings(rec, el) {
   // ── color
   const colorable = props.filter(p => p.type !== 'text');
   const colorProp = set.props.get(st.color_by) || null;
-  el.appendChild(makeChoiceRow('color by', [['', 'one color'], ...colorable.map(p => [p.name, propLabel(p)])],
+  el.appendChild(makeChoiceRow('color by', [['', '---'], ...colorable.map(p => [p.name, propLabel(p)])],
     colorProp ? colorProp.name : '', v => {
       if (v) st.color_by = v; else delete st.color_by;
       delete st.window; // a new property: its own full range
@@ -5008,7 +5020,7 @@ function buildMarkerStyleSettings(rec, el) {
   const shapeProps = props.filter(p => p.type === 'categorical');
   const shapeProp = set.props.get(st.shape_by) || null;
   if (shapeProps.length) {
-    el.appendChild(makeChoiceRow('shape by', [['', 'one shape'], ...shapeProps.map(p => [p.name, p.name])],
+    el.appendChild(makeChoiceRow('shape by', [['', '---'], ...shapeProps.map(p => [p.name, p.name])],
       shapeProp ? shapeProp.name : '', v => { if (v) st.shape_by = v; else delete st.shape_by; restyle(true); }));
   }
   if (!shapeProp) {
@@ -5024,7 +5036,7 @@ function buildMarkerStyleSettings(rec, el) {
     delete st.size_mm; delete st.size_px;
     st['size_' + unit] = min === max ? min : [min, max];
   };
-  el.appendChild(makeChoiceRow('size by', [['', 'one size'], ...sizeProps.map(p => [p.name, propLabel(p)])],
+  el.appendChild(makeChoiceRow('size by', [['', '---'], ...sizeProps.map(p => [p.name, propLabel(p)])],
     sizeProp ? sizeProp.name : '', v => {
       if (v) st.size_by = v; else delete st.size_by;
       const p = set.props.get(v);
@@ -5050,6 +5062,94 @@ function buildMarkerStyleSettings(rec, el) {
     el.appendChild(makeSliderRow('SIZE', { min: smin, max: smax, step: sstep, value: spec.max, format: sfmt,
       onInput: v => { setSize(spec.unit, v, v); restyle(); } }));
   }
+}
+
+// SHOW ONLY: filters on the marker properties, combined with AND. A
+// categorical filter is a list of values to keep (any of them: OR); a
+// number filter is a from–to range. Markers that don't pass aren't drawn.
+function buildMarkerFilterSettings(rec, el) {
+  const { set } = rec;
+  const refilter = () => { buildMarkerGroup(rec); render3D(); registerMarkerItems(); }; // re-renders the tree (row tag)
+  const box = document.createElement('div');
+  box.className = 'dt-filters';
+  const title = document.createElement('div');
+  title.className = 'dt-fields-title';
+  title.textContent = rec.filters.length ? 'SHOW ONLY (all conditions)' : 'SHOW ONLY';
+  box.appendChild(title);
+
+  for (const f of rec.filters) {
+    const p = set.props.get(f.prop);
+    if (!p) continue;
+    const head = document.createElement('div');
+    head.className = 'dt-filter-head';
+    const name = document.createElement('span');
+    name.className = 'dt-filter-name';
+    name.textContent = p.name + (p.unit ? ' (' + p.unit + ')' : '');
+    head.appendChild(name);
+    if (f.values) {
+      const vals = set.markers.values[p.name];
+      const counts = new Map();
+      for (const v of vals) if (v != null) counts.set(v, (counts.get(v) || 0) + 1);
+      const entries = p.legend.filter(e => counts.has(e.value));
+      head.append(
+        makeSettingsButton('all', () => { f.values = new Set(entries.map(e => e.value)); refilter(); }),
+        makeSettingsButton('none', () => { f.values = new Set(); refilter(); }));
+      head.appendChild(makeSettingsButton('✕', () => { rec.filters = rec.filters.filter(x => x !== f); refilter(); }, 'remove this condition'));
+      box.appendChild(head);
+      const list = document.createElement('div');
+      list.className = 'dt-filter-values' + (entries.length > 10 ? ' dt-filter-scroll' : '');
+      for (const e of entries) {
+        const lab = document.createElement('label');
+        lab.className = 'dt-filter-value';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'dt-check';
+        cb.checked = f.values.has(e.value);
+        cb.addEventListener('click', ev => ev.stopPropagation());
+        cb.addEventListener('change', () => { if (cb.checked) f.values.add(e.value); else f.values.delete(e.value); refilter(); });
+        const sw = document.createElement('span');
+        sw.className = 'dt-filter-swatch';
+        sw.style.background = 'rgb(' + e.color.map(c => Math.round(c * 255)).join(',') + ')';
+        const txt = document.createElement('span');
+        txt.textContent = e.name + ' (' + counts.get(e.value) + ')';
+        lab.append(cb, sw, txt);
+        list.appendChild(lab);
+      }
+      box.appendChild(list);
+    } else {
+      head.appendChild(makeSettingsButton('✕', () => { rec.filters = rec.filters.filter(x => x !== f); refilter(); }, 'remove this condition'));
+      box.appendChild(head);
+      const [lo, hi] = p.dataRange || propertyRange(p);
+      const step = p.type === 'integer' ? 1 : (hi - lo) / 500 || 1;
+      const fmt = v => String(+v.toPrecision(4)) + (p.unit ? ' ' + p.unit : '');
+      box.appendChild(makeSliderRow('FROM', { min: lo, max: hi, step, value: f.range[0], format: fmt,
+        onInput: v => { f.range[0] = v; refilterQuiet(); } }));
+      box.appendChild(makeSliderRow('TO', { min: lo, max: hi, step, value: f.range[1], format: fmt,
+        onInput: v => { f.range[1] = v; refilterQuiet(); } }));
+    }
+  }
+  // While dragging a range: update the view and the row's count without
+  // re-rendering the settings (which would end the drag).
+  function refilterQuiet() {
+    buildMarkerGroup(rec); render3D();
+    const shown = rec.mask ? rec.mask.reduce((a, v) => a + v, 0) : set.markers.n;
+    const row = el.parentElement && el.parentElement.querySelector('.dt-tag');
+    if (row) row.textContent = (rec.mask ? shown.toLocaleString() + ' of ' : '') + set.markers.n.toLocaleString() + ' markers';
+  }
+
+  // Add a condition: any categorical or number property not yet filtered.
+  const avail = [...set.props.values()].filter(p => set.markers.values[p.name] && p.type !== 'text'
+    && !rec.filters.some(f => f.prop === p.name));
+  if (avail.length) {
+    box.appendChild(makeChoiceRow('+ condition', [['', '---'], ...avail.map(p => [p.name, p.name])], '', v => {
+      const p = set.props.get(v);
+      if (!p) return;
+      if (p.type === 'categorical') rec.filters.push({ prop: p.name, values: new Set(p.legend.map(e => e.value)) });
+      else rec.filters.push({ prop: p.name, range: [...(p.dataRange || propertyRange(p))] });
+      refilter();
+    }, 'show only markers that meet this condition too'));
+  }
+  el.appendChild(box);
 }
 
 // The file's description minus the tables: properties (with what the

@@ -81,6 +81,12 @@ or, equivalently, a list of objects (convenient for small hand-written files):
 
 `null` (or a missing key) means "no value".
 
+A column that isn't declared in `properties` is still read: its type is
+guessed (all numbers → `number`, or `integer` if all whole; otherwise
+`categorical` with up to 50 distinct values, else `text`), and the viewer
+notes it. Declaring properties is still recommended — it's the only way to
+give a range, unit, legend or order.
+
 ### Marker table
 
 | column                | required | meaning |
@@ -120,6 +126,7 @@ exist. Rows referring to an unknown marker id are an error.
 | `shape_by`            | a categorical property; shapes from its legend |
 | `color`               | fixed color `[r, g, b]` 0–255 |
 | `color_by`            | a property: categorical → legend colors; number/integer → colormap over its `range` |
+| `colormap`            | for a numeric `color_by`: `"viridis"` (default), `"jet"`, `"gray"`, `"hot"` or `"coolwarm"` |
 | `size_mm` / `size_px` | size in mm (world) or in screen pixels: a number, or `[min, max]` together with a numeric `size_by` |
 | `size_by`             | a property: number/integer → linear over its `range` onto `[min, max]`; categorical → the legend's `size` factors times the base size |
 | `opacity`             | 0–1, default 1 |

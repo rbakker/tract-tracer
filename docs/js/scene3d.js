@@ -1126,6 +1126,23 @@ ${CLIP_SETUP_GLSL}
 `;
 
 
+// The GPU's renderer and vendor strings. Firefox now reports the real GPU
+// through plain RENDERER/VENDOR and warns that WEBGL_debug_renderer_info is
+// deprecated; Chrome and Safari still return a generic "WebKit WebGL"
+// there and need the extension. So: plain parameters first, and the
+// extension only when they're generic.
+export function gpuInfo(gl) {
+  let renderer = gl.getParameter(gl.RENDERER) || '', vendor = gl.getParameter(gl.VENDOR) || '';
+  if (/^(webkit|mozilla)\b/i.test(renderer) || /^(webkit|mozilla)\b/i.test(vendor)) {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg) {
+      renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || renderer;
+      vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || vendor;
+    }
+  }
+  return { renderer, vendor };
+}
+
 export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInfo) {
   const isColor = (anat.channels || 1) === 3;
   const isLabelMode = !isColor && !!(dispInfo && dispInfo.apply && dispInfo.map);
@@ -1162,10 +1179,10 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   // Logged unconditionally too, since a webgl2 debug_renderer_info string
   // (actual GPU model, where available) is exactly what's most useful to
   // have on hand once real DevTools access is sorted out.
-  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const { renderer: gpuRenderer, vendor: gpuVendor } = gpuInfo(gl);
   console.info('Glass brain GPU info:', {
-    renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
-    vendor:   dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)   : gl.getParameter(gl.VENDOR),
+    renderer: gpuRenderer,
+    vendor:   gpuVendor,
     max3DTextureSize: max3D,
     volumeShape: anat.shape,
     hasFloatLinear,

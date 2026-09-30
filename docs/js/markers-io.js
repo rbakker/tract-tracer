@@ -256,11 +256,37 @@ function norm01(p, v) {
   return Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
 }
 
+// Which markers pass the filters (1) or not (0). filters: a list of
+//   { prop, values: Set }   categorical: the value is one of these (OR)
+//   { prop, range: [a, b] } number/integer: a <= value <= b
+// combined with AND. A marker without a value for a filtered property
+// doesn't pass. Returns null when nothing is filtered.
+export function markerFilterMask(set, filters) {
+  const active = (filters || []).filter(f => set.props.has(f.prop) && set.markers.values[f.prop]);
+  if (!active.length) return null;
+  const n = set.markers.n, mask = new Uint8Array(n).fill(1);
+  for (const f of active) {
+    const vals = set.markers.values[f.prop];
+    if (f.values) {
+      for (let i = 0; i < n; i++) if (mask[i] && (vals[i] == null || !f.values.has(vals[i]))) mask[i] = 0;
+    } else if (f.range) {
+      const lo = Math.min(f.range[0], f.range[1]), hi = Math.max(f.range[0], f.range[1]);
+      const eps = 1e-9 * Math.max(1, hi - lo);
+      for (let i = 0; i < n; i++) {
+        const v = vals[i];
+        if (mask[i] && !(Number.isFinite(v) && v >= lo - eps && v <= hi + eps)) mask[i] = 0;
+      }
+    }
+  }
+  return mask;
+}
+
 // Resolves the marker style into per-marker arrays:
 //   color Float32Array(3n) 0-1, shape Uint8Array(n) (index into
 //   MARKER_SHAPES), size Float32Array(n) (in sizeUnit), sizeUnit 'mm'|'px'.
-// colormap(t) → [r,g,b] 0-1 is used for numeric color_by.
-export function resolveMarkerStyle(set, st, colormap) {
+// colormap(t) → [r,g,b] 0-1 is used for numeric color_by. mask (see
+// markerFilterMask): markers with 0 get size 0, i.e. aren't drawn.
+export function resolveMarkerStyle(set, st, colormap, mask = null) {
   const { n, values } = set.markers;
   const prop = k => (k && set.props.has(k) ? set.props.get(k) : null);
   const color = new Float32Array(3 * n), shape = new Uint8Array(n), size = new Float32Array(n);
@@ -318,7 +344,7 @@ export function resolveMarkerStyle(set, st, colormap) {
       const t = zv ? norm01(zp, zv[i]) : NaN;
       s = Number.isNaN(t) ? spec.min : spec.min + t * (spec.max - spec.min);
     }
-    size[i] = s;
+    size[i] = mask && !mask[i] ? 0 : s;
   }
   return { color, shape, size, sizeUnit: spec.unit };
 }

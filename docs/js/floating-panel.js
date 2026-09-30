@@ -45,6 +45,7 @@ const INTERACTIVE_SELECTOR = [
 ].join(', ');
 
 const DRAG_THRESHOLD = 4; // px of movement before a press turns into a drag
+const SCROLLBAR_ZONE = 16; // px along a scrollable element's edge where a press never drags (see _canStartDrag)
 
 function clampPanelPos(panel, left, top) {
   const margin = 60; // keep at least this much of the panel reachable/visible
@@ -153,12 +154,21 @@ class FloatingPanel {
     if (!(t instanceof Element)) return false;
     if (t.closest(this.noDragSelector)) return false;
     if (!this.dragAnywhere && !t.closest('.app-panel-titlebar')) return false;
-    // A press on a native scrollbar targets the scrolling element itself,
-    // but lands outside its client area.
-    const hasVScroll = t.scrollHeight > t.clientHeight;
-    const hasHScroll = t.scrollWidth  > t.clientWidth;
-    if ((hasVScroll && e.offsetX >= t.clientWidth) ||
-        (hasHScroll && e.offsetY >= t.clientHeight)) return false;
+    // A press on a scrollbar must scroll, not drag. Classic scrollbars
+    // take layout space, but overlay scrollbars (macOS, many touchpads,
+    // Firefox/GTK) are drawn ON TOP of the content, so a press on one
+    // looks like a press on the content. So: no drag when the press is
+    // within SCROLLBAR_ZONE px of the right (or bottom) edge of any
+    // scrollable element between the target and the panel.
+    for (let n = t; n && n !== this.el.parentElement; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      const r = n.getBoundingClientRect();
+      if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1 &&
+          e.clientX >= r.right - SCROLLBAR_ZONE) return false;
+      if (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1 &&
+          e.clientY >= r.bottom - SCROLLBAR_ZONE) return false;
+      if (n === this.el) break;
+    }
     return true;
   }
 
