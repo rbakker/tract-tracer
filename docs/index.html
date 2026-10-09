@@ -60,6 +60,28 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .row-pill.axi{border-color:var(--axi);background:var(--axi);}
 .slice-row.collapsed{flex:none!important;}
 .slice-row.collapsed .slice-canvas{display:none;}
+.slice-row.collapsed .orient-arrows{display:none;}
+/* orientation arrows (updateOrientArrows): bottom-left of each section */
+.orient-arrows{position:absolute;left:3px;bottom:3px;pointer-events:none;overflow:visible;z-index:2;}
+.orient-arrows{opacity:0.7;transition:opacity 0.15s;}
+.orient-arrows:hover{opacity:1;}
+.orient-arrows g{color:var(--dim);}
+.orient-arrows path{stroke:currentColor;stroke-width:1.2;fill:none;stroke-linecap:round;}
+.orient-arrows path.oa-head{fill:currentColor;stroke:#000;stroke-width:0.5;stroke-opacity:0.5;}
+.orient-arrows text{fill:currentColor;font:600 10px/1 'JetBrains Mono',monospace;stroke:#000;stroke-width:2px;stroke-opacity:0.6;
+  paint-order:stroke;pointer-events:visiblePainted;cursor:help;}
+.orient-arrows:hover g{color:var(--bright);}
+
+/* ── UI size ──
+   The whole interface is drawn 1.2x larger than its pixel sizes (what a
+   120% browser zoom gave): CSS zoom on the UI pieces — never on the
+   canvases, whose pixel sizes the renderers manage themselves. For
+   positioned pieces (panels, badges) the zoom goes on their children, so
+   their own left/top aren't scaled. Smaller: the browser's zoom. */
+:root{--ui:1.2;}
+#top-btns,#stats,#mprogress,#welcome,#gl-crash-banner,.ld-box,.slice-titlebar,.orient-arrows{zoom:var(--ui);}
+.app-panel:not(.card-panel) > *,.label-badge > *{zoom:var(--ui);}
+.app-panel:not(.card-panel){width:calc(340px * var(--ui));max-width:calc(100vw - 16px);}
 
 /* ── SETTINGS BUTTON + LOAD BUTTON ── */
 #top-btns{position:absolute;top:10px;left:12px;z-index:10;
@@ -104,6 +126,27 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .app-panel-close:hover{color:var(--accent);}
 .app-panel.focused { border-color: var(--focus); }
 .app-panel-body{overflow-y:auto;overflow-x:hidden;padding:14px 16px;flex:1 1 auto;}
+/* context cards (CardPanel): compact */
+/* 3D labels and cards are "easy mode": larger than the DATA panel —
+   1.44x with a mouse (1.2x on top of the UI's own 1.2x, --ui), 1.6x on
+   touch screens (tablets: finger-size targets). CSS zoom on their children, so positions and the panel
+   itself aren't scaled twice. */
+:root{--z3d:1.2;}
+@media (pointer:coarse){:root{--z3d:1.6;}
+  .hover-tip .mt-title,.card-panel .app-panel-title{gap:9px !important;}
+  .hover-tip .mt-open,.hover-tip .mt-close{padding:0 6px;}
+  .card-panel .app-panel-close{padding:0 8px;}}
+.hover-tip > *,.card-panel > *{zoom:var(--z3d);}
+.card-panel{width:calc(270px * var(--z3d)) !important;max-width:calc(100vw - 12px);}
+.hover-tip.mt-card{width:calc(260px * var(--z3d)) !important;max-width:calc(100% - 12px);}
+.card-panel .app-panel-titlebar{padding:5px 6px 5px 10px;letter-spacing:0.04em;font-size:11px;color:var(--bright);}
+.card-panel .app-panel-title{display:flex;align-items:center;min-width:0;}
+.card-panel .app-panel-title .mt-id{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.card-panel .mt-sw{width:10px;height:10px;border-radius:2px;flex:none;margin-right:7px;}
+.card-panel .app-panel-body{padding:6px 10px 8px;}
+.card-panel .mt-file{color:var(--dim);font-size:9px;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.card-panel .dt-settings{padding:2px 0 0;border:none;background:none;}
+.hover-tip .frame-row{display:flex;align-items:center;gap:6px;cursor:pointer;padding-right:4px;}
 .panel-content{display:block;}
 
 /* ── DATA TREE (FILE panel) ── */
@@ -125,7 +168,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .dt-caret{width:14px;flex:none;text-align:center;color:var(--dim);cursor:pointer;
   font-size:13px;line-height:1;user-select:none;
   font-family:-apple-system,'Segoe UI',sans-serif;}
-.dt-caret-empty{cursor:default;visibility:hidden;}
+.dt-caret-empty{display:none;} /* leaf rows: no caret column, no indent */
 .dt-check{flex:none;accent-color:var(--accent2);cursor:pointer;}
 .dt-radio{flex:none;accent-color:var(--accent);cursor:pointer;}
 .dt-check:disabled,.dt-radio:disabled{opacity:0.3;cursor:default;}
@@ -136,6 +179,33 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .dt-swatch::-webkit-color-swatch{border:none;border-radius:1px;}
 .dt-swatch::-moz-color-swatch{border:none;border-radius:1px;}
 .dt-swatch:hover{border-color:var(--accent);transform:scale(1.25);}
+/* focus icon (a small sun): dim outline when off; lit when on */
+.focus-btn{flex:none;background:none;border:none;padding:0;margin:0 1px;width:13px;height:13px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--dim);opacity:0.55;}
+.focus-btn svg{overflow:visible;}
+.focus-btn .fi-core{fill:none;stroke:currentColor;stroke-width:1.2;}
+.focus-btn .fi-rays line{stroke:currentColor;stroke-width:1.2;stroke-linecap:round;}
+.focus-btn:hover{opacity:1;color:var(--bright);}
+.focus-btn.on{opacity:1;color:#ffd34d;}
+.focus-btn.on .fi-core{fill:currentColor;}
+.focus-btn.mixed{opacity:1;color:#ffd34d;}
+/* info icon (file header): a bold italic serif "i" */
+.info-btn{flex:none;background:none;border:none;padding:0;margin:0;width:7px;height:14px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;color:#e8e8e8;opacity:0.85;}
+.info-btn:hover{opacity:1;color:#fff;}
+.focus-btn.mixed .fi-core{fill:none;}
+.focus-btn.mixed .fi-rays{opacity:0.45;}
+/* the spotlight (desk lamp) in the 3D label and card: "focus only this" */
+.solo-btn{flex:none;background:none;border:none;padding:0;margin:0 1px;width:16px;height:16px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--dim);opacity:0.7;}
+.solo-btn:hover{opacity:1;color:var(--bright);}
+.solo-btn.on{opacity:1;color:#ffd34d;}
+.solo-btn svg{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;overflow:visible;}
+.solo-btn .lamp-fill{fill:currentColor;stroke:none;}
+.solo-btn .lamp-beam{stroke-width:1.1;}
+/* the bundle's swatch in its 3D label and card title */
+.hover-tip .dt-swatch,.card-panel .dt-swatch{width:10px;height:10px;margin-right:2px;}
+.card-panel .app-panel-title,.hover-tip .mt-title{gap:5px;}
 .dt-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   color:var(--bright);font-size:10px;letter-spacing:0.03em;
   line-height:1.4;} /* room for underscores: overflow:hidden clipped them at the default line height */
@@ -154,9 +224,9 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .dt-field-line:hover .dt-field-name{color:var(--bright);}
 .dt-field-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   color:var(--text);font-size:10px;line-height:1.4;}
-.dt-toolbar{gap:10px;cursor:default;}
+.dt-toolbar{gap:6px;cursor:default;}
 .dt-toolbar:hover{background:none;}
-.dt-toolbar-lbl{color:var(--dim);font-size:9px;letter-spacing:0.06em;margin-left:20px;}
+.dt-toolbar-lbl{color:var(--dim);font-size:9px;letter-spacing:0.06em;}
 .ld-overlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.55);
   display:flex;align-items:center;justify-content:center;padding:16px;}
 .ld-box{background:var(--panel);border:1px solid var(--accent);width:min(440px,100%);
@@ -173,7 +243,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .ld-btn:focus-visible{outline:1px solid var(--accent);outline-offset:2px;}
 .ld-btn.ld-cancel{color:var(--dim);margin-right:auto;order:-1;}
 .dt-toolbar{flex-wrap:wrap;}
-.dt-toolbar-choice{margin-left:20px;}
+.dt-toolbar-choice{margin-left:0;}
 .dt-color{width:34px;height:16px;padding:0;border:1px solid rgba(255,255,255,0.18);border-radius:2px;
   background:none;cursor:pointer;}
 .dt-color::-webkit-color-swatch-wrapper{padding:0;}
@@ -187,6 +257,50 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .dt-filter-scroll{max-height:96px;overflow-y:auto;}
 .dt-filter-value{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text);cursor:pointer;white-space:nowrap;}
 .dt-filter-swatch{width:8px;height:8px;border-radius:2px;flex:none;}
+.hover-tip{position:absolute;display:none;z-index:61;background:var(--panel);
+  border:1px solid var(--border);border-radius:2px;box-shadow:0 2px 12px rgba(0,0,0,0.65);
+  color:var(--text);font-size:10px;letter-spacing:0.03em;}
+.hover-tip.mt-small{align-items:center;gap:8px;padding:3px 4px 3px 8px;white-space:nowrap;}
+.hover-tip .mt-id{color:var(--bright);font-size:11px;}
+.hover-tip.mt-stack{flex-direction:column;align-items:flex-start;gap:3px;padding-top:4px;padding-bottom:4px;}
+.hover-tip .mt-region{display:flex;align-items:center;gap:6px;}
+.hover-tip .mt-region-sw{flex:none;width:9px;height:9px;border-radius:2px;background:#888;}
+.hover-tip .mt-val{color:var(--dim);}
+.hover-tip .mt-open,.hover-tip .mt-close{background:none;border:none;color:var(--dim);cursor:pointer;
+  font-size:13px;line-height:1;padding:0 3px;font-family:inherit;transform:rotate(90deg);}
+.hover-tip .mt-close{transform:rotate(-90deg);color:var(--accent);}
+.hover-tip .mt-open:hover,.hover-tip .mt-close:hover{color:var(--bright);}
+.hover-tip.mt-card{width:260px;padding:6px 8px 7px;border-color:var(--accent);max-height:calc(100% - 12px);overflow-y:auto;}
+.hover-tip .mt-head{display:flex;align-items:center;justify-content:space-between;}
+.hover-tip .mt-file{color:var(--dim);font-size:9px;margin:1px 0 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hover-tip .mt-rows{display:flex;flex-direction:column;gap:1px;}
+.hover-tip .mt-row{display:flex;align-items:baseline;gap:6px;padding:2px 3px;border-radius:2px;}
+.hover-tip .mt-act{cursor:pointer;}
+.hover-tip .mt-act:hover{background:rgba(255,255,255,0.05);}
+.hover-tip .mt-row.mt-on{background:rgba(72,136,255,0.18);}
+.hover-tip .mt-k{flex:none;width:78px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hover-tip .mt-v{flex:1;min-width:0;color:var(--bright);display:flex;align-items:center;gap:4px;overflow-wrap:anywhere;}
+.hover-tip .mt-text .mt-v{display:block;white-space:pre-wrap;color:var(--text);max-height:90px;overflow-y:auto;}
+.hover-tip .mt-only{flex:none;background:none;border:1px solid var(--border);border-radius:2px;color:var(--dim);
+  font-family:inherit;font-size:8px;letter-spacing:0.06em;padding:0 4px;cursor:pointer;}
+.hover-tip .mt-only:hover{color:var(--bright);border-color:var(--accent);}
+.hover-tip .mt-only.mt-on{color:var(--accent);border-color:var(--accent);}
+.hover-tip .mt-bar{position:relative;height:7px;margin:2px 3px 0 87px;border-radius:2px;
+  background-origin:border-box;background-repeat:no-repeat;}
+.hover-tip .mt-tick{position:absolute;top:-2px;bottom:-2px;width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 2px #000;}
+.hover-tip .mt-ends{display:flex;justify-content:space-between;margin:0 3px 3px 87px;color:var(--dim);font-size:8px;}
+.hover-tip .mt-sw{width:10px;height:10px;border-radius:2px;flex:none;margin-right:6px;}
+.hover-tip .mt-title{display:flex;align-items:center;min-width:0;}
+.hover-tip .mt-title .mt-id{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hover-tip.mt-card .dt-settings{padding:2px 0 0;border:none;background:none;}
+.hover-tip .mt-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;
+  padding-top:5px;border-top:1px solid rgba(255,255,255,0.08);color:var(--dim);font-size:8px;}
+/* helper settings, indented under their "… by" choice; labels line up so
+   the helpers' controls start where the main rows' controls start */
+.dt-settings .dt-choice > label{min-width:52px;}
+.dt-settings .dt-choice.dt-helper,.dt-settings .dt-slider-row.dt-helper,
+.dt-settings .dt-filter-values.dt-helper{margin-left:14px;}
+.dt-settings .dt-choice.dt-helper > label,.dt-settings .dt-slider-row.dt-helper > label{min-width:38px;width:38px;letter-spacing:0.04em;}
 .dt-note{flex-basis:100%;color:var(--dim);font-size:9px;line-height:1.5;}
 .dt-menu-btn{flex:none;width:16px;text-align:center;background:none;border:none;color:var(--dim);font-size:13px;
   cursor:pointer;padding:0;font-family:inherit;line-height:1;transform:rotate(90deg);transition:transform 0.15s;}
@@ -280,9 +394,9 @@ input[type=file]{display:none;}
 
 /* ── FLOATING TOOLTIP ── */
 #tip{position:fixed;background:#ffd86e;color:#1a1200;font-family:'JetBrains Mono',monospace;
-  font-size:9px;line-height:1.6;letter-spacing:0.04em;padding:6px 9px;
+  font-size:calc(9px * var(--ui));line-height:1.6;letter-spacing:0.04em;padding:calc(6px * var(--ui)) calc(9px * var(--ui));
   border-radius:2px;box-shadow:0 2px 10px rgba(0,0,0,0.6);
-  pointer-events:none;z-index:9999;display:none;max-width:240px;white-space:pre-wrap;}
+  pointer-events:none;z-index:9999;display:none;max-width:calc(240px * var(--ui));white-space:pre-wrap;}
 
 #gl-crash-banner{position:fixed;top:0;left:0;right:0;z-index:10000;display:none;
   background:#4a0f0f;color:#ffdada;font-family:'JetBrains Mono',monospace;
@@ -298,12 +412,14 @@ input[type=file]{display:none;}
   font-size:9px;letter-spacing:0.2em;border-bottom:1px solid var(--border);padding-bottom:4px;}
 .cfg-section:first-child{margin-top:0;}
 
+
 /* rows */
 .ctl-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
 .ctl-row label{color:var(--dim);letter-spacing:0.08em;font-size:9px;
   white-space:nowrap;min-width:64px;}
 .ctl-row input[type=range]{flex:1;accent-color:var(--accent2);min-width:0;}
 .ctl-val{color:var(--text);font-size:9px;min-width:42px;text-align:right;}
+.ctl-val.tools-status{flex:1;text-align:left;color:var(--dim);margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* reset button */
 .plane-toggles{display:flex;gap:10px;margin-bottom:4px;margin-left:62px;}
 .plane-toggle{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;}
@@ -390,13 +506,6 @@ input[type=file]{display:none;}
   z-index:50;box-shadow:0 2px 10px rgba(0,0,0,0.6);
   max-width:min(420px,calc(100% - 32px));overflow:hidden;text-overflow:ellipsis;}
 #mprogress:empty{display:none;}
-#bundle-hover-tooltip{position:absolute;display:none;
-  color:var(--bright);letter-spacing:0.03em;
-  pointer-events:none;white-space:nowrap;background:var(--panel);
-  border:1px solid var(--border);padding:4px 9px;border-radius:2px;
-  font-size:12px;z-index:60;box-shadow:0 2px 10px rgba(0,0,0,0.6);
-  max-width:min(320px,calc(100% - 20px));overflow:hidden;text-overflow:ellipsis;}
-
 /* ── RESIZE SEPARATORS ── */
 .sep{width:3px;flex-shrink:0;background:var(--border);cursor:col-resize;
   position:relative;z-index:20;transition:background 0.15s;}
@@ -460,13 +569,12 @@ input[type=file]{display:none;}
 <!-- MIDDLE: 3D view -->
 <div id="middle">
   <canvas id="three-canvas"></canvas>
-  <div id="bundle-hover-tooltip"></div>
   <!-- Top-left buttons -->
   <div id="top-btns">
     <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
     <button class="top-btn" id="load-btn"><span class="icon">⊞</span>DATA</button>
     <button class="top-btn" id="settings-btn"><span class="icon">⚙</span>SETTINGS</button>
-    <button class="top-btn" id="about-btn"><span class="icon">ⓘ</span>ABOUT</button>
+    <button class="top-btn" id="tools-btn"><span class="icon">☰</span>TOOLS</button>
   </div>
 
   <!-- Floating panel: FILE -->
@@ -528,37 +636,56 @@ input[type=file]{display:none;}
 
     <div id="panel-content-settings" class="panel-content">
     <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
-      <label>GPU·TIER</label>
+      <label>GPU·tier</label>
       <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>LOW</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>HIGH</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="ultra" id="quality-ultra"><span>ULTRA</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>low</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>high</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="ultra" id="quality-ultra"><span>ultra</span></label>
       </div>
     </div>
-    <div class="cfg-section" data-tip="Left-click or drag to move the probe.\nScroll to step through slices.\nCtrl+Scroll to zoom.\nRight-drag to pan.">STREAMLINE PROBE</div>
-    <div class="ctl-row" data-tip="Probe radius in mm.\nStreamlines passing through the sphere (or 'ends-only') are selected.">
-      <label>RADIUS</label>
+    <div class="cfg-section" data-tip="Which streamlines are shown, and how.\nThe probe: left-click or drag to move it, scroll to step through slices, Ctrl+Scroll to zoom, right-drag to pan.\nFocus a bundle with the sun icon next to its color (DATA panel, or hover its ends in 3D).">STREAMLINE SELECTION</div>
+    <div class="ctl-row" data-tip="The probe.\noff: no probe, all streamlines shown (the probe panel is hidden).\nselect: show only the streamlines the probe hits.\nhighlight: show all streamlines, the hit ones solid and the rest dimmed (see dimming).">
+      <label>probe</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="off" id="probe-mode-off"><span>off</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="select" id="probe-mode-select" checked><span>select</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="highlight" id="probe-mode-highlight"><span>highlight</span></label>
+      </div>
+    </div>
+    <div class="ctl-row probe-setting" data-tip="Probe radius in mm.\nStreamlines passing through the sphere (or 'ends-only') are selected.">
+      <label>radius</label>
       <input type="range" id="radius-slider" min="0.25" max="10" value="5" step="0.25">
       <span class="ctl-val" id="radius-val">5.0 mm</span>
     </div>
-    <div class="ctl-row" data-tip="What the probe selects. LINES: any streamline passing through the probe sphere. ENDS: only streamlines with a start or end point inside the probe sphere.">
-      <label>SELECT</label>
+    <div class="ctl-row probe-setting" data-tip="Which streamlines the probe hits. lines: any streamline passing through the probe sphere. ends: only streamlines with a start or end point inside the probe sphere.">
+      <label>match</label>
       <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-select" value="streamlines" id="probe-select-streamlines" checked><span>LINES</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-select" value="ends" id="probe-select-ends"><span>ENDS</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-select" value="streamlines" id="probe-select-streamlines" checked><span>lines</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-select" value="ends" id="probe-select-ends"><span>ends</span></label>
       </div>
+    </div>
+<div class="ctl-row probe-setting" data-tip="Color of the streamline ends inside the probe sphere (also the color of the probe sphere and ring). None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
+  <label>inner·ends</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="hide"> None</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="bundle"> Bundle</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat" checked><input type="color" autocomplete="off" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
+    <div class="ctl-row" data-tip="Opacity of the dimmed streamlines — those the highlight probe doesn't hit, and those outside the focused bundles — times their bundle's own opacity. Lower is dimmer.">
+      <label>dimming</label>
+      <input type="range" id="context-slider" min="0" max="100" value="15" step="1">
+      <span class="ctl-val" id="context-val">15%</span>
     </div>
 
     <div class="cfg-section" data-tip="Streamlines selected by the probe are shown in both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">STREAMLINE RENDERING</div>
 
 <div class="ctl-row" data-tip="Streamline width in screen pixels. 0 switches lines off entirely (replaces the old None color option). In the 3D view this is the width at the NEAR end of the depth fade (the far end is fixed at 0.5px, always thinner). In the 2D slab panels width is a constant half this value (minimum 1px) — no depth fade there, since an orthographic slice has no meaningful camera depth.">
-  <label>WIDTH</label>
+  <label>line·width</label>
   <input type="range" id="line-width-slider" min="0" max="10" step="0.5" value="2">
   <span class="slider-val" id="line-width-val">2 px</span>
 </div>
 
 <div class="ctl-row" data-tip="Streamline color: RAS for directional coloring, Bundle for each file's fixed color from a multi-file/zip bundle load (falls back to the default color for a normal single-file load), or a custom uniform color. Set WIDTH to 0 to hide lines entirely.">
-  <label>LINE·COLOR</label>
+  <label>line·color</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="ras" checked>
     <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
   </label>
@@ -566,31 +693,25 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="flat"><input type="color" autocomplete="off" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
 <div class="ctl-row" data-tip="Directional sheen strength (Kajiya-Kay tangent shading). A streamline lights up brightest where it runs ORTHOGONAL to the light direction, and goes dark where it points straight at (or away from) it — same as a real cylindrical strand: light traveling along a strand's own axis never faces any point on its surface head-on, since a cylinder's surface normals all point outward, perpendicular to that axis; light hitting the strand from the side illuminates the half facing it normally. 0 = flat color, no directional shading at all; 1 = normal strength; higher exaggerates it.">
-  <label>REFLECTANCE</label>
+  <label>reflectance</label>
   <input type="range" id="reflectance-slider" min="0" max="2" step="0.05" value="1">
   <span class="slider-val" id="reflectance-val">1.00</span>
 </div>
-<div class="ctl-row" data-tip="NEAR-END dot color: endpoint closest to probe. None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
-  <label>NEAR·ENDS</label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="hide"> None</label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="bundle"> Bundle</label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat" checked><input type="color" autocomplete="off" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
-</div>
-<div class="ctl-row" data-tip="FAR-END dot color: endpoint farthest from probe. None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
-  <label>FAR·ENDS</label>
+<div class="ctl-row" data-tip="Color of the streamline ends; with the probe on: of those outside the probe sphere. None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
+  <label>ends·color</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="hide"> None</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="flat" checked><input type="color" autocomplete="off" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="Near/far-end dot size in screen pixels.">
-  <label>ENDS·SIZE</label>
+<div class="ctl-row" data-tip="Size of the end dots (ends and inner ends) in screen pixels.">
+  <label>ends·size</label>
   <input type="range" id="ends-size" min="1" max="16" step="0.5" value="6">
   <span class="slider-val" id="ends-size-val">6</span>
 </div>
 
 <div id="ao-controls">
 <div class="ctl-row" data-tip="Combines AO's reach (radius, mm), how sharply it falls off within that reach, and its overall darkening strength into one dial — all three individually make the effect stronger, so one slider steps through them together rather than needing three separate tweaks. Radius is scaled to the loaded data's own size; the other two range across N8AO's own full range. 0 = off entirely, and also re-enables the depth-darkening cue below (which AO otherwise replaces — see its own note), rather than needing a separate on/off switch. Its rendering library (self-hosted, not CDN) is only fetched the first time you move this off 0, not before. No measurable performance difference across the range once loaded — these are all post-hoc math on an already-fixed-cost sampling pass; GPU tier maps to one of N8AO's own quality presets (sample count), which is the setting that actually affects performance.">
-  <label>AO·STRENGTH</label>
+  <label>AO·strength</label>
   <input type="range" id="ao-strength-slider" min="0" max="1" step="0.02" value="0">
   <span class="slider-val" id="ao-strength-val">0%</span>
   <span class="slider-val" id="ao-status"></span>
@@ -599,25 +720,25 @@ input[type=file]{display:none;}
 
     <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.\nAll three sliders default to their centre (raw=50) position — the mathematically 'neutral' reference value for each.">VOLUME RENDERING</div>
     <div class="ctl-row" data-tip="How to interpret and display this volume. ANAT: plain grayscale scan (for 3-channel data, shown as the vector-length magnitude — an FA-like scalar). R/A/S: colour-encoded fibre direction, only available for 3-channel data (auto-selected when such data loads). LABEL: each voxel's rounded value is a label index, colored via the loaded LUT — or, if none is loaded, an automatically generated one (maximally-distinct colors, named Label_N). Only available for single-channel data.">
-      <label>MODALITY</label>
+      <label>modality</label>
       <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="anat" id="modality-anat" checked><span>ANAT</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="anat" id="modality-anat" checked><span>anat</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="dec" id="modality-dec" disabled><span>
           <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
         </span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="seg" id="modality-seg" disabled><span>LABEL</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="seg" id="modality-seg" disabled><span>label</span></label>
       </div>
     </div>
     <div class="ctl-row" data-tip="Rendering style for the glass brain — three genuinely separate shaders, not a smooth blend between them. GLASS: a real isosurface with a Fresnel rim (using RIM) instead of full opacity — a true thin, transparent shell; streamlines and other geometry show through it. SOLID: the same real isosurface, fully opaque, with proper depth and lighting — FOREGROUND (below) replaces OPACITY here, since opacity has no effect on an opaque surface. RIM-LIT: a soft, glowing boundary built up from many semi-transparent samples along each ray, using OPACITY — no real depth, more a haze than a shell. Clip planes and COVER work the same way in SOLID and GLASS.">
-      <label>SHADER</label>
+      <label>shader</label>
       <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="glass" id="render-mode-glass" checked><span>GLASS</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="solid" id="render-mode-solid"><span>SOLID</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="translucent" id="render-mode-translucent"><span>RIM-LIT</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="glass" id="render-mode-glass" checked><span>glass</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="solid" id="render-mode-solid"><span>solid</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="translucent" id="render-mode-translucent"><span>rim-lit</span></label>
       </div>
     </div>
     <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from FOREGROUND below, so narrowing FOREGROUND to hide a tissue type can never also erode this outer surface.">
-      <label>BACKGROUND</label>
+      <label>background</label>
       <select id="bg-invert-select" class="inline-select" autocomplete="off">
         <option value="below" selected>below</option>
         <option value="above">above</option>
@@ -626,12 +747,12 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="background-val">0.10</span>
     </div>
     <div class="ctl-row" id="row-opacity" data-tip="0-100%, shown at right. Only affects RIM-LIT mode — how much of the glowing boundary builds up along each ray. Applies to scans, colour (DEC/FA) volumes, and labelled volumes alike.">
-      <label>OPACITY</label>
+      <label>opacity</label>
       <input type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
       <span class="ctl-val" id="brain-alpha-val">50%</span>
     </div>
     <div class="ctl-row" id="row-cutout" style="display:none;" data-tip="First half of FOREGROUND's combined rule (see the row below for how the two combine into one) — defines what part of the SOLID/GLASS surface stays visible once you're behind an active clip plane with COVER, e.g. isolating grey matter and hiding white matter to reveal what's inside. Everything that fails the combined rule (both rows together) is hidden. ABOVE (default): value must be >= this threshold to count as foreground. BELOW: value must be <= threshold instead. All comparisons inclusive.">
-      <label>FOREGROUND</label>
+      <label>foreground</label>
       <select id="cutout-row1-select" class="inline-select" autocomplete="off">
         <option value="above" selected>above</option>
         <option value="below">below</option>
@@ -649,79 +770,152 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="brain-cutout-below-val">1.00</span>
     </div>
     <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
-      <label>RIM</label>
+      <label>rim</label>
       <input type="range" id="brain-rim-slider" min="0" max="100" value="33" step="1">
       <span class="ctl-val" id="brain-rim-val">1.00</span>
     </div>
     <div class="ctl-row" data-tip="Shading light direction. CENTER matches the old camera-aligned 'headlamp' light (flatter, but sometimes an easier fixed reference); LEFT/RIGHT nudges it off-axis, which reads as more three-dimensional on a static view.">
-      <label>LIGHT</label>
+      <label>light</label>
       <input type="range" id="light-slider" min="-100" max="100" value="0" step="1">
-      <span class="ctl-val" id="light-val">CENTER</span>
+      <span class="ctl-val" id="light-val">center</span>
     </div>
     <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead. FRAMES shows/hides all three plane rectangles without affecting clipping.">
-      <label>CLIP·PLANE</label>
+      <label>clip·plane</label>
       <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-none"><input type="radio" autocomplete="off" name="clip-plane" value="none" checked><span>NONE</span></label>
-        <label class="clip-radio-opt cro-sag"><input type="radio" autocomplete="off" name="clip-plane" value="sag"><span>SAG</span></label>
-        <label class="clip-radio-opt cro-cor"><input type="radio" autocomplete="off" name="clip-plane" value="cor"><span>COR</span></label>
-        <label class="clip-radio-opt cro-axi"><input type="radio" autocomplete="off" name="clip-plane" value="axi"><span>AXI</span></label>
+        <label class="clip-radio-opt cro-none"><input type="radio" autocomplete="off" name="clip-plane" value="none" checked><span>none</span></label>
+        <label class="clip-radio-opt cro-sag"><input type="radio" autocomplete="off" name="clip-plane" value="sag"><span>sag</span></label>
+        <label class="clip-radio-opt cro-cor"><input type="radio" autocomplete="off" name="clip-plane" value="cor"><span>cor</span></label>
+        <label class="clip-radio-opt cro-axi"><input type="radio" autocomplete="off" name="clip-plane" value="axi"><span>axi</span></label>
       </div>
     </div>
     <div class="clip-sub-row">
       <label class="ctl-toggle">
         <input type="checkbox" autocomplete="off" id="clip-slice">
         <div class="pill"></div>
-        <span class="tog-label">SLICE</span>
+        <span class="tog-label">slice</span>
       </label>
       <label class="ctl-toggle">
         <input type="checkbox" autocomplete="off" id="clip-flip">
         <div class="pill"></div>
-        <span class="tog-label">FLIP</span>
+        <span class="tog-label">flip</span>
       </label>
       <label class="ctl-toggle">
         <input type="checkbox" autocomplete="off" id="clip-cover" checked>
         <div class="pill"></div>
-        <span class="tog-label">COVER</span>
+        <span class="tog-label">cover</span>
       </label>
       <label class="ctl-toggle">
         <input type="checkbox" autocomplete="off" id="clip-frames" checked>
         <div class="pill"></div>
-        <span class="tog-label">FRAMES</span>
+        <span class="tog-label">frames</span>
       </label>
     </div>
 
     <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.\nPitch = left-right axis · Yaw = up-down · Roll = front-back.\nUse Reset Planes to return to standard orientation.">SLICE PLANES</div>
     <div class="ctl-row" data-tip="Show streamline segments within a slab of this thickness (× voxel size) around each slice plane.">
-      <label>THICKNESS</label>
+      <label>thickness</label>
       <input type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
       <span class="ctl-val" id="slab-val">3.0×</span>
     </div>
     <div class="ctl-row" data-tip="Logarithmic gain, neutral (1.0x) in the middle.\nFor a scan: a gamma curve — raise to brighten, lower to darken — that always keeps true black and true white fixed, so background stays dark at any setting.\nFor a colour (DEC/FA) volume: brightens colours, which are dim by nature.\nApplies to both the 2D slices and the 3D glass brain.">
-      <label>INTENSITY</label>
+      <label>intensity</label>
       <input type="range" id="contrast-slider" min="0" max="100" value="50" step="1">
       <span class="ctl-val" id="contrast-val">1.00×</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the left-right axis.">
-      <label>PITCH</label>
+      <label>pitch</label>
       <input type="range" id="pitch-slider" min="-90" max="90" value="0" step="1">
       <span class="ctl-val" id="pitch-val">0°</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the up-down axis.">
-      <label>YAW</label>
+      <label>yaw</label>
       <input type="range" id="yaw-slider" min="-90" max="90" value="0" step="1">
       <span class="ctl-val" id="yaw-val">0°</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the front-back axis.">
-      <label>ROLL</label>
+      <label>roll</label>
       <input type="range" id="roll-slider" min="-90" max="90" value="0" step="1">
       <span class="ctl-val" id="roll-val">0°</span>
     </div>
-    <button id="rot-reset">RESET PLANES</button>
+    <button id="rot-reset">reset planes</button>
     </div><!-- /panel-content-settings -->
     </div><!-- /app-panel-body -->
   </div><!-- /panel-settings -->
 
-  <!-- Floating panel: ABOUT -->
+  <!-- Floating panel: TOOLS (screenshot, rotation movie, about) -->
+  <div id="panel-tools" class="app-panel">
+    <div class="app-panel-titlebar">
+      <span class="grip">⠿</span><span class="app-panel-title">TOOLS</span>
+      <button class="app-panel-close" title="close">×</button>
+    </div>
+    <div class="app-panel-body">
+    <div id="panel-content-tools" class="panel-content">
+    <div class="cfg-section" data-tip="Save one view as a PNG image: only the picture itself, without labels, buttons or panels on top of it.">SCREENSHOT</div>
+    <div class="ctl-row" data-tip="Which view to save.">
+      <label>view</label>
+      <select class="inline-select" id="shot-view"></select>
+    </div>
+    <div class="ctl-row" data-tip="Image size relative to the view on screen. Larger sizes are rendered again at that resolution (sharper than enlarging), with lines and dots scaled along.">
+      <label>size</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="shot-scale" value="1" checked><span>×1</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="shot-scale" value="2"><span>×2</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="shot-scale" value="4"><span>×4</span></label>
+      </div>
+    </div>
+    <div class="ctl-row shot-2d-row" data-tip="Sections: draw the orientation arrows (L/R, A/P, S/I) into the image.">
+      <label>arrows</label>
+      <input type="checkbox" class="dt-check" id="shot-arrows" checked>
+    </div>
+    <div class="ctl-row shot-2d-row" data-tip="Sections: include the cursor lines (and the probe ring). Off: only the image itself.">
+      <label>cursor</label>
+      <input type="checkbox" class="dt-check" id="shot-cursor">
+    </div>
+    <div class="ctl-row"><label></label><button class="accent-link dt-set-btn" id="shot-save">save PNG</button><span class="ctl-val tools-status" id="shot-status"></span></div>
+
+    <div class="cfg-section" data-tip="A movie of the 3D view turning once around (360°) the screen's vertical axis, starting from the current view. Rendered frame by frame, so it is smooth however long it takes.">ROTATION MOVIE</div>
+    <div class="ctl-row" data-tip="Length of one full turn, in seconds. The movie ends where it started, so a player set to loop plays it seamlessly.">
+      <label>length</label>
+      <input type="range" id="mov-len" min="2" max="30" step="1" value="6">
+      <span class="ctl-val" id="mov-len-val">6 s</span>
+    </div>
+    <div class="ctl-row" data-tip="Frames per second.">
+      <label>fps</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-fps" value="30" checked><span>30</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-fps" value="60"><span>60</span></label>
+      </div>
+    </div>
+    <div class="ctl-row" data-tip="Movie size relative to the 3D view on screen.">
+      <label>size</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-scale" value="1" checked><span>×1</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-scale" value="2"><span>×2</span></label>
+      </div>
+    </div>
+    <div class="ctl-row" data-tip="Compression. high: about 4× the bitrate of low — sharper fine lines, a larger file.">
+      <label>quality</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-quality" value="low"><span>low</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-quality" value="high" checked><span>high</span></label>
+      </div>
+    </div>
+    <div class="ctl-row" data-tip="MP4 plays in PowerPoint, Keynote and most players; WebM in browsers.">
+      <label>format</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-format" value="mp4" checked><span>mp4</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="mov-format" value="webm"><span>webm</span></label>
+      </div>
+    </div>
+    <div class="ctl-row"><label></label><button class="accent-link dt-set-btn" id="mov-save">save movie</button><span class="ctl-val tools-status" id="mov-status"></span></div>
+
+    <div class="cfg-section">ABOUT</div>
+    <div class="ctl-row"><label></label><button class="accent-link dt-set-btn" id="tools-about">about this app…</button></div>
+    </div><!-- /panel-content-tools -->
+    </div><!-- /app-panel-body -->
+  </div><!-- /panel-tools -->
+
+  <!-- Floating panel: ABOUT (opened from TOOLS) -->
   <div id="panel-about" class="app-panel">
     <div class="app-panel-titlebar">
       <span class="grip">⠿</span><span class="app-panel-title">ABOUT</span>
@@ -830,20 +1024,41 @@ import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTc
          parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
 import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
-import { LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton } from './js/loaded-data.js';
-import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
+import { LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
+import { FloatingPanel, PanelDockGroup, CardPanel } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
-         makeRibbonLines, makeEndpointDots, hexToRgbRaw, makeColormapTexture,
+         makeRibbonLines, makeEndpointDots, computeRibbonDensity, sortRibbonByDepth, setRibbonHighlight, hexToRgbRaw, makeColormapTexture,
          setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE,
          BUILTIN_COLORMAPS, writeColormapRow, colormapCSSGradient, sampleStops,
          makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
 import { parseMarkers, resolveMarkerStyle, markerFilterMask, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
-import { makeMarkerGroup, setMarkerDisplay, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
+import { makeMarkerGroup, setMarkerDisplay, setMarkerHover, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
+
+// ?timing in the page URL: logs to the browser console where the time of
+// each probe move goes. GPU work is forced to finish at each mark (a
+// 1-pixel read), so the numbers include it — slower overall, but honest
+// per step.
+const TIMING = new URLSearchParams(location.search).has('timing');
+let _tm = null;
+const _px1 = new Uint8Array(4);
+function tStart() { if (TIMING) _tm = [['start', performance.now()]]; }
+function tMark(label, gpu = false) {
+  if (!_tm) return;
+  if (gpu) { const gl = renderer3.getContext(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px1); }
+  _tm.push([label, performance.now()]);
+}
+function tEnd() {
+  if (!_tm) return;
+  const parts = [];
+  for (let i = 1; i < _tm.length; i++) parts.push(_tm[i][0] + ' ' + (_tm[i][1] - _tm[i-1][1]).toFixed(1));
+  console.log('[timing] ' + parts.join(' · ') + ' · TOTAL ' + (_tm[_tm.length-1][1] - _tm[0][1]).toFixed(1) + ' ms');
+  _tm = null;
+}
 
 'use strict';
 
@@ -952,7 +1167,7 @@ function syncViewOOP(views, cursor) {
     views[key] = [vc[0]+d*n[0], vc[1]+d*n[1], vc[2]+d*n[2]];
   }
 }
-let radius=2, probeEndsOnly=false, slabMultiplier=3, endsPx=6;
+let radius=2, probeOn=true, probeMode='select', probeContext=0.15, probeEndsOnly=false, slabMultiplier=3, endsPx=6;
 // RADIUS slider scaling. The slider's numeric max — reaching it (or a
 // value >= it) means "Show All", handled specially in updateProbe rather
 // than relying on radius happening to be numerically huge. Both get
@@ -993,7 +1208,7 @@ function smallestAtLeast(x, seq) {
 function updateRadiusLabel() {
   const el = document.getElementById('radius-val');
   if (!el) return;
-  el.textContent = (radius >= radiusMaxMm) ? 'ALL' : radius.toFixed(2) + ' mm';
+  el.textContent = (radius >= radiusMaxMm) ? 'all' : radius.toFixed(2) + ' mm';
 }
 // Scales the STREAMLINE PROBE radius slider to the loaded data's own
 // size, and (when setDefault) picks a sensible default position — 1/5 of
@@ -1045,7 +1260,9 @@ function updateProbeRadiusRange(setDefault) {
     // value as the max itself for a small enough max, which puts a
     // regular whole-tractogram load into Show All too; that's fine, not
     // guarded against.
-    radius = isBundle ? radiusMaxMm : nearestInSeq(radiusMaxMm / 5, seq);
+    // The radius itself always gets the 1/5 default, so switching the
+    // probe on later starts from a useful size.
+    radius = nearestInSeq(radiusMaxMm / 5, seq);
   } else if (wasShowAll) {
     radius = radiusMaxMm; // preserve Show All across a rescale rather than falling out of it
   } else {
@@ -1054,7 +1271,40 @@ function updateProbeRadiusRange(setDefault) {
   radius = Math.max(+slider.min, radius);
   slider.value = radius;
   updateRadiusLabel();
+  // Defaults for a new load: a whole tractogram opens with the probe on,
+  // selecting; a bundle set with the probe off, set to highlight for when
+  // it's switched on.
+  if (setDefault) { setProbeMode(isBundle ? 'highlight' : 'select', { update: false }); setProbeOn(!isBundle, { update: false }); }
   if (gridIdx) updateProbe();
+}
+// The STREAMLINE PROBE switch. Off: every (visible) streamline is shown,
+// the probe sphere/ring and the probe's slice panel (left) are hidden, and
+// the probe's settings rows with it. A bundle-set load switches it off, a
+// whole-tractogram load on. The RADIUS slider's rightmost position (ALL)
+// does the selection part of the same thing with the panel kept.
+function probeBypassed() { return !probeOn || radius >= radiusMaxMm; }
+function setProbeOn(on, { update = true } = {}) {
+  const changed = probeOn !== on;
+  probeOn = on;
+  showProbeRows();
+  if (typeof setLeftPanelHidden === 'function') setLeftPanelHidden(!on);
+  if (!changed || !update) return;
+  if (on && gridIdx && gridIdx.cs !== radius && radius < radiusMaxMm) gridIdx = new GridIndex(allPts, radius);
+  updateProbeGap();
+  if (gridIdx) updateProbe();
+  if (on) updateSlicesA();
+}
+function showProbeRows() {
+  document.querySelectorAll('.probe-setting').forEach(el => { el.style.display = probeOn ? '' : 'none'; });
+  const r = document.getElementById('probe-mode-' + (probeOn ? probeMode : 'off'));
+  if (r) r.checked = true;
+}
+// Probe mode: 'select' (show only the hit streamlines) or 'highlight'
+// (show all, the hit ones solid, the rest translucent — see updateProbe).
+function setProbeMode(mode, { update = true } = {}) {
+  probeMode = mode;
+  showProbeRows();
+  if (update && gridIdx) updateProbe();
 }
 // Streamline width, in screen pixels — see the WIDTH slider in STREAMLINE
 // RENDERING settings. In 3D this is the NEAR-end width of RIBBON_VS's
@@ -1062,6 +1312,8 @@ function updateProbeRadiusRange(setDefault) {
 // halved (minimum 1px, since an orthographic slab has no meaningful
 // camera depth to taper against — see slab-renderer.js's SLAB_VS).
 let lineWidthPx = 2.0;
+let _shotScale = 1; // TOOLS › screenshot / movie: > 1 while rendering larger than the screen
+let _shotHideCursor = false; // TOOLS › screenshot of a section without its cursor
 const readColorState = (pickerId, mode) => [mode, document.getElementById(pickerId).value];
 let lineStyle = readColorState('line-color-picker', 'ras');
 let srcStyle  = readColorState('src-color-picker',  'flat');
@@ -1165,8 +1417,14 @@ function wireSlider(sliderId, valId, curveFn, format, onChange) {
 }
 
 function setCursorA(ras) {
+  tStart();
   syncViewOOP(state.get('src.view'), ras);
-  updateSlicesA(); updateProbe(); updatePlaneMeshes(); updateLabelHud('src');
+  // updateProbe redraws the probe's slices itself (with the new
+  // selection); drawing them here first too was a second full redraw.
+  if (!gridIdx) updateSlicesA();
+  tMark('probe slices (no tractogram)');
+  updateProbe({ probeOnly: true }); updatePlaneMeshes(); updateLabelHud('src');
+  tMark('rest'); tEnd();
 }
 function setCursorB(ras) {
   syncViewOOP(state.get('tgt.view'), ras);
@@ -1214,15 +1472,26 @@ function drawSlice(planeKey, tag) {
   // Parse srcStyle setting into an [r,g,b] triple for the probe ring.
   const hex = srcStyle.rgb;
   const probeColor = [parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255];
-  vr.renderSlice(cvs, planeKey, view[planeKey], cursor,
+  // TOOLS › screenshot without the cursor: its lines are drawn at the
+  // cursor's in-plane position, so for this one render that is moved far
+  // off the canvas (in the plane only — the section itself stays), with no
+  // edge ticks and no probe ring. The next normal draw puts it back.
+  let chCursor = cursor, chWH = wH, chWV = wV, chRing = probeRadius;
+  if (_shotHideCursor) {
+    const a = vr.canvasToRas(planeKey, 0, 0, tag), b = vr.canvasToRas(planeKey, -1e5, -1e5, tag);
+    if (a && b) chCursor = cursor.map((c, i) => c + b[i] - a[i]);
+    chWH = chWV = 0; chRing = -1;
+  }
+  vr.renderSlice(cvs, planeKey, view[planeKey], chCursor,
                PLANES[planeKey].chColorH, PLANES[planeKey].chColorV,
-               wH, wV, probeColor, tag, zoom, probeRadius);
+               chWH, chWV, probeColor, tag, zoom, chRing);
                
-  if (setStreamlines.length && slabRenderer) {
+  if (selMesh && slabRenderer) {
 	// Left panel: near dots (probed end). Right panel: far dots (target end).
 	// srcDots = closest endpoint to cursor; tgtDots = farthest. Both shown in all panels.
 	const slabOpts = {
 	  selMesh,
+	  lineMeshes: lineMeshes2D(),
 	  srcMesh: srcDots,
 	  tgtMesh: tgtDots,
 	  slabMultiplier,
@@ -1237,16 +1506,87 @@ function drawSlice(planeKey, tag) {
 	  // ones (slab-renderer.js gates visibility on this value being > 0).
 	  // Per-file widths come from fileStyleTex now; this only gates "any
 	  // lines at all" (slab-renderer.js skips its line passes at 0).
-	  lineWidthPx2D: anyLineWidth() > 0 ? 1 : 0,
+	  lineWidthPx2D: anyLineWidth() > 0 ? _shotScale : 0,
 	  hasFaint: anyFaint(),
 	};
 	const viewCentre = state.get(tag+'.view.'+planeKey);
 	slabRenderer.render(cvs, planeKey, cursor, tag, vr, state.get('anat.vox_mm'), viewCentre, slabOpts);
   }
   updateCoordLabel(planeKey, cursor, tag);
+  updateOrientArrows(planeKey, tag, cvs);
 }
 
-function updateSlicesA() { for (const k of ['sag','cor','axi']) drawSlice(k, 'src'); updateProbeGap(); }
+// ── Orientation arrows ──────────────────────────────────────
+// Bottom-left corner of each section: an arrow pointing right and one
+// pointing up, each with the anatomical direction it points to (L/R, A/P,
+// S/I), in a neutral gray (axis colors proved more confusing than helpful
+// in an already colorful view). Taken from the renderer's own
+// screen→RAS mapping, so they follow any flip (radiological vs
+// anatomical) or rotation. Hidden on sections too small for them.
+const ORIENT_GRAY = 'var(--dim)'; // like the coordinate readout
+const ORIENT = [['R', 'L', ORIENT_GRAY, 'right', 'left'], ['A', 'P', ORIENT_GRAY, 'anterior', 'posterior'],
+                ['S', 'I', ORIENT_GRAY, 'superior', 'inferior']];
+const _orientEls = {};
+function orientOf(d) { // dominant RAS axis of direction d → [letter, color, word]
+  let a = 0; for (let k = 1; k < 3; k++) if (Math.abs(d[k]) > Math.abs(d[a])) a = k;
+  const o = ORIENT[a], pos = d[a] > 0;
+  return [pos ? o[0] : o[1], o[2], pos ? o[3] : o[4]];
+}
+function orientDirs(planeKey, tag, cvs) {
+  const W = cvs.clientWidth || cvs.width, H = cvs.clientHeight || cvs.height;
+  const c = vr.canvasToRas(planeKey, W / 2, H / 2, tag), r = vr.canvasToRas(planeKey, W / 2 + 10, H / 2, tag),
+        u = vr.canvasToRas(planeKey, W / 2, H / 2 - 10, tag);
+  if (!c || !r || !u) return null;
+  return [orientOf([r[0] - c[0], r[1] - c[1], r[2] - c[2]]), orientOf([u[0] - c[0], u[1] - c[1], u[2] - c[2]])];
+}
+// The same arrows painted into a 2D context (screenshots), k = scale.
+function paintOrientArrows(ctx, H, k, dirs) {
+  const css = getComputedStyle(document.documentElement);
+  const col = c => c.startsWith('var(') ? css.getPropertyValue(c.slice(4, -1)).trim() : c;
+  ctx.save();
+  ctx.translate(0, H); ctx.scale(k, k);
+  const [h, v] = dirs;
+  const arrow = (o, x1, y1, head, tx, ty, align) => {
+    ctx.strokeStyle = ctx.fillStyle = col(o[1]);
+    ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(10, -10); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(...head[0]); ctx.lineTo(...head[1]); ctx.lineTo(...head[2]); ctx.closePath(); ctx.fill();
+    ctx.font = "600 10px 'JetBrains Mono', monospace"; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineJoin = 'round';
+    ctx.strokeText(o[0], tx, ty); ctx.fillText(o[0], tx, ty);
+  };
+  arrow(h, 20, -10, [[24, -10], [18, -13.5], [18, -6.5]], 27, -6, 'left');
+  arrow(v, 10, -20, [[10, -24], [6.5, -18], [13.5, -18]], 10, -28, 'center');
+  ctx.restore();
+}
+function updateOrientArrows(planeKey, tag, cvs) {
+  const key = planeKey + tag;
+  let el = _orientEls[key];
+  if (!el) {
+    el = _orientEls[key] = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    el.setAttribute('class', 'orient-arrows');
+    el.setAttribute('width', '46'); el.setAttribute('height', '46');
+    el.innerHTML = '<g class="oa-h"><path d="M7 39H17"/><path class="oa-head" d="M21 39l-6 -3.5v7z"/><text x="24" y="43"></text></g>'
+      + '<g class="oa-v"><path d="M7 39V29"/><path class="oa-head" d="M7 25l-3.5 6h7z"/><text x="7" y="21" text-anchor="middle"></text></g>';
+    cvs.parentElement.appendChild(el);
+    el._last = '';
+  }
+  if (_shotScale !== 1) return; // a screenshot is being rendered
+  const dirs = orientDirs(planeKey, tag, cvs);
+  const show = !!dirs && cvs.clientWidth >= 90 && cvs.clientHeight >= 90;
+  el.style.display = show ? '' : 'none';
+  if (!show) return;
+  const [h, v] = dirs;
+  const sig = h.join() + v.join();
+  if (sig === el._last) return;
+  el._last = sig;
+  for (const [g, o] of [[el.querySelector('.oa-h'), h], [el.querySelector('.oa-v'), v]]) {
+    g.querySelector('text').textContent = o[0];
+    g.setAttribute('data-tip', (g.classList.contains('oa-h') ? 'to the right: ' : 'up: ') + o[2]);
+  }
+}
+
+function updateSlicesA() { if (!probeOn) return; for (const k of ['sag','cor','axi']) drawSlice(k, 'src'); updateProbeGap(); }
 function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'tgt'); }
 
 function updateCoordLabel(planeKey, cursor, tag) {
@@ -1263,11 +1603,11 @@ function updateCoordLabel(planeKey, cursor, tag) {
 // 2.  GPU SLAB RENDERER  — see js/slab-renderer.js
 // ═══════════════════════════════════════════════════════════
 let setStreamlines = [];
-// The subset of setStreamlines actually rendered, after pickRenderPositions
+// The subset of setStreamlines actually rendered, after thinSqrt
 // thins it down to MAX_RENDER_POINTS — see updateProbe. Kept separate from
 // setStreamlines itself since saving/export and SHOW INDICES both need the
 // true full selection, not whatever got thinned for display.
-let renderStreamlines = [], renderProbedEnds = null;
+let renderStreamlines = [];
 
 let slabRenderer = null;  // initialised after renderer3 exists
 
@@ -1563,7 +1903,29 @@ async function ensureAOComposer() {
   return aoLoadPromise;
 }
 
+// Translucent streamlines are blended in drawing order, so their segments
+// are kept sorted far-to-near for the current view (sortRibbonByDepth in
+// scene3d.js). Sorting is CPU work, so it never runs while the view is
+// moving (that made rotation sluggish with large bundle sets): only once,
+// a quarter second after the view stops changing, and right away after a
+// rebuild (no order yet).
+const _viewFwd = new THREE.Vector3();
+let _sortIdleTimer = null;
+function sortTranslucentForView(force = false) {
+  if (!selMesh || !selMesh.faintMesh || !selMesh.faintMesh.visible) return;
+  camera.getWorldDirection(_viewFwd);
+  const last = selMesh.geometry.userData.sortDir;
+  if (last && last.dot(_viewFwd) > 0.99995) return; // already sorted for this view
+  if (force || !last) {
+    sortRibbonByDepth(selMesh, _viewFwd);
+    return;
+  }
+  clearTimeout(_sortIdleTimer);
+  _sortIdleTimer = setTimeout(() => { _sortIdleTimer = null; sortTranslucentForView(true); render3D(); }, 250);
+}
+
 function render3D() {
+  sortTranslucentForView(); tMark('sort');
   if (aoEnabled && aoComposer) {
     // None of this app's own hand-written shaders (scene3d.js: LINE_FS,
     // GLASS_ONLY_FS, SOLID_ONLY_FS, DOTS_FS, ...) include three's
@@ -1623,82 +1985,283 @@ const controls=new TrackballControls(camera,threeCanvas);
 // position status labels the 2D panels use for cursor coordinates — that
 // status relates to a fixed probe/cursor position, this relates to
 // wherever the mouse currently is, a different kind of thing entirely.
-const bundleTooltipEl = document.getElementById('bundle-hover-tooltip');
-const _raycaster = new THREE.Raycaster();
-const _ndc = new THREE.Vector2();
-let _hoverDebounceTimer = null;
-let _tooltipShownAt = 0;
-let _tooltipVisible = false;
-let _lastPointerEvent = null;
-
-function hideBundleTooltip() {
-  bundleTooltipEl.style.display = 'none';
-  _tooltipVisible = false;
-}
-
-function showBundleTooltip(name, clientX, clientY) {
-  bundleTooltipEl.textContent = name;
-  bundleTooltipEl.style.display = 'block';
-  const rect = threeCanvas.getBoundingClientRect();
-  bundleTooltipEl.style.left = (clientX - rect.left + 14) + 'px';
-  bundleTooltipEl.style.top  = (clientY - rect.top + 14) + 'px';
-  _tooltipShownAt = performance.now();
-  _tooltipVisible = true;
-}
-
-function armBundleHoverDebounce() {
-  clearTimeout(_hoverDebounceTimer);
-  _hoverDebounceTimer = setTimeout(doBundleHoverHitTest, 250);
-}
-
-function doBundleHoverHitTest() {
-  if (!isBundle || !bundleNames || !_lastPointerEvent) return;
-  const dotsObjs = [srcDots, tgtDots].filter(Boolean);
-  if (!dotsObjs.length) return;
-
-  const rect = threeCanvas.getBoundingClientRect();
-  _ndc.x = ((_lastPointerEvent.clientX - rect.left) / rect.width) * 2 - 1;
-  _ndc.y = -((_lastPointerEvent.clientY - rect.top) / rect.height) * 2 + 1;
-  _raycaster.setFromCamera(_ndc, camera);
-
-  // World-space hover radius, recomputed from the CURRENT camera distance
-  // every hit-test — Points.raycast()'s threshold is a fixed world-space
-  // value (verified directly in three's own Points.js source), but these
-  // dots are drawn at a constant SCREEN-space size (gl_PointSize), so a
-  // fixed world-space threshold would give an inconsistent hit radius
-  // depending on zoom level. Approximates using distance-to-orbit-target
-  // as a stand-in for "how far away is whatever's under the cursor" —
-  // not exact per-dot (a dot much nearer or farther than the orbit
-  // target would get a slightly wrong effective radius), but cheap and
-  // reasonable given most dots sit reasonably close to that distance.
-  const distToTarget = camera.position.distanceTo(controls.target);
-  const vFovRad = camera.fov * Math.PI / 180;
-  const canvasHeightPx = threeCanvas.clientHeight || 1;
-  const worldUnitsPerPixel = (2 * distToTarget * Math.tan(vFovRad / 2)) / canvasHeightPx;
-  _raycaster.params.Points.threshold = worldUnitsPerPixel * Math.max(endsPx, 8);
-
-  const hits = _raycaster.intersectObjects(dotsObjs, false);
-  if (!hits.length) return;
-  const hit = hits[0];
-  const bundleIdArr = hit.object.userData.bundleId;
-  const bId = bundleIdArr ? bundleIdArr[hit.index] : -1;
-  if (bId < 0 || !bundleNames[bId]) return;
-  showBundleTooltip(bundleNames[bId], _lastPointerEvent.clientX, _lastPointerEvent.clientY);
-}
-
-threeCanvas.addEventListener('mousemove', e => {
-  _lastPointerEvent = e;
-  if (_tooltipVisible) {
-    const elapsed = performance.now() - _tooltipShownAt;
-    if (elapsed < 1000) return; // minimum display time not yet reached — keep showing, don't re-debounce yet
-    hideBundleTooltip();
+// ── Bundle hover and card ─────────────────────────────────
+// Resting the mouse (250 ms) on a bundle's streamline end shows a small
+// label (name, » to open its card) and lights up that bundle's ends near
+// the mouse, so it's clear which bundle the label means. Ends are picked
+// on the CPU from a list of the ends of every DRAWN streamline — dimmed
+// ones included, and whether or not end dots are shown — so a dimmed
+// bundle can still be found and opened. Nothing of this runs while the
+// mouse moves or the view is dragged.
+// The card holds the bundle's settings, built by the same code as its
+// DATA panel row (buildBundleSettings): closing the card changes nothing.
+// Touch (see handleTap): picks made for a finger use larger radii; the
+// mouse events a browser fakes right after a tap are ignored.
+let _touchPick = false, _lastTouchAt = -1e9, _multiTouch = false;
+const _touches = new Set();
+const pickPx = px => _touchPick ? Math.round(px * 2.4) : px;
+const recentTouch = () => performance.now() - _lastTouchAt < 1000;
+let _endPick = null;   // { pos: Float32Array (2 ends x 3 per streamline), gid: Int32Array, n }
+function buildEndPickList(ids) {
+  if (!isBundle || !streamlineBundleId) { _endPick = null; return; }
+  const n = ids.length, pos = new Float32Array(6 * n), gid = new Int32Array(n);
+  for (let k = 0; k < n; k++) {
+    const id = ids[k], t = allStreamlines[id], m = t.length, o = 6 * k;
+    pos[o] = t[0]; pos[o+1] = t[1]; pos[o+2] = t[2];
+    pos[o+3] = t[m-3]; pos[o+4] = t[m-2]; pos[o+5] = t[m-1];
+    gid[k] = streamlineBundleId[id];
   }
-  armBundleHoverDebounce();
+  _endPick = { pos, gid, n };
+}
+// Screen positions (canvas CSS px) of the pick list's ends, per call.
+const _pickB = new THREE.Matrix4();
+function forEachEndOnScreen(fn) {
+  if (!_endPick) return;
+  const rect = threeCanvas.getBoundingClientRect(), W = rect.width, H = rect.height;
+  _pickB.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  const e = _pickB.elements, P = _endPick.pos;
+  for (let j = 0, m = 2 * _endPick.n; j < m; j++) {
+    const px = P[3*j], py = P[3*j+1], pz = P[3*j+2];
+    const w = e[3] * px + e[7] * py + e[11] * pz + e[15];
+    if (w <= 0) continue;
+    fn(j, ((e[0] * px + e[4] * py + e[8] * pz + e[12]) / w + 1) / 2 * W,
+          (1 - (e[1] * px + e[5] * py + e[9] * pz + e[13]) / w) / 2 * H, w);
+  }
+}
+// The bundle whose end is nearest the mouse (within 10 px; the nearer one
+// to the camera on a tie), or null.
+function pickBundleEnd(clientX, clientY) {
+  if (!_endPick) return null;
+  const rect = threeCanvas.getBoundingClientRect();
+  const x = clientX - rect.left, y = clientY - rect.top, R2 = pickPx(10) ** 2;
+  const cand = [];
+  forEachEndOnScreen((j, sx, sy, w) => {
+    const d = (sx - x) * (sx - x) + (sy - y) * (sy - y);
+    if (d <= R2) cand.push([d, w, j, sx, sy]);
+  });
+  // SOLID: only ends actually in view (tested nearest first, a few at most)
+  cand.sort((a, b) => a[0] - b[0]);
+  let best = null, bestD = Infinity, bestW = Infinity, tested = 0;
+  for (const [d, w, j, sx, sy] of cand) {
+    if (renderMode === 'solid') {
+      if (best && d > bestD + 4) break;          // can't win any more
+      if (++tested > 24) break;                  // bound the ray walks
+      if (hiddenBySolid(rect.left + sx, rect.top + sy, w)) continue;
+    }
+    if (d < bestD - 4 || (d <= bestD + 4 && w < bestW)) { best = { gi: _endPick.gid[j >> 1], sx: x, sy: y }; bestD = d; bestW = w; }
+  }
+  return best && groups[best.gi] ? best : null;
+}
+// Lights up bundle gi's ends within 50 px of (sx, sy): the same dots in
+// their own colors, slightly larger, on top. null: off.
+let _hoverEnds = null, _roundDot = null;
+function roundDotTexture() {
+  if (_roundDot) return _roundDot;
+  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.beginPath(); x.arc(16, 16, 15, 0, 2 * Math.PI); x.fill();
+  return (_roundDot = new THREE.CanvasTexture(c));
+}
+function showHoverEnds(gi, sx, sy) {
+  if (_hoverEnds) { scene.remove(_hoverEnds); _hoverEnds.geometry.dispose(); _hoverEnds.material.dispose(); _hoverEnds = null; }
+  if (gi != null && _endPick) {
+    const pts = [], cols = [], P = _endPick.pos;
+    // The ends' own colors, as drawn (SETTINGS › ends·color, and inner·ends
+    // for ends inside the probe sphere) — 'bundle': the bundle color as the
+    // end dots show it (x1.3, see makeEndpointDots); hidden ends: that too.
+    const bc = groups[gi].color || [1, 1, 1];
+    const colorOf = style => style.mode === 'flat' ? hexToRgbRaw(style.rgb) : bc.map(v => Math.min(1, v * 1.3));
+    const cOuter = colorOf(tgtStyle), cInner = colorOf(srcStyle);
+    const pr = _lastDotsProbe, r2 = pr ? pr.radius * pr.radius : -1;
+    const rect = threeCanvas.getBoundingClientRect();
+    forEachEndOnScreen((j, x, y, w) => {
+      if (_endPick.gid[j >> 1] !== gi || (x - sx) * (x - sx) + (y - sy) * (y - sy) > 50 * 50) return;
+      if (hiddenBySolid(rect.left + x, rect.top + y, w)) return; // SOLID: don't reveal ends inside the brain
+      const px = P[3*j], py = P[3*j+1], pz = P[3*j+2];
+      pts.push(px, py, pz);
+      const inner = pr && (px - pr.cursor[0]) ** 2 + (py - pr.cursor[1]) ** 2 + (pz - pr.cursor[2]) ** 2 <= r2;
+      cols.push(...(inner ? cInner : cOuter));
+    });
+    if (pts.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      _hoverEnds = new THREE.Points(geo, new THREE.PointsMaterial({ vertexColors: true, size: endsPx + 2, sizeAttenuation: false, depthTest: false, transparent: true, map: roundDotTexture() }));
+      _hoverEnds.renderOrder = 10;
+      scene.add(_hoverEnds);
+    }
+  }
+  render3D();
+}
+
+const bundleTipEl = document.createElement('div');
+bundleTipEl.className = 'hover-tip';
+document.getElementById('middle').appendChild(bundleTipEl);
+let bundleHover = null;   // { gi, sx, sy } — the label
+let bundleCard = null;    // { gi } — the open card (bundleCardPanel)
+let _bundleTipTimer = null, _overBundleTip = false;
+function hideBundleTooltip(force = false) { // (name kept: the marker code calls it)
+  if (force) _overBundleTip = false;
+  if (!bundleHover || _overBundleTip) return;
+  if (colorPickerIn(bundleTipEl)) return; // its color picker is open
+  const ae = document.activeElement;
+  if (ae && ae.tagName === 'SELECT' && bundleTipEl.contains(ae)) return; // its pulldown is in use
+  bundleHover = null;
+  bundleTipEl.style.display = 'none';
+  showHoverEnds(null);
+}
+// The spotlight (a desk lamp): "focus only this bundle". Off (grey): click
+// to focus only this bundle; on (lit, with a beam) while this bundle is
+// the only focused one: click to focus all again.
+function lampIconSVG(on) {
+  const beam = on ? [-30, 0, 30].map(d => {
+    const a = (50 + d) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    return '<line class="lamp-beam" x1="' + (11.8 + 0.4 * c).toFixed(2) + '" y1="' + (6.6 + 0.4 * s).toFixed(2)
+         + '" x2="' + (11.8 + 2.6 * c).toFixed(2) + '" y2="' + (6.6 + 2.6 * s).toFixed(2) + '"/>';
+  }).join('') : '';
+  return '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">'
+    + '<rect x="1.4" y="13.3" width="7.2" height="1.6" rx="0.8" class="lamp-fill"/>'
+    + '<line x1="5.4" y1="13.3" x2="3.4" y2="8.4"/><line x1="3.4" y1="8.4" x2="9.6" y2="4.2"/>'
+    + '<circle cx="3.4" cy="8.4" r="1.1" class="lamp-fill"/>'
+    + '<path d="M -3.5 0 A 3.5 3.5 0 0 1 3.5 0 Z" transform="translate(11 5.3) rotate(-40)" class="lamp-fill"/>'
+    + beam + '</svg>';
+}
+// Is a color input inside el in use (its picker possibly open)?
+const colorPickerIn = el => { const a = document.activeElement; return !!a && a.type === 'color' && el.contains(a); };
+// The bundle's title: color swatch (a color input), focus icon, name —
+// in its 3D label and its card.
+function fillBundleTitle(el, g) {
+  el.innerHTML = '';
+  const sw = document.createElement('input');
+  sw.type = 'color';
+  sw.className = 'dt-swatch';
+  sw.value = rgbRawToHex(g.color || [1, 1, 1]);
+  sw.title = 'change bundle color';
+  sw.addEventListener('click', e => e.stopPropagation());
+  sw.addEventListener('input', () => setBundleColor(g, sw.value));
+  const solo = isSoloFocus(g);
+  const sb = document.createElement('button');
+  sb.className = 'solo-btn';
+  sb.className = 'solo-btn' + (solo ? ' on' : '');
+  sb.innerHTML = lampIconSVG(solo);
+  sb.title = solo ? 'focus all bundles again' : 'focus only this bundle (dim all others)';
+  sb.addEventListener('click', e => { e.stopPropagation(); soloFocus(g); });
+  const fb = makeFocusButton(!!g.focus, () => toggleFocus(g),
+    g.focus ? 'focused (drawn solid) — click: dim this bundle' : 'dimmed — click: focus this bundle (draw it solid)');
+  const name = document.createElement('span');
+  name.className = 'mt-id';
+  name.textContent = g.name;
+  const ib = makeInfoButton(() => showBundleHeader(g), 'header of ' + g.source.name);
+  el.append(sb, fb, ib, sw, name); // the swatch next to the name it colors
+}
+function showBundleLabel(hit) {
+  clearTimeout(_bundleTipTimer); // a hide pending from the previous label must not hide this one
+  const g = groups[hit.gi];
+  bundleHover = hit;
+  bundleTipEl.className = 'hover-tip mt-small';
+  bundleTipEl.innerHTML = '<span class="mt-title"></span>'
+    + (hasBundleSettings(g) ? '<button class="mt-open" title="settings (pins the card)">»</button>' : '');
+  fillBundleTitle(bundleTipEl.querySelector('.mt-title'), g);
+  bundleTipEl.querySelector('.mt-open')?.addEventListener('click', ev => { ev.stopPropagation(); openBundleCard(hit); });
+  bundleTipEl.style.display = 'flex';
+  placeTip(bundleTipEl, hit.sx, hit.sy);
+  showHoverEnds(hit.gi, hit.sx, hit.sy);
+}
+// The card: a CardPanel (floating-panel.js) — movable like the other
+// panels; once moved, later cards open where it was left.
+const bundleCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => {
+  bundleCard = null;
+  showHoverEnds(null);
+} });
+bundleCardPanel.el.addEventListener('pointerdown', () => { _cardBusy = true; }, true);
+// A card control was used: bring the DATA panel up to date.
+window.addEventListener('pointerup', () => { if (_cardBusy) { _cardBusy = false; dataStore.refresh(); } });
+bundleCardPanel.el.addEventListener('focusout', () => { if (bundleCard) dataStore.refresh(); });
+function openBundleCard(hit) {
+  if (typeof closeMarkerCard === 'function') closeMarkerCard();
+  _overBundleTip = false;
+  bundleHover = null;
+  bundleTipEl.style.display = 'none';
+  bundleCard = { gi: hit.gi, sx: hit.sx, sy: hit.sy };
+  renderBundleCard();
+  const rect = threeCanvas.getBoundingClientRect();
+  bundleCardPanel.openAt(rect.left + hit.sx, rect.top + hit.sy);
+  showHoverEnds(hit.gi, hit.sx, hit.sy);
+}
+function closeBundleCard() {
+  if (bundleCard) bundleCardPanel.close();
+}
+let _cardBusy = false;    // a control in the card is being used: don't rebuild it
+function renderBundleCard() {
+  const g = bundleCard && groups[bundleCard.gi];
+  if (!g || !g.visible || !hasBundleSettings(g)) { closeBundleCard(); return; }
+  // The title's color input stays while its picker is open.
+  if (!colorPickerIn(bundleCardPanel.titleEl)) fillBundleTitle(bundleCardPanel.titleEl, g);
+  const body = bundleCardPanel.body;
+  body.innerHTML = '';
+  const settings = document.createElement('div');
+  settings.className = 'dt-settings';
+  buildBundleSettings(g, settings);
+  body.append(settings);
+}
+// Something about the bundles changed (here or in the DATA panel): redraw
+// the open card — unless one of its own controls is in use.
+function bundleChanged() {
+  if (bundleCard && !_cardBusy) renderBundleCard();
+  if (bundleHover && groups[bundleHover.gi] && !colorPickerIn(bundleTipEl))
+    fillBundleTitle(bundleTipEl.querySelector('.mt-title'), groups[bundleHover.gi]);
+}
+bundleTipEl.addEventListener('pointerdown', ev => ev.stopPropagation());
+bundleTipEl.addEventListener('wheel', ev => ev.stopPropagation());
+// (A finger lifting off the label also "leaves" it: on touch the label
+// stays until a tap elsewhere — see handleTap.)
+bundleTipEl.addEventListener('pointerenter', e => { if (e.pointerType === 'touch') return; _overBundleTip = true; clearTimeout(_bundleTipTimer); });
+bundleTipEl.addEventListener('pointerleave', e => { if (e.pointerType === 'touch') return; _overBundleTip = false; clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500); });
+
+let _hoverDebounceTimer = null, _lastPointerEvent = null;
+function doBundleHoverHitTest() {
+  if (!_lastPointerEvent || _overBundleTip) return;
+  if (typeof markerHover !== 'undefined' && (markerHover || markerCard)) return; // a marker's label/card has the say
+  const hit = pickBundleEnd(_lastPointerEvent.clientX, _lastPointerEvent.clientY);
+  let brainHit = null;
+  // Lit-up ends follow the mouse: only where it rests near a bundle's ends.
+  if (hit) {
+    if (!bundleCard || hit.gi !== bundleCard.gi) showBundleLabel(hit);
+    else showHoverEnds(hit.gi, hit.sx, hit.sy);
+  } else if ((brainHit = pickBrain(_lastPointerEvent.clientX, _lastPointerEvent.clientY))) {
+    clearTimeout(_bundleTipTimer); // still on the brain: keep the label
+    // a new label — or the same one on another region (LABEL mode)
+    if (!(bundleHover && bundleHover.anatomy && (bundleHover.hit && bundleHover.hit.label) === brainHit.label)) {
+      const rect = threeCanvas.getBoundingClientRect();
+      showAnatomyLabel(_lastPointerEvent.clientX - rect.left, _lastPointerEvent.clientY - rect.top, brainHit);
+    }
+  } else if (pickFrameEdge(_lastPointerEvent.clientX, _lastPointerEvent.clientY)) {
+    clearTimeout(_bundleTipTimer); // still on a frame: keep the label
+    if (!(bundleHover && bundleHover.frames)) {
+      const rect = threeCanvas.getBoundingClientRect();
+      showFramesLabel(_lastPointerEvent.clientX - rect.left, _lastPointerEvent.clientY - rect.top);
+    }
+  } else {
+    if (_hoverEnds) showHoverEnds(null);
+    clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
+  }
+}
+threeCanvas.addEventListener('mousemove', e => {
+  if (recentTouch()) return; // the mouse events a browser fakes after a tap
+  _lastPointerEvent = e;
+  clearTimeout(_hoverDebounceTimer);
+  if (e.buttons) { hideBundleTooltip(); return; }    // dragging the view
+  // Moving away from the labelled spot ends the label (the label itself
+  // keeps it while the mouse is on it).
+  if (bundleHover && Math.hypot(e.offsetX - bundleHover.sx, e.offsetY - bundleHover.sy) > 16) {
+    clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
+  }
+  _hoverDebounceTimer = setTimeout(doBundleHoverHitTest, 250);
 });
 threeCanvas.addEventListener('mouseleave', () => {
+  if (recentTouch()) return;
   clearTimeout(_hoverDebounceTimer);
-  hideBundleTooltip();
   _lastPointerEvent = null;
+  clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
 });
 
 // ── WebGL context-loss diagnostics ──────────────────────────
@@ -1740,7 +2303,10 @@ let selMesh=null, srcDots=null, tgtDots=null, probeSphere=null;
 // Reused here so streamline fog auto-scales to the loaded data instead
 // of using fixed mm values that only happen to suit one dataset.
 let sceneRadius = 0;
-let _lastProbedEnds=null, _lastCursor=[0,0,0];
+let _lastDotsProbe=null;
+// File (group) index per rendered streamline, from the last rebuild — for
+// dotsSkip below.
+let _lastRenderFileIdx=null;
 // Slice plane meshes in 3D view
 const planeMeshes = {sag:null, cor:null, axi:null};
 // Which single plane (if any) clips the anatomy: 'none' | 'sag' | 'cor' | 'axi'.
@@ -1755,7 +2321,8 @@ let clipFlip = false;
 // a 2D slice. When off, that flat cap is skipped so the ray looks past the
 // cut into whatever real tissue boundary lies behind it.
 let cover = true;
-// Shows all three plane rectangles (default) — independent of clipping.
+// Shows the plane rectangles (default) — independent of clipping. Also
+// switchable from the 3D view: rest the mouse on a frame's edge.
 let framesVisible = true;
 const PLANE_AXIS_INDEX = {sag:0, cor:1, axi:2}; // matches vr._getNormalAxis / vr._rot_dirs
 
@@ -2173,56 +2740,180 @@ function updateLightBias(s) {
 // "fix the view, then screenshot" moment rather than everyday interaction.
 const MAX_RENDER_POINTS = { low: 300000, high: 1500000, ultra: 20000000 };
 
-// Picks which selected streamlines to actually render when the full
-// selection would exceed the point budget. Returns POSITIONS into `ids`
-// (not streamline indices directly) so the caller can filter any other
-// per-selection parallel array — e.g. probedEnds — the same way. Keeps the
-// same fraction of every bundle, spread evenly through it (a per-bundle
-// running tally: each streamline adds `keep` to its bundle's tally and is
-// kept whenever the tally reaches 1), so the rendered subset stays
-// representative — and every bundle with a selected streamline keeps at
-// least one: its tally starts at 1, so its first streamline is always
-// kept. A single stride over the whole selection used to drop tiny
-// bundles (a 1-streamline bundle almost always fell between two stride
-// steps). Still one cheap pass over lengths plus one over ids. Doesn't hit
-// the budget exactly — the fraction is estimated from the selection's
-// average length, and the guaranteed first streamlines can add at most one
-// per bundle — which is fine.
-function pickRenderPositions(ids, maxPoints) {
-  let total = 0;
-  const counts = new Array(ids.length);
-  for (let i = 0; i < ids.length; i++) {
-    counts[i] = allStreamlines[ids[i]].length / 3;
-    total += counts[i];
-  }
-  if (total <= maxPoints) {
-    return { positions: null, renderedPoints: total }; // null = no thinning needed, use ids as-is
-  }
-  const avgPts = total / ids.length;
-  const keep = Math.max(1, Math.floor(maxPoints / avgPts)) / ids.length; // fraction to keep, < 1
+// Thinning to the point budget. Every streamline has a fixed RANK in
+// [0, 1), spread evenly within its bundle (golden-ratio sequence over its
+// position in the bundle; the bundle's first streamline has rank 0). A
+// bundle keeps the streamlines whose rank is below its threshold, so:
+//  - the kept lines are spread over the whole bundle;
+//  - which lines a threshold keeps never changes — thinning is stable
+//    (the probe highlight relies on this);
+//  - a bundle with any line at all keeps at least its lowest-ranked one.
+// How many a bundle keeps grows with the square root of its size:
+// kept(n) = min(n, c * sqrt(n)), with c chosen so the total (in points,
+// using each bundle's average streamline length) fits the budget. Small
+// bundles stay complete; large ones are thinned most but still keep more
+// lines than small ones.
+let _ranks = null, _ranksFor = null;
+function streamlineRanks() {
+  const key = streamlineBundleId || allStreamlines;
+  if (_ranks && _ranksFor === key && _ranks.length === allStreamlines.length) return _ranks;
+  const n = allStreamlines.length, gid = streamlineBundleId;
+  let ng = 1;
+  if (gid) for (let i = 0; i < n; i++) if (gid[i] + 1 > ng) ng = gid[i] + 1;
+  const pos = new Int32Array(ng), r = new Float32Array(n);
+  const PHI = 0.6180339887498949;
+  for (let i = 0; i < n; i++) { const g = gid ? gid[i] : 0; r[i] = (pos[g]++ * PHI) % 1; }
+  _ranks = r; _ranksFor = key;
+  return r;
+}
+// The ids (indices into allStreamlines) to draw out of `ids` within
+// `budget` points: `ids` itself when it fits.
+function thinSqrt(ids, budget) {
   const gid = streamlineBundleId;
-  const tally = new Float64Array(gid ? Math.max(1, groups.length) : 1).fill(1);
-  const positions = [];
-  let renderedPoints = 0;
-  for (let i = 0; i < ids.length; i++) {
-    const g = gid ? gid[ids[i]] : 0;
-    if (tally[g] >= 1) {
-      tally[g] -= 1;
-      positions.push(i);
-      renderedPoints += counts[i];
-    }
-    tally[g] += keep;
+  let ng = 1;
+  if (gid) for (const id of ids) if (gid[id] + 1 > ng) ng = gid[id] + 1;
+  const n = new Float64Array(ng), pts = new Float64Array(ng);
+  let total = 0;
+  for (const id of ids) {
+    const g = gid ? gid[id] : 0, c = allStreamlines[id].length / 3;
+    n[g]++; pts[g] += c; total += c;
   }
-  return { positions, renderedPoints };
+  if (total <= budget) return ids;
+  const keptPts = c => {
+    let sum = 0;
+    for (let g = 0; g < ng; g++) if (n[g]) sum += Math.min(n[g], c * Math.sqrt(n[g])) * pts[g] / n[g];
+    return sum;
+  };
+  let lo = 0, hi = 0;
+  for (let g = 0; g < ng; g++) hi = Math.max(hi, Math.sqrt(n[g]));
+  for (let it = 0; it < 40; it++) { const mid = (lo + hi) / 2; if (keptPts(mid) <= budget) lo = mid; else hi = mid; }
+  const t = new Float64Array(ng);
+  for (let g = 0; g < ng; g++) if (n[g]) t[g] = Math.min(n[g], lo * Math.sqrt(n[g])) / n[g];
+  const ranks = streamlineRanks();
+  const minRank = new Float32Array(ng).fill(2), minId = new Int32Array(ng).fill(-1);
+  for (const id of ids) { const g = gid ? gid[id] : 0; if (ranks[id] < minRank[g]) { minRank[g] = ranks[id]; minId[g] = id; } }
+  return ids.filter(id => { const g = gid ? gid[id] : 0; return ranks[id] < t[g] || id === minId[g]; });
 }
 
-function updateProbe(){
+// The streamlines the probe hits (indices into allStreamlines), visible
+// bundles only: passing through the sphere (LINES), or with a start or end
+// point inside it (ENDS). Show All (probe off, or RADIUS at ALL): all.
+function probeHitIds(cx, cy, cz, showAll) {
+  let ids;
+  // Show All bypasses the geometric probe test entirely rather than
+  // relying on a merely-large numeric radius, which wouldn't reliably
+  // cover streamlines running outside the anatomy's own bounding box.
+  if (showAll) {
+    ids = allStreamlines.map((_,i) => i);
+  } else if(!probeEndsOnly){
+    const hitPts=gridIdx.queryRadius(cx,cy,cz,radius);
+    const hitSet=new Set(); for(const pi of hitPts) hitSet.add(streamlineLookup[pi]);
+    ids=Array.from(hitSet).sort((a, b) => a - b);
+  } else {
+    const r2=radius*radius;
+    ids=[];
+    for(let si=0;si<allStreamlines.length;si++){
+      const t=allStreamlines[si], n=t.length/3; if(n<1) continue;
+      let dx=t[0]-cx, dy=t[1]-cy, dz=t[2]-cz;
+      if(dx*dx+dy*dy+dz*dz<=r2) { ids.push(si); continue; }
+      dx=t[3*(n-1)]-cx; dy=t[3*(n-1)+1]-cy; dz=t[3*(n-1)+2]-cz;
+      if(dx*dx+dy*dy+dz*dz<=r2) ids.push(si);
+    }
+  }
+  return visibleOnly(ids);
+}
+// Per-bundle visibility from the DATA panel's tree: drops streamlines
+// whose bundle is toggled off.
+function visibleOnly(ids) {
+  if (streamlineBundleId && hiddenBundleIndices.size)
+    return ids.filter(id => !hiddenBundleIndices.has(streamlineBundleId[id]));
+  return ids;
+}
+// Probe HIGHLIGHT mode: every visible streamline is drawn, as translucent
+// context (probeContext x the file's opacity), and the ones the probe hits
+// solid on top. Only with the probe on and a real radius (not ALL).
+const highlightActive = () => (probeOn && probeMode === 'highlight' && !probeBypassed()) || !!focusMask();
+// FOCUS: g.focus per bundle (all true at load). Focused bundles are drawn
+// solid, the others dimmed; with the probe on, only the focused bundles'
+// streamlines the probe hits are solid (and in probe select mode only the
+// focused bundles are drawn at all). Per group: 1 = focused — or null
+// when every visible bundle is focused (nothing dimmed: plain rendering).
+function focusMask() {
+  const vis = groups.filter(g => g.visible);
+  if (vis.every(g => g.focus !== false)) return null;   // all focused: nothing dimmed
+  return Uint8Array.from(groups, g => g.focus !== false && g.visible ? 1 : 0);
+}
+// For the status line: the focused bundles, when some are dimmed.
+function focusNames() {
+  const vis = groups.filter(g => g.visible);
+  if (vis.every(g => g.focus !== false)) return [];
+  return vis.filter(g => g.focus !== false).map(g => g.name);
+}
+// Point budget shares in highlight mode, as fractions of the tier's
+// budget: when the visible streamlines don't fit, the context keeps
+// 1 - HIGHLIGHT_BUDGET and the hits HIGHLIGHT_BUDGET. The 2D slice panels
+// get their own, thinner context sample (CONTEXT_2D_BUDGET): every slice
+// draws every line it is given, in up to three passes, so their cost grows
+// with the number of lines.
+const HIGHLIGHT_BUDGET = 0.3;
+const CONTEXT_2D_BUDGET = 0.2;
+// The last highlight-mode build: { drawn: Uint8Array over allStreamlines,
+// renderIds, thinned, mesh } — for the probe-move shortcut in updateProbe.
+let _hl = null;
+// Highlight flag per RENDERED streamline (null outside highlight mode) —
+// for the end dots (only highlighted lines get them).
+let _renderHighlight = null;
+// Highlight mode's 2D meshes: the context sample (built at a rebuild) and
+// the hits (rebuilt on every probe move). _ctx2D === 'same': the 3D mesh
+// itself is used (nothing to thin).
+let _ctx2D = null, _hits2D = null;
+// While the probe is dragged: the cursor slices, and (when thinned) a
+// rebuild adding hits missing from the drawn sample, wait until it stops.
+let _hlRebuildTimer = null, _slicesBTimer = null;
+const SETTLE_MS = 250;
+function syncContextUniform() {
+  if (!selMesh) return;
+  selMesh.material.uniforms.u_context.value = highlightActive() ? probeContext : -1;
+  selMesh.material.uniforms.u_dimming.value = probeContext;
+}
+function lineMeshes2D() {
+  if (!_renderHighlight || _ctx2D === 'same' || !_ctx2D) return [selMesh];
+  return [_ctx2D, _hits2D];
+}
+function dispose2D() {
+  if (_ctx2D && _ctx2D !== 'same') _ctx2D.geometry.dispose();
+  if (_hits2D) _hits2D.geometry.dispose();
+  _ctx2D = null; _hits2D = null;
+}
+// A ribbon mesh for the streamlines `ids` (indices into allStreamlines),
+// sharing the 3D mesh's materials; highlight: per-streamline flags, or
+// one value for all.
+function buildRibbonFor(ids, highlight) {
+  const bundleInfo = isBundle && streamlineBundleId ? { idPerStreamline: Int32Array.from(ids, i => streamlineBundleId[i]), palette: bundlePaletteRGB } : null;
+  return makeRibbonLines(ids.map(i => allStreamlines[i]), lineWidthPx, 0.5, bundleInfo, buildFieldInfo(ids), {
+    tex: fileStyleTex,
+    fileIndex: Float32Array.from(ids, gi => streamlineBundleId ? streamlineBundleId[gi] : 0),
+    materials: ribbonMaterials,
+    highlight: typeof highlight === 'number' ? new Uint8Array(ids.length).fill(highlight) : highlight,
+  });
+}
+function buildHits2D(hits, budget) {
+  if (_hits2D) { _hits2D.geometry.dispose(); _hits2D = null; }
+  if (_ctx2D === 'same') return;
+  const ids = thinSqrt(hits, HIGHLIGHT_BUDGET * budget);
+  if (ids.length) _hits2D = buildRibbonFor(ids, 1);
+}
+
+// opts.probeOnly: only the probe moved or changed (cursor, radius, LINES/
+// ENDS) — in highlight mode that needs no rebuild, just new flags.
+function updateProbe(opts = {}){
   if(!gridIdx) return;
   const [cx,cy,cz]=state.get('src.cursor');
-  // Show All: see the selection block below for the full rationale. A
-  // wireframe sphere at radiusMaxMm would span the whole anatomy here and
-  // add nothing useful, so skip drawing it in this mode.
-  const showAll = radius >= radiusMaxMm;
+  // Show All: no probe test (see probeHitIds). A wireframe sphere at
+  // radiusMaxMm would span the whole anatomy here and add nothing useful,
+  // so skip drawing it in this mode.
+  const showAll = probeBypassed();
+  const hl = highlightActive();
   if(probeSphere) scene.remove(probeSphere);
   if (!showAll) {
     const sg=new THREE.SphereGeometry(radius,12,8);
@@ -2231,6 +2922,51 @@ function updateProbe(){
   } else {
     probeSphere=null;
   }
+  const budget = MAX_RENDER_POINTS[qualityTier];
+  // The SOLID set ("hits"): the probe's hits, limited to the focused
+  // bundles if any; with the probe off (or at ALL) and a focus: all of the
+  // focused bundles' streamlines.
+  const F = focusMask();
+  const inF = id => F[streamlineBundleId ? streamlineBundleId[id] : 0] === 1;
+  let hits = probeHitIds(cx, cy, cz, showAll);
+  if (F) hits = hits.filter(inF);
+  tMark('hit test');
+  // Inner ends: the ends within the probe sphere; none without a probe.
+  const dotsProbe = showAll ? null : { cursor: [cx,cy,cz], radius };
+
+  // Highlight mode, probe moved: the drawn lines stay as they are; the
+  // hits among them get highlighted (flags only). The 2D panels' hit mesh
+  // is small and rebuilt. The cursor slices — and, when thinned, a rebuild
+  // adding hits missing from the drawn sample — follow once the probe
+  // stops.
+  if (hl && opts.probeOnly && selMesh && _hl && _hl.mesh === selMesh) {
+    const isHit = new Uint8Array(allStreamlines.length);
+    for (const id of hits) isHit[id] = 1;
+    _renderHighlight = Uint8Array.from(_hl.renderIds, id => isHit[id]);
+    setRibbonHighlight(selMesh, _renderHighlight);
+    tMark('flags');
+    setStreamlines = hits.map(i => allStreamlines[i]);
+    showSelectionStats(hits.length, _hl.renderIds.length, true, _hl.thinned);
+    buildHits2D(hits, budget);
+    tMark('2D hit mesh');
+    if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
+    if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
+    _lastDotsProbe = dotsProbe;
+    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip()));
+    tMark('end dots');
+    if(slabRenderer) slabRenderer.invalidate(selMesh);
+    updateScene3d(); tMark('3D', true);
+    updateSlicesA(); tMark('probe slices');
+    clearTimeout(_slicesBTimer);
+    _slicesBTimer = setTimeout(() => { _slicesBTimer = null; updateSlicesB(); }, SETTLE_MS);
+    if (_hl.thinned && !thinSqrt(hits, HIGHLIGHT_BUDGET * budget).every(id => _hl.drawn[id])) {
+      clearTimeout(_hlRebuildTimer);
+      _hlRebuildTimer = setTimeout(() => { _hlRebuildTimer = null; updateProbe(); }, SETTLE_MS);
+    }
+    return;
+  }
+  clearTimeout(_hlRebuildTimer); _hlRebuildTimer = null;
+
   // selMesh.material is now a compiled ShaderMaterial (one WebGL program
   // per instance) rather than the old shared-style LineBasicMaterial, so
   // it's worth disposing explicitly here too, not just the geometry.
@@ -2241,81 +2977,51 @@ function updateProbe(){
   if(selMesh){ scene.remove(selMesh); selMesh.geometry.dispose(); selMesh=null; }
   if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
   if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
-  let ids;
-  let probedEnds = null;  // per-tract: 0=start probed, 1=end probed, 2=both/pass-through
-  // Show All: the RADIUS slider's rightmost position. Bypasses the
-  // geometric probe test entirely rather than relying on a merely-large
-  // numeric radius, which wouldn't reliably cover streamlines running
-  // outside the anatomy's own bounding box. probedEnds stays null
-  // (pass-through) — NEAR/FAR·ENDS still resolve by distance to the
-  // cursor, same as normal pass-through selection; only the radius test
-  // itself is skipped.
-  if (showAll) {
-    ids = allStreamlines.map((_,i) => i);
-  } else if(!probeEndsOnly){
-    const hitPts=gridIdx.queryRadius(cx,cy,cz,radius);
-    const hitSet=new Set(); for(const pi of hitPts) hitSet.add(streamlineLookup[pi]);
-    ids=Array.from(hitSet);
-    // pass-through mode: no flip needed, probedEnds stays null (=all 2)
-  } else {
-    const r2=radius*radius;
-    const startHit=new Set(), endHit=new Set();
-    for(let si=0;si<allStreamlines.length;si++){
-      const t=allStreamlines[si], n=t.length/3; if(n<1) continue;
-      let dx=t[0]-cx, dy=t[1]-cy, dz=t[2]-cz;
-      if(dx*dx+dy*dy+dz*dz<=r2) startHit.add(si);
-      dx=t[3*(n-1)]-cx; dy=t[3*(n-1)+1]-cy; dz=t[3*(n-1)+2]-cz;
-      if(dx*dx+dy*dy+dz*dz<=r2) endHit.add(si);
-    }
-    const hitSet=new Set([...startHit,...endHit]);
-    ids=Array.from(hitSet);
-    // Build per-tract probedEnds: 0=start, 1=end, 2=both
-    probedEnds=new Uint8Array(ids.length);
-    ids.forEach((si,i)=>{
-      const s=startHit.has(si), e=endHit.has(si);
-      probedEnds[i] = (s && e) ? 2 : s ? 0 : 1;
-    });
-  }
-  // Per-bundle visibility from the FILE panel's data tree: drop any
-  // streamline whose bundle is currently toggled off, before the
-  // thinning/rendering step below. Must stay index-aligned with
-  // probedEnds (built in lock-step with ids above) when present.
-  if (streamlineBundleId && hiddenBundleIndices.size) {
-    if (probedEnds) {
-      const keptIds = [], keptEnds = [];
-      ids.forEach((id, idx) => {
-        if (!hiddenBundleIndices.has(streamlineBundleId[id])) { keptIds.push(id); keptEnds.push(probedEnds[idx]); }
-      });
-      ids = keptIds;
-      probedEnds = Uint8Array.from(keptEnds);
-    } else {
-      ids = ids.filter(id => !hiddenBundleIndices.has(streamlineBundleId[id]));
-    }
-  }
-  setStreamlines=ids.map(i=>allStreamlines[i]);
+  dispose2D();
+  _hl = null; _renderHighlight = null; _endPick = null;
 
-  // Thin down to a point budget for actual rendering — see
-  // pickRenderPositions' comment. setStreamlines (above) stays the FULL
-  // selection: saving/export and the SHOW INDICES debug feature both read
-  // it and need the true selected set, not whatever subset got rendered.
-  const { positions: renderPos, renderedPoints } = pickRenderPositions(ids, MAX_RENDER_POINTS[qualityTier]);
-  const isThinned = renderPos !== null;
-  renderStreamlines  = isThinned ? renderPos.map(p=>allStreamlines[ids[p]]) : setStreamlines;
-  renderProbedEnds   = isThinned && probedEnds ? Uint8Array.from(renderPos.map(p=>probedEnds[p])) : probedEnds;
-  // Bundle id per RENDERED streamline, same selection/thinning as
-  // renderStreamlines/renderProbedEnds above — must stay index-aligned
-  // with renderStreamlines since makeRibbonLines/makeEndpointDots zip
-  // them together positionally.
-  const renderBundleIds = isBundle && streamlineBundleId
-    ? (isThinned ? Int32Array.from(renderPos.map(p=>streamlineBundleId[ids[p]]))
-                 : Int32Array.from(ids.map(i=>streamlineBundleId[i])))
-    : null;
+  // setStreamlines stays the FULL selection (the hits): saving/export and
+  // the SHOW INDICES debug feature both read it and need the true selected
+  // set, not whatever subset got rendered.
+  setStreamlines = hits.map(i => allStreamlines[i]);
+  // What gets drawn: in select mode the hits, thinned to the point budget
+  // (see thinSqrt); in highlight mode every visible streamline — when
+  // that's over budget, a context sample plus the hits, each thinned to
+  // its own share.
+  let renderIds, isThinned, visible = null;
+  if (!hl) {
+    renderIds = thinSqrt(hits, budget);
+    isThinned = renderIds !== hits;
+  } else {
+    // Everything visible is drawn — except in probe select mode with a
+    // focus: only the focused bundles.
+    visible = visibleOnly(allStreamlines.map((_,i) => i));
+    if (F && !showAll && probeMode === 'select') visible = visible.filter(inF);
+    isThinned = thinSqrt(visible, budget) !== visible;
+    if (!isThinned) renderIds = visible;
+    else {
+      const set = new Set(thinSqrt(visible, (1 - HIGHLIGHT_BUDGET) * budget));
+      for (const id of thinSqrt(hits, HIGHLIGHT_BUDGET * budget)) set.add(id);
+      renderIds = Array.from(set).sort((a, b) => a - b);
+    }
+    const drawn = new Uint8Array(allStreamlines.length);
+    for (const id of renderIds) drawn[id] = 1;
+    const isHit = new Uint8Array(allStreamlines.length);
+    for (const id of hits) isHit[id] = 1;
+    _renderHighlight = Uint8Array.from(renderIds, id => isHit[id]);
+    _hl = { drawn, renderIds, thinned: isThinned, mesh: null };
+  }
+  renderStreamlines = renderIds.map(i => allStreamlines[i]);
+  // Bundle id per RENDERED streamline — must stay index-aligned with
+  // renderStreamlines since makeRibbonLines/makeEndpointDots zip them
+  // together positionally.
+  const renderBundleIds = isBundle && streamlineBundleId ? Int32Array.from(renderIds, i => streamlineBundleId[i]) : null;
   _lastBundleInfo = renderBundleIds ? { idPerStreamline: renderBundleIds, palette: bundlePaletteRGB } : null;
   // Data-field coloring: for every rendered streamline whose geometry
   // file has an active .dqz data field, its normalized values (see
   // fieldNormValues) — null for the rest, which keep LINE·COLOR.
-  const renderIds = isThinned ? renderPos.map(p => ids[p]) : ids;
   const fieldInfo = buildFieldInfo(renderIds);
+  _lastFieldInfo = fieldInfo;
   // Which streamline file each rendered streamline belongs to — its row in
   // fileStyleTex (width, opacity, field window).
   writeFileStyles();
@@ -2323,22 +3029,16 @@ function updateProbe(){
     tex: fileStyleTex,
     fileIndex: Float32Array.from(renderIds, gi => streamlineBundleId ? streamlineBundleId[gi] : 0), // group (bundle) index
     materials: ribbonMaterials,
+    highlight: _renderHighlight,
   };
-
-  let selText=ids.length?ids.length.toLocaleString()+' selected':'';
-  if (isThinned) selText += ' · ' + renderStreamlines.length.toLocaleString() + ' rendered';
-  document.getElementById('stat-sel').textContent=selText;
-  // Update save zone status
-  const sp=document.getElementById('save-status');
-  if(sp) sp.textContent=ids.length?ids.length.toLocaleString()+' streamlines':'select streamlines first';
-  const idxBtn=document.getElementById('btn-show-indices');
-  if(idxBtn){
-    if(ids.length) idxBtn.classList.remove('disabled');
-    else idxBtn.classList.add('disabled');
-  }
-  if(ids.length){
+  showSelectionStats(hits.length, renderIds.length, hl, isThinned);
+  if(renderIds.length){
+    tMark('selection');
     selMesh = makeRibbonLines(renderStreamlines, lineWidthPx, 0.5, _lastBundleInfo, fieldInfo, styleInfo);
+    tMark('build mesh');
     ribbonMaterials = { opaque: selMesh.material, faint: selMesh.faintMesh.material };
+    if (_hl) _hl.mesh = selMesh;
+    syncContextUniform();
     setRibbonFaintMode(selMesh, anyFaint());
     // Sync to the current LIGHT slider position immediately — otherwise a
     // freshly-rebuilt selMesh starts back at the default CENTER light
@@ -2352,13 +3052,47 @@ function updateProbe(){
     selMesh.userData.depthTarget = controls.target;
     selMesh.userData.sceneRadius = sceneRadius || 1;
     applyLineShadingFlags(); // fresh material -> fresh default uniforms, resync AO/lighting state onto it
-    _lastCursor=[cx,cy,cz];
-    _lastProbedEnds=renderProbedEnds;
-    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, renderProbedEnds, [cx,cy,cz], endsPx, renderer3.getPixelRatio(), _lastBundleInfo));
+    // Highlight mode's 2D meshes (see lineMeshes2D): a thinner context
+    // sample, unless the 3D mesh already fits the 2D budget.
+    if (hl) {
+      const ctxIds = thinSqrt(visible, CONTEXT_2D_BUDGET * budget);
+      if (ctxIds === visible && !isThinned) _ctx2D = 'same';
+      else { _ctx2D = buildRibbonFor(ctxIds, 0); buildHits2D(hits, budget); }
+      tMark('2D meshes');
+    }
+    _lastDotsProbe = dotsProbe;
+    _lastRenderFileIdx = styleInfo.fileIndex;
+    buildEndPickList(renderIds);
+    updateRibbonDensity(); tMark('density');
+    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip()));
+    tMark('end dots');
   }
   if(slabRenderer) slabRenderer.invalidate(selMesh);
-  updateScene3d();
-  updateSlicesA(); updateSlicesB();
+  updateScene3d(); tMark('3D draw', true);
+  updateSlicesA(); tMark('probe slices'); updateSlicesB(); tMark('cursor slices');
+}
+
+// The stats HUD line and the export rows. Highlight mode: "37 highlighted
+// · 12,400 shown"; select mode: "37 selected" (+ "· N rendered" when
+// thinned).
+function showSelectionStats(nHits, nRendered, highlight, thinned = false) {
+  let selText;
+  if (highlight) selText = nHits.toLocaleString() + ' highlighted · ' + nRendered.toLocaleString() + ' shown' + (thinned ? ' (thinned)' : '');
+  else {
+    selText = nHits ? nHits.toLocaleString() + ' selected' : '';
+    if (thinned) selText += ' · ' + nRendered.toLocaleString() + ' rendered';
+  }
+  const fn = focusNames();
+  if (fn.length) selText += ' · focus: ' + (fn.length === 1 ? fn[0] : fn.length + ' of ' + groups.filter(g => g.visible).length);
+  else if (focusMask()) selText += ' · all dimmed';
+  document.getElementById('stat-sel').textContent=selText;
+  const sp=document.getElementById('save-status');
+  if(sp) sp.textContent=nHits?nHits.toLocaleString()+' streamlines':'select streamlines first';
+  const idxBtn=document.getElementById('btn-show-indices');
+  if(idxBtn){
+    if(nHits) idxBtn.classList.remove('disabled');
+    else idxBtn.classList.add('disabled');
+  }
 }
 
 // Coalesces several updateProbe() requests made in the same task (e.g.
@@ -2374,7 +3108,7 @@ function rebuildDots() {
   if (!renderStreamlines || !renderStreamlines.length) return;
   if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
   if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
-  ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastProbedEnds, _lastCursor, endsPx, renderer3.getPixelRatio(), _lastBundleInfo));
+  ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip()));
   if(slabRenderer) slabRenderer.invalidate(selMesh);
   updateScene3d();
 }
@@ -2462,7 +3196,9 @@ function saveTck(){
   const r=radius.toFixed(2);
   const xyz=`${cx.toFixed(1)},${cy.toFixed(1)},${cz.toFixed(1)}`;
   const url=location.origin+location.pathname;
-  const cmd = probeEndsOnly
+  const cmd = probeBypassed()
+    ? `${url}/tractogram-observer selected ${n} streamlines (all visible, no probe)`
+    : probeEndsOnly
     ? `${url}/tractogram-observer selected ${n} streamlines with a start- or end point in a sphere with radius ${r} around ras-coordinate [${xyz}]`
     : `${url}/tractogram-observer selected ${n} streamlines passing through a sphere with radius ${r} around ras-coordinate [${xyz}]`;
   let buf;
@@ -2479,7 +3215,7 @@ function saveTck(){
 function collectState() {
   return {
     settings: {
-      radius, probeEndsOnly, slabMultiplier, endsPx, lineWidthPx, reflectance,
+      radius, probeOn, probeMode, probeContext, probeEndsOnly, slabMultiplier, endsPx, lineWidthPx, reflectance,
       lineStyle, srcStyle, tgtStyle,
       glassBrainAlpha, glassBrainRimPow,
       cutoutT1, cutoutBelowThresh, cutoutRow1Above, cutoutRow2AndBelow,
@@ -3134,7 +3870,7 @@ function clearStreamlines() {
   if (tgtDots) { scene.remove(tgtDots); tgtDots.geometry.dispose(); tgtDots = null; }
   if (slabRenderer) slabRenderer.invalidate(null);
   trckParents = []; groups = []; allStreamlines = null; streamlineLookup = null; allPts = null; gridIdx = null;
-  setStreamlines = []; renderStreamlines = []; renderProbedEnds = null; // their 'nothing loaded' values (see their declarations)
+  setStreamlines = []; renderStreamlines = []; // their 'nothing loaded' values (see their declarations)
   isBundle = false; streamlineBundleId = null; bundlePaletteRGB = null; bundleNames = null; _lastBundleInfo = null;
   hiddenBundleIndices.clear();
   trckHeader = null; trckHeaderReady = false;
@@ -3374,9 +4110,228 @@ const settingsPanel = new FloatingPanel({
 const aboutPanel = new FloatingPanel({
   panelEl: document.getElementById('panel-about'),
   anchorEl: document.getElementById('fullscreen-btn'),
-  triggerBtn: document.getElementById('about-btn'),
   group: panelGroup,
   onOpen: () => loadAboutContent(),
+});
+const toolsPanel = new FloatingPanel({
+  panelEl: document.getElementById('panel-tools'),
+  anchorEl: document.getElementById('fullscreen-btn'),
+  triggerBtn: document.getElementById('tools-btn'),
+  group: panelGroup,
+  onOpen: () => fillShotViews(),
+});
+document.getElementById('tools-about').addEventListener('click', e => { e.stopPropagation(); aboutPanel.open(); });
+
+// ── TOOLS › screenshot and rotation movie ───────────────────
+// Only the picture itself (the WebGL canvas, or a section's canvas) —
+// never the labels, buttons or panels on top of it. Larger sizes render
+// again at that resolution: the 3D renderer's pixel ratio goes up, and
+// everything sized in screen pixels (line widths, end dots; markers do
+// it themselves) goes up with it, so the image looks like the screen,
+// only sharper. A section renders into a temporarily enlarged canvas with
+// the same field of view.
+const SHOT_PLANES = { sag: 'SAG', cor: 'COR', axi: 'AXI' };
+function fillShotViews() {
+  const sel = document.getElementById('shot-view'), keep = sel.value;
+  sel.innerHTML = '';
+  const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
+  add('3d', '3D view');
+  for (const [tag, name] of [['src', 'probe'], ['tgt', 'cursor']]) {
+    if (tag === 'src' && !probeOn) continue;
+    for (const k of ['sag', 'cor', 'axi']) {
+      const cvs = (tag === 'src' ? canvasA : canvasB)[k];
+      if (cvs && cvs.clientWidth > 0 && cvs.clientHeight > 0 && state.get('anat.file')) add(k + ':' + tag, SHOT_PLANES[k] + ' ' + name);
+    }
+  }
+  if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+  syncShotRows();
+}
+function syncShotRows() {
+  const is3d = document.getElementById('shot-view').value === '3d';
+  document.querySelectorAll('.shot-2d-row').forEach(r => { r.style.display = is3d ? 'none' : ''; });
+}
+document.getElementById('shot-view').addEventListener('change', syncShotRows);
+const radioVal = name => document.querySelector('input[name="' + name + '"]:checked').value;
+const stamp = () => { const d = new Date(), z = n => String(n).padStart(2, '0');
+  return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()); };
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  a.addEventListener('click', e => e.stopPropagation()); // not an "outside click" for the panels
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+// Renders the 3D view k× larger than on screen until the returned
+// function is called (which restores everything and redraws).
+function begin3DScale(k) {
+  const pr = renderer3.getPixelRatio(), W = threeCanvas.clientWidth, H = threeCanvas.clientHeight;
+  const seen = new Set(), saved = [];
+  scene.traverse(o => {
+    for (const m of [].concat(o.material || [])) {
+      const u = m && m.uniforms;
+      if (!u) continue;
+      for (const key of ['u_widthNearPx', 'u_widthFarPx', 'u_pointSize']) {
+        const un = u[key];
+        if (un && !seen.has(un)) { seen.add(un); saved.push([un, un.value]); un.value *= k; }
+      }
+    }
+  });
+  const lit = _hoverEnds; if (lit) lit.visible = false; // the lit-up ends are a hover effect
+  _shotScale = k;
+  writeFileStyles();
+  renderer3.setPixelRatio(pr * k);
+  if (aoComposer) { aoComposer.setPixelRatio(pr * k); aoComposer.setSize(W, H); }
+  return () => {
+    for (const [un, v] of saved) un.value = v;
+    if (lit) lit.visible = true;
+    _shotScale = 1;
+    writeFileStyles();
+    renderer3.setPixelRatio(pr);
+    if (aoComposer) { aoComposer.setPixelRatio(pr); aoComposer.setSize(W, H); }
+    render3D();
+  };
+}
+// The largest scale the GPU can render the 3D view at.
+function max3DScale(k) {
+  const gl = renderer3.getContext(), max = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+  const pr = renderer3.getPixelRatio();
+  return Math.max(1, Math.min(k, max / (threeCanvas.clientWidth * pr), max / (threeCanvas.clientHeight * pr)));
+}
+// The WebGL canvas is only readable right after drawing: copy it at once.
+function copyCanvas(src) {
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  c.getContext('2d').drawImage(src, 0, 0);
+  return c;
+}
+function shot3D(k) {
+  const end = begin3DScale(max3DScale(k));
+  try { sortTranslucentForView(true); render3D(); return copyCanvas(threeCanvas); }
+  finally { end(); }
+}
+function shotSection(planeKey, tag, k, arrows, cursor = true) {
+  const cvs = (tag === 'src' ? canvasA : canvasB)[planeKey];
+  const W = cvs.width, H = cvs.height, shared = vr._sharedMmPerPx ? vr._sharedMmPerPx[tag] : null;
+  const pp = vr._planeParams[planeKey + tag], ppMm = pp && pp.mm_per_px;
+  let out, dirs = arrows ? orientDirs(planeKey, tag, cvs) : null;
+  try {
+    if (k > 1) {
+      cvs.width = Math.round(W * k); cvs.height = Math.round(H * k); // CSS size unchanged
+      if (shared) vr._sharedMmPerPx[tag] = shared / k;               // same field of view
+      if (pp) pp.mm_per_px = ppMm / k;                               // cursor arm widths
+      _shotScale = k;
+    }
+    _shotHideCursor = !cursor;
+    drawSlice(planeKey, tag);
+    out = copyCanvas(cvs);
+  } finally {
+    _shotHideCursor = false;
+    if (k > 1) {
+      cvs.width = W; cvs.height = H;
+      if (vr._sharedMmPerPx) vr._sharedMmPerPx[tag] = shared;
+      _shotScale = 1;
+    }
+    if (k > 1 || !cursor) drawSlice(planeKey, tag);
+  }
+  if (dirs) paintOrientArrows(out.getContext('2d'), out.height, out.width / (cvs.clientWidth || W), dirs);
+  return out;
+}
+document.getElementById('shot-save').addEventListener('click', e => {
+  e.stopPropagation();
+  const view = document.getElementById('shot-view').value, k = +radioVal('shot-scale');
+  const status = document.getElementById('shot-status');
+  try {
+    let c, name;
+    if (view === '3d') { c = shot3D(k); name = '3d'; }
+    else { const [pk, tag] = view.split(':'); c = shotSection(pk, tag, k, document.getElementById('shot-arrows').checked, document.getElementById('shot-cursor').checked);
+           name = pk + '-' + (tag === 'src' ? 'probe' : 'cursor'); }
+    c.toBlob(b => {
+      if (!b) { status.textContent = 'could not make the image'; return; }
+      downloadBlob(b, 'tractogram-observer_' + name + '_' + stamp() + '.png');
+      status.textContent = c.width + '×' + c.height + ' px saved';
+    }, 'image/png');
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'failed: ' + (err.message || err);
+  }
+});
+
+// The rotation movie: one turn around the screen's vertical axis through
+// the rotation centre, frame by frame (each frame rendered, copied and
+// encoded before the next — never real-time capture), with mediabunny.
+let _movieBusy = false, _movieCancel = false;
+async function recordRotation({ seconds, fps, k, format, quality }, onProgress) {
+  const M = await import('mediabunny');
+  const end = begin3DScale(max3DScale(k));
+  const target = controls.target.clone(), pos0 = camera.position.clone(), up0 = camera.up.clone();
+  threeCanvas.style.pointerEvents = 'none'; // no orbiting while recording
+  try {
+    // H.264 and friends need even sizes
+    const outW = threeCanvas.width & ~1, outH = threeCanvas.height & ~1;
+    const fmt = format === 'mp4' ? new M.Mp4OutputFormat() : new M.WebMOutputFormat();
+    const codec = await M.getFirstEncodableVideoCodec(fmt.getSupportedVideoCodecs(), { width: outW, height: outH });
+    if (!codec) throw new Error('this browser cannot encode ' + format + ' at ' + outW + '×' + outH);
+    const frame = document.createElement('canvas');
+    frame.width = outW; frame.height = outH;
+    const fctx = frame.getContext('2d');
+    const output = new M.Output({ format: fmt, target: new M.BufferTarget() });
+    // bits per pixel per frame: high ≈ 15 Mbit/s, low ≈ 4 Mbit/s at 1080p30
+    const bpp = quality === 'low' ? 0.06 : 0.24;
+    const source = new M.CanvasSource(frame, { codec, bitrate: Math.round(Math.min(60e6, Math.max(1e6, outW * outH * fps * bpp))) });
+    output.addVideoTrack(source, { frameRate: fps });
+    await output.start();
+    const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize(); // screen vertical
+    const offset = pos0.clone().sub(target);
+    const n = Math.max(2, Math.round(seconds * fps));
+    for (let i = 0; i < n; i++) {
+      if (_movieCancel) { await output.cancel(); return null; }
+      camera.position.copy(target).add(offset.clone().applyAxisAngle(axis, 2 * Math.PI * i / n));
+      camera.up.copy(axis);
+      camera.lookAt(target);
+      camera.updateMatrixWorld();
+      sortTranslucentForView(true);
+      render3D();
+      fctx.drawImage(threeCanvas, 0, 0, outW, outH, 0, 0, outW, outH);
+      await source.add(i / fps, 1 / fps);
+      onProgress(i + 1, n);
+    }
+    await output.finalize();
+    const blob = new Blob([output.target.buffer], { type: fmt.mimeType || (format === 'mp4' ? 'video/mp4' : 'video/webm') });
+    blob.codec = codec;
+    return blob;
+  } finally {
+    camera.position.copy(pos0); camera.up.copy(up0); camera.lookAt(target); camera.updateMatrixWorld();
+    threeCanvas.style.pointerEvents = '';
+    end();
+  }
+}
+document.getElementById('mov-len').addEventListener('input', e => {
+  document.getElementById('mov-len-val').textContent = e.target.value + ' s';
+});
+document.getElementById('mov-save').addEventListener('click', async e => {
+  e.stopPropagation();
+  const btn = e.currentTarget, status = document.getElementById('mov-status');
+  if (_movieBusy) { _movieCancel = true; return; } // the button cancels while recording
+  const opts = { seconds: +document.getElementById('mov-len').value, fps: +radioVal('mov-fps'), k: +radioVal('mov-scale'),
+                 format: radioVal('mov-format'), quality: radioVal('mov-quality') };
+  _movieBusy = true; _movieCancel = false;
+  btn.textContent = 'cancel';
+  status.textContent = 'preparing…';
+  try {
+    const blob = await recordRotation(opts, (i, n) => { status.textContent = 'frame ' + i + ' / ' + n; });
+    if (blob) {
+      downloadBlob(blob, 'tractogram-observer_rotation_' + stamp() + '.' + opts.format);
+      const names = { avc: 'H.264', hevc: 'H.265', vp9: 'VP9', vp8: 'VP8', av1: 'AV1' };
+      status.textContent = 'saved: ' + (blob.size / 1e6).toFixed(1) + ' MB, ' + (names[blob.codec] || blob.codec)
+        + (opts.format === 'mp4' && blob.codec !== 'avc' ? ' (no H.264 here: may not play in PowerPoint)' : '');
+    } else status.textContent = 'cancelled';
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'failed: ' + (err.message || err);
+  } finally {
+    _movieBusy = false;
+    btn.textContent = 'save movie';
+  }
 });
 
 // HEADER / INDICES / STATE viewer — a 4th FloatingPanel instance, but
@@ -3489,19 +4444,68 @@ document.getElementById('btn-show-state').addEventListener('click', e => {
 
 // ── Floating tooltip ──────────────────────────────────────
 const tipEl = document.getElementById('tip');
-document.querySelectorAll('[data-tip]').forEach(el => {
-  el.addEventListener('mouseenter', e => {
-    tipEl.textContent = el.dataset.tip.replace(/\\n/g, '\n');
-    tipEl.style.left = (e.clientX + 14) + 'px';
-    tipEl.style.top  = (e.clientY + 14) + 'px';
-    tipEl.style.display = 'block';
-  });
-  el.addEventListener('mousemove', e => {
-    tipEl.style.left = (e.clientX + 14) + 'px';
-    tipEl.style.top  = (e.clientY + 14) + 'px';
-  });
-  el.addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
+// Help text on hover, as in the SETTINGS panel. Also used for rows built
+// later (the DATA panel's settings): attachTip(el, text).
+// One tooltip style for the whole app: the yellow one, shown at once.
+// Every element with a data-tip — and every plain title attribute too
+// (moved into data-tip on first hover, so the browser's own delayed
+// tooltip never shows) — gets it, through one set of document-level
+// listeners; elements created later need nothing extra.
+function attachTip(el, text) {
+  if (text != null) el.dataset.tip = text;
+}
+let _tipOwner = null;
+function tipTextOf(el) {
+  if (el.hasAttribute('title')) {           // (titles set again later win)
+    const t = el.getAttribute('title');
+    el.removeAttribute('title');
+    if (t) el.setAttribute('data-tip', t);
+  }
+  return el.getAttribute('data-tip');
+}
+function hideTip() { _tipOwner = null; tipEl.style.display = 'none'; }
+function placeTipAt(e) {
+  const pad = 14, w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + w > window.innerWidth - 4) x = Math.max(4, e.clientX - pad - w);
+  if (y + h > window.innerHeight - 4) y = Math.max(4, e.clientY - pad - h);
+  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+}
+document.addEventListener('mouseover', e => {
+  if (recentTouch()) return;                // no hover tips for a finger
+  const el = e.target.closest ? e.target.closest('[title],[data-tip]') : null;
+  const text = el && tipTextOf(el);
+  if (!text) { hideTip(); return; }
+  if (el === _tipOwner) return;
+  _tipOwner = el;
+  tipEl.textContent = text.replace(/\\n/g, '\n');
+  tipEl.style.display = 'block';
+  placeTipAt(e);
 });
+// Convert titles as soon as they appear (rows re-render, buttons retitle
+// themselves), so the browser's delayed tooltip never shows at all.
+const _titleToTip = el => { const t = el.getAttribute('title'); el.removeAttribute('title'); if (t) el.setAttribute('data-tip', t); };
+document.querySelectorAll('[title]').forEach(_titleToTip);
+new MutationObserver(muts => {
+  for (const m of muts) {
+    if (m.type === 'attributes') { if (m.target.hasAttribute('title')) _titleToTip(m.target); continue; }
+    for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.hasAttribute('title')) _titleToTip(n);
+      n.querySelectorAll('[title]').forEach(_titleToTip);
+    }
+  }
+}).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
+document.addEventListener('mousemove', e => {
+  if (!_tipOwner) return;
+  if (!_tipOwner.isConnected) { hideTip(); return; }
+  placeTipAt(e);
+});
+document.addEventListener('mouseout', e => {
+  if (_tipOwner && !(e.relatedTarget && _tipOwner.contains(e.relatedTarget))) hideTip();
+});
+// A click hides the tip (the row under it may be re-rendered away).
+document.addEventListener('pointerdown', () => hideTip(), true);
 document.getElementById('rot-reset').addEventListener('click',()=>{
   pitch=yaw=roll=0;
   ['pitch','yaw','roll'].forEach(a=>{document.getElementById(a+'-slider').value=0;document.getElementById(a+'-val').textContent='0°';});
@@ -3509,9 +4513,9 @@ document.getElementById('rot-reset').addEventListener('click',()=>{
 });
 document.getElementById('radius-slider').addEventListener('input',e=>{
   radius=+e.target.value;updateRadiusLabel();
-  if(gridIdx&&gridIdx.cs!==radius&&radius<radiusMaxMm)gridIdx=new GridIndex(allPts,radius);
+  if(probeOn&&gridIdx&&gridIdx.cs!==radius&&radius<radiusMaxMm)gridIdx=new GridIndex(allPts,radius);
   updateProbeGap();
-  updateProbe();
+  updateProbe({ probeOnly: true }); // (to or from ALL: updateProbe rebuilds anyway)
   updateSlicesA();
 });
 document.getElementById('brain-alpha-slider').addEventListener('input',e=>{
@@ -3564,12 +4568,26 @@ function updateProbeGap() {
   // being bypassed rather than actually drawn. vol-renderer.js's own
   // shader convention is u_probeRadius<0 => ring off (see SLICE_FS), so
   // match that exactly rather than inventing a second "off" value.
-  vr.setProbeRadius(radius >= radiusMaxMm ? -1 : radius / p.mm_per_px);
+  vr.setProbeRadius(probeBypassed() ? -1 : radius / p.mm_per_px);
 }
+// probe: off | select | highlight — off switches the probe off, keeping
+// the last mode for when it's switched on again.
+document.querySelectorAll('input[name="probe-mode"]').forEach(r => r.addEventListener('change', () => {
+  if (r.value === 'off') { setProbeOn(false); return; }
+  const wasOn = probeOn;
+  setProbeMode(r.value, { update: wasOn });
+  if (!wasOn) setProbeOn(true);
+}));
+document.getElementById('context-slider').addEventListener('input', e => {
+  probeContext = +e.target.value / 100;
+  document.getElementById('context-val').textContent = e.target.value + '%';
+  restyleFiles();
+  bundleChanged();
+});
 document.querySelectorAll('input[name="probe-select"]').forEach(r=>{
   r.addEventListener('change', ()=>{
     probeEndsOnly = r.value === 'ends';
-    updateProbe();
+    updateProbe({ probeOnly: true });
   });
 });
 document.getElementById('slab-slider').addEventListener('input',e=>{
@@ -4121,49 +5139,39 @@ function buildLutSettings(lut, el) {
   }, 'remove this lookup table'));
 }
 
-// First row under "Streamline bundles": select [all] [none] · header,
-// and — once any data fields are attached — "color all by [field]",
-// which picks that field (by name) in every bundle that has it.
+// First row under "Streamline bundles": the same on/off checkbox and focus
+// icon as the bundle rows, applying to all bundles — each shows on, off or
+// mixed (some on); a click switches all on (or, when all are on, all off).
+// Plus the tractogram header(s).
 function makeStreamlineToolbar() {
   return new ToolbarItem((_, bar) => {
-    const lbl = document.createElement('span');
-    lbl.className = 'dt-toolbar-lbl';
-    lbl.textContent = 'select';
-    const setAll = on => {
+    const nVis = groups.filter(g => g.visible).length;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'dt-check';
+    cb.checked = nVis === groups.length;
+    cb.indeterminate = nVis > 0 && nVis < groups.length;
+    cb.title = 'switch all bundles on (all on: all off)';
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const on = nVis < groups.length;
       for (const g of groups) if (g.item && g.item.visible !== on) g.item.visible = on;
       dataStore.refresh();
-    };
+    });
+    const nFoc = groups.filter(g => g.focus).length;
+    const allFoc = nFoc === groups.length;
+    const fb = makeFocusButton(allFoc, () => {
+      const on = !allFoc;
+      for (const g of groups) g.focus = on;
+      focusChanged();
+    }, allFoc ? 'all bundles focused — click: dim all' : 'focus all bundles (draw all solid)');
+    if (!allFoc && nFoc > 0) fb.classList.add('mixed');
+    const lbl = document.createElement('span');
+    lbl.className = 'dt-toolbar-lbl';
+    lbl.textContent = 'apply to all';
     const spacer = document.createElement('span');
     spacer.style.flex = '1';
-    bar.append(lbl,
-      makeSettingsButton('all', () => setAll(true), 'switch all bundles on'),
-      makeSettingsButton('none', () => setAll(false), 'switch all bundles off'),
-      spacer,
+    bar.append(cb, fb, lbl, spacer,
       makeSettingsButton('header', () => showTrckHeaderPanel(), trckParents.length > 1 ? 'headers of all streamline files' : 'tractogram header'));
-    const names = [...new Set(dqzChildRecords.filter(r => r.status === 'matched').map(fieldName))];
-    if (names.length && groups.length > 1) {
-      // Current choice: the one field name all colored bundles use, as
-      // long as every bundle that has a field of that name uses it; no
-      // colored bundle: none; anything else: mixed.
-      const active = new Set(groups.filter(g => g.activeField).map(g => fieldName(g.activeField)));
-      const hasField = (g, n) => dqzChildRecords.some(r => r.status === 'matched' && r.parent === g.source && fieldName(r) === n);
-      const current = active.size === 0 ? ''
-        : active.size === 1 && groups.every(g => !hasField(g, [...active][0]) || (g.activeField && fieldName(g.activeField) === [...active][0]))
-          ? [...active][0] : null; // null: mixed
-      const opts = [['', 'none'], ...names.map(n => [n, n])];
-      if (current === null) opts.unshift(['*', '(mixed)']);
-      const row = makeChoiceRow('color all by', opts, current === null ? '*' : current, value => {
-        if (value === '*') return;
-        for (const g of groups) {
-          g.activeField = value ? dqzChildRecords.find(r => r.status === 'matched' && r.parent === g.source && fieldName(r) === value) || null : null;
-          if (g.activeField) { fieldNormValues(g.activeField); writeFieldColormapRow(g); }
-        }
-        rebuildDqzChildItems();
-        updateProbe();
-      }, 'color every bundle by the data field of this name (bundles without it: none)');
-      row.classList.add('dt-toolbar-choice');
-      bar.appendChild(row);
-    }
   });
 }
 
@@ -4188,24 +5196,73 @@ function registerTrckItem() {
     };
     // updateProbe() rebuilds selMesh/dots from bundlePaletteRGB, so
     // changing the group's color array in place is enough to recolor it.
-    bi.onColorChange = (_, hex) => {
-      g.color = hexToRgbRaw(hex);
-      bundlePaletteRGB[groups.indexOf(g)] = g.color;
-      updateProbe();
-    };
-    bi.buildSettings = (_, el) => {
-      buildFileStyleSettings(g, el);
-      buildSplitSettings(g.source, el);
-      buildFieldSettings(g, el);
-      el.appendChild(makeSettingsButton('show header', () =>
-        showHeaderPanel('TRACTS HEADER · ' + g.source.name, JSON.stringify(g.source.header, null, 2))));
-    };
+    bi.onColorChange = (_, hex) => setBundleColor(g, hex, false);
+    // DATA panel: the focus icon adds to / removes from the focused set.
+    if (g.focus === undefined) g.focus = true; // new bundles start focused (solid)
+    bi.focused = !!g.focus;
+    bi.onFocusToggle = () => toggleFocus(g);
+    bi.onInfo = () => showBundleHeader(g);
+    bi.infoTitle = 'header of ' + g.source.name;
+    // Only a bundle with data files has a menu (checked at each render).
+    const build = (_, el) => buildBundleSettings(g, el);
+    Object.defineProperty(bi, 'buildSettings', { get: () => hasBundleSettings(g) ? build : null, set() {}, configurable: true });
     proxySettingsOpen(bi, g);
     return bi;
   });
   dataStore.streamlineToolbar = makeStreamlineToolbar();
   dataStore.setStreamlines(rows);
   rebuildDqzChildItems();
+  bundleChanged();
+}
+
+// A bundle's settings — the same in its DATA panel row and in its 3D card
+// (hover a bundle's ends, then »): split by, color·by (only with data files;
+// see hasBundleSettings). The state lives on the group, so both stay in step (see
+// bundleChanged).
+function buildBundleSettings(g, el) {
+  buildSplitSettings(g.source, el);
+  buildFieldSettings(g, el);
+}
+// The data fields (matched .dqz children) of streamline file p.
+const fieldRecsOf = p => dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p.source);
+// Does bundle g have a settings menu at all (split by / color·by)? A bundle
+// without data files has none: no », no card, no DATA row menu.
+const hasBundleSettings = g => splitCandidates(g.source).length > 0 || fieldRecsOf(g).length > 0;
+// A bundle's file header (the info icon before its color swatch).
+function showBundleHeader(g) {
+  showHeaderPanel('TRACTS HEADER · ' + g.source.name, JSON.stringify(g.source.header, null, 2));
+}
+// FOCUS: every bundle has a sun icon — lit: drawn solid (focused), unlit:
+// dimmed (SETTINGS › dimming). All bundles start focused. The sun is a
+// plain on/off toggle everywhere (DATA row, 3D label and card); the 3D
+// label and card also have the spotlight, "focus only this" (soloFocus).
+function toggleFocus(g) {
+  g.focus = !g.focus;
+  focusChanged();
+}
+// Is g the only focused (visible) bundle?
+const isSoloFocus = g => g.focus && groups.every(x => x === g || !x.visible || !x.focus);
+// The 3D label/card's spotlight, "focus only this": g alone focused; when
+// it already is, all focused again.
+function soloFocus(g) {
+  if (isSoloFocus(g)) for (const x of groups) x.focus = true;
+  else { for (const x of groups) x.focus = false; g.focus = true; }
+  focusChanged();
+}
+// A bundle's color, from its DATA swatch or its 3D label/card swatch.
+function setBundleColor(g, hex, refreshTree = true) {
+  g.color = hexToRgbRaw(hex);
+  bundlePaletteRGB[groups.indexOf(g)] = g.color;
+  if (g.item) g.item.colorHex = hex;
+  updateProbe();
+  if (refreshTree) dataStore.refresh();
+  bundleChanged();
+}
+function focusChanged() {
+  for (const g of groups) if (g.item) g.item.focused = !!g.focus;
+  updateProbe();
+  dataStore.refresh();
+  bundleChanged();
 }
 
 // "split by [none | field]" for streamline file p: turn one file into a
@@ -4341,63 +5398,49 @@ const fieldName = rec => (rec.header && rec.header.name) || rec.file.name;
 // its file as a plain list — a radio per field picks the one that colors
 // this bundle's streamlines (click the active one again for none) —
 // followed by the active field's colormap and APPLY FROM/TO window.
+// "color·by [--- | data field]" for bundle p — its file's matched .dqz
+// data fields — with, once one is chosen, its helpers indented below it
+// (as in the markers' COLOR·BY): map (the colormap), from and to (the
+// window; the parts outside it are dimmed). Left out when the file has
+// no data fields.
 function buildFieldSettings(p, el) {
-  const recs = dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p.source);
+  const recs = fieldRecsOf(p);
   if (!recs.length) return;
-  const box = document.createElement('div');
-  box.className = 'dt-fields';
-  const title = document.createElement('div');
-  title.className = 'dt-fields-title';
-  title.textContent = 'DATA';
-  box.appendChild(title);
-  const group = 'dt-field-' + groups.indexOf(p);
-  for (const rec of recs) {
-    const h = rec.header;
-    const line = document.createElement('label');
-    line.className = 'dt-field-line';
-    line.title = [h.name, h.description, rec.file.name,
-                  (h.scope === 'per_vertex' ? 'per-vertex' : 'per-streamline') + ' · ' + h.kind + (parseFieldLegend(h) ? ' · legend' : '')]
-                 .filter(Boolean).join('\n') + '\n(click to color streamlines by this field; click again to turn off)';
-    const radio = document.createElement('input');
-    radio.type = 'radio'; radio.name = group; radio.className = 'dt-radio';
-    radio.checked = p.activeField === rec;
-    // Handled on click, not change: clicking the active field turns it off.
-    radio.addEventListener('click', e => { e.stopPropagation(); setActiveField(p, p.activeField === rec ? null : rec); });
-    const name = document.createElement('span');
-    name.className = 'dt-field-name';
-    name.textContent = fieldName(rec);
-    const tag = document.createElement('span');
-    tag.className = 'dt-tag';
-    tag.textContent = h.kind; // scope and legend are in the tooltip
-    const hdr = makeSettingsButton('hdr', () => showDqzChildHeaderPanel(rec), 'show this data file\'s header');
-    line.append(radio, name, tag, hdr);
-    box.appendChild(line);
-  }
-  el.appendChild(box);
-  if (p.activeField) {
-    el.appendChild(makeColormapPicker(p.activeField));
-    for (const r of makeFieldWindowRows(p.activeField)) el.appendChild(r);
-  }
+  const label = r => fieldName(r) + ' (' + r.header.kind + ')';
+  const row = makeChoiceRow('color·by', [['', '---'], ...recs.map((r, i) => [String(i), label(r)])],
+    p.activeField ? String(recs.indexOf(p.activeField)) : '',
+    v => setActiveField(p, v === '' ? null : recs[+v]));
+  attachTip(row, 'Color the streamlines by one of their data fields (.dqz), with a colormap over its from–to window; the parts outside the window are dimmed. --- : the normal line color.');
+  const rec = p.activeField;
+  if (rec) row.appendChild(makeInfoButton(() => showDqzChildHeaderPanel(rec), 'header of ' + rec.file.name));
+  el.appendChild(row);
+  if (!rec) return;
+  const helper = (r, tip) => { r.classList.add('dt-helper'); if (tip) attachTip(r, tip); el.appendChild(r); };
+  helper(makeColormapPicker(rec), 'The colormap, spread over the from–to window.');
+  const [fr, to] = makeFieldWindowRows(rec);
+  helper(fr, 'Value at the start of the colormap. Parts of the streamlines outside from–to are dimmed (SETTINGS › dimming). to < from reverses the colormap. Drag, or click to type.');
+  helper(to, 'Value at the end of the colormap. Drag, or click to type.');
 }
 
 // Makes `rec` (or nothing, for null) the field that colors parent file
 // p's streamlines, then rebuilds the streamline mesh. At most one field
 // per geometry file; files without one keep the global LINE·COLOR mode.
 // ── Per-file streamline style (FILE panel) ───────────────────
-// p.style = { width: null (= follow the global WIDTH slider) | px,
-//             opacity: 0..1 } for each loaded streamline file. Opacity
-// applies to the file's NON-highlighted parts (normal LINE·COLOR color):
-// 1 = opaque as always, <1 = drawn in the faint (translucent) pass, 0 =
-// not drawn. Parts inside the active data field's window are always drawn
-// opaque in the colormap. All of it lives in fileStyleTex, so sliders
-// only rewrite a texel and redraw — no streamline rebuild.
+// Per-file style for each loaded streamline file. It lives in fileStyleTex
+// together with the active data field's window, so sliders only rewrite a
+// texel and redraw — no streamline rebuild. (Line width is global, SETTINGS
+// › line·width; the per-bundle width multiplier was dropped: with flat
+// ribbons it added little.) (Opacity isn't per file: what is dimmed — the
+// parts outside a field's window, the probe highlight's and the focus's
+// context — uses SETTINGS › dimming; see FIELD_COLOR_GLSL.)
 function fileStyle(p) {
-  return p.style || (p.style = { width: null, opacity: 1 });
+  return p.style || (p.style = {});
 }
-const fileWidth = p => fileStyle(p).width ?? lineWidthPx;
+const fileWidth = () => lineWidthPx * _shotScale; // (larger while a scaled screenshot renders)
 // Any file drawn below full opacity? If not, the faint (translucent) pass
 // is skipped entirely, in 3D and in the 2D slab panels.
-const anyFaint = () => groups.some(g => fileStyle(g).opacity < 0.999);
+// (In probe highlight mode the context lines are translucent too.)
+const anyFaint = () => (highlightActive() || groups.some(g => g.activeField)) && probeContext < 0.999;
 
 // The streamline mesh's two materials, created once and reused by every
 // rebuild (see makeRibbonLines' styleInfo.materials).
@@ -4409,13 +5452,64 @@ function writeFileStyles() {
   groups.forEach((p, i) => {
     const st = fileStyle(p);
     const [lo, hi] = p.activeField ? fieldWindowNorm(p.activeField) : [0, 1];
-    setFileStyle(fileStyleTex, i, fileWidth(p), st.opacity, lo, hi);
+    setFileStyle(fileStyleTex, i, fileWidth(p), 1, lo, hi);
   });
 }
 function restyleFiles() {
   writeFileStyles();
+  syncContextUniform();
   setRibbonFaintMode(selMesh, anyFaint());
+  updateRibbonDensity();
+  // A file crossing 100% opacity gains or loses its end dots.
+  if (faintKey() !== _dotsFaintKey || groups.some(g => g.activeField)) rebuildDots(); // dots follow the field windows
   redrawAll();
+  bundleChanged();
+}
+// Translucent files: no end dots (they'd sit on top of lines you are
+// trying to look through), and density-compensated opacity — see
+// computeRibbonDensity in scene3d.js.
+// In probe highlight mode: context lines are translucent (whatever their
+// file's opacity), only highlighted lines get end dots.
+// Dimmed lines and parts (probe highlight / focus context, the parts of a
+// data-colored line outside its color window) are translucent, get the
+// density correction, and have no end dots.
+const isFaintFile = g => highlightActive() || !!g.activeField;
+const faintKey = () => (_renderHighlight ? 'h' : '') + groups.map(g => g.activeField ? 1 : 0).join('');
+let _dotsFaintKey = '';
+let _lastFieldInfo = null;   // the last build's buildFieldInfo (per rendered streamline)
+function dotsSkip() {
+  _dotsFaintKey = faintKey();
+  const idx = _lastRenderFileIdx, hl = _renderHighlight, fi = _lastFieldInfo;
+  if (!idx || (!hl && !fi)) return null;
+  // Per file: its field window in normalized values, or null.
+  const win = groups.map(g => {
+    if (!g.activeField) return null;
+    const [a, b] = fieldWindowNorm(g.activeField);
+    return [Math.min(a, b) - 1e-4, Math.max(a, b) + 1e-4];
+  });
+  const outside = (v, w) => Number.isFinite(v) && (v < w[0] || v > w[1]);
+  return i => {
+    if (hl && !hl[i]) return 3;
+    const w = win[idx[i]], v = fi && fi.perTract[i];
+    if (!w || v == null) return 0;
+    if (typeof v === 'number') return outside(v, w) ? 3 : 0;
+    return (outside(v[0], w) ? 1 : 0) | (outside(v[v.length - 1], w) ? 2 : 0);
+  };
+}
+// The density voxel scales with the data, like the probe radius: 1/100
+// of the tractogram's diameter (about 1.5 mm for a human brain, 0.1 mm
+// for a mouse).
+function densityVoxelMm() {
+  const d = lastTrckBoxRadius > 0 ? 2 * lastTrckBoxRadius : 0;
+  return d > 0 ? d / 100 : 0;
+}
+function updateRibbonDensity() {
+  if (!selMesh) return;
+  const files = [];
+  groups.forEach((g, i) => { if (isFaintFile(g)) files.push(i); });
+  if (!files.length) return;
+  computeRibbonDensity(selMesh, files, densityVoxelMm());
+  if (_ctx2D && _ctx2D !== 'same') computeRibbonDensity(_ctx2D, files, densityVoxelMm());
 }
 
 // One "LABEL [value field]" row for an inline settings area. The field is
@@ -4428,7 +5522,7 @@ function restyleFiles() {
 // Typed values are clamped to [min, max]. format(v) gives the display
 // text; parse(text) reads typed text back (default: the first number in
 // it, so "40%" or "2.0 px" work too) and returns NaN for nonsense.
-function makeSliderRow(label, { min, max, step, value, format, onInput, parse = null }) {
+function makeSliderRow(label, { min, max, step, value, format, onInput, parse = null, editText = null }) {
   const row = document.createElement('div');
   row.className = 'ctl-row dt-slider-row';
   const lbl = document.createElement('label'); lbl.textContent = label;
@@ -4496,7 +5590,7 @@ function makeSliderRow(label, { min, max, step, value, format, onInput, parse = 
     editing = true;
     field.classList.add('dt-editing');
     input.readOnly = false;
-    input.value = String(+(+value).toPrecision(6));
+    input.value = editText ? editText(value) : String(+(+value).toPrecision(6));
     input.focus();
     input.select();
   }
@@ -4524,26 +5618,16 @@ function makeSliderRow(label, { min, max, step, value, format, onInput, parse = 
   return row;
 }
 
-// WIDTH + OPACITY for streamline file p (single tractogram or one bundle).
-function buildFileStyleSettings(p, el) {
-  const st = fileStyle(p);
-  el.appendChild(makeSliderRow('WIDTH', {
-    min: 0, max: 10, step: 0.5, value: fileWidth(p),
-    format: v => v.toFixed(1) + ' px' + (st.width === null ? ' ·global' : ''),
-    onInput: v => { st.width = v; restyleFiles(); },
-  }));
-  el.appendChild(makeSliderRow('OPACITY', {
-    min: 0, max: 100, step: 1, value: Math.round(st.opacity * 100),
-    format: v => v + '%',
-    onInput: v => { st.opacity = v / 100; restyleFiles(); },
-  }));
-}
-
 function setActiveField(p, rec) {
   p.activeField = rec;
   if (rec) { fieldNormValues(rec); writeFieldColormapRow(p); } // not mid-rebuild
   rebuildDqzChildItems();          // radio states
   updateProbe();
+  // The open card gets its helper rows now — not only once its controls
+  // are released (the pulldown's change can come before that).
+  _cardBusy = false;
+  bundleChanged();
+  dataStore.refresh();
 }
 
 // ── Field colormaps ─────────────────────────────────────────
@@ -4713,6 +5797,7 @@ function writeFieldColormapRow(p) {
 // legend and a continuous map) do the streamline meshes get rebuilt.
 function setFieldColormap(rec, ref) {
   rec.colormap = ref;
+  _cardBusy = false; // the card shows the new swatch
   const using = groups.filter(g => g.activeField === rec);
   if (using.length) {
     const before = rec.normKey;
@@ -4721,15 +5806,15 @@ function setFieldColormap(rec, ref) {
     if (rec.normKey !== before) updateProbe(); else restyleFiles(); // window's normalized form can change too
   }
   rebuildDqzChildItems(); // refresh the preview swatch
+  bundleChanged();
 }
 
 // "colormap [select] [swatch]" for a field's inline settings area.
 function makeColormapPicker(rec) {
-  const wrap = document.createElement('span');
-  wrap.className = 'dt-cmap';
-  const lbl = document.createElement('span');
-  lbl.className = 'dt-cmap-lbl';
-  lbl.textContent = 'colormap';
+  const wrap = document.createElement('div');
+  wrap.className = 'dt-choice dt-cmap';
+  const lbl = document.createElement('label');
+  lbl.textContent = 'map';
   const sel = document.createElement('select');
   sel.className = 'inline-select';
   const choices = fieldColormapChoices(rec), cur = fieldColormap(rec);
@@ -4748,6 +5833,7 @@ function makeColormapPicker(rec) {
   sw.className = 'dt-cmap-swatch';
   rec._swatch = sw;
   updateFieldSwatch(rec);
+  sel.style.flex = '0 0 auto';
   wrap.append(lbl, sel, sw);
   return wrap;
 }
@@ -4781,8 +5867,8 @@ function makeFieldWindowRows(rec) {
     if (groups.some(g => g.activeField === rec)) restyleFiles();
   };
   return [
-    makeSliderRow('APPLY FROM', { min: lo, max: hi, step, value: win[0], format: fmt, onInput: v => { win[0] = v; onChange(); } }),
-    makeSliderRow('APPLY TO',   { min: lo, max: hi, step, value: win[1], format: fmt, onInput: v => { win[1] = v; onChange(); } }),
+    makeSliderRow('from', { min: lo, max: hi, step, value: win[0], format: fmt, onInput: v => { win[0] = v; onChange(); } }),
+    makeSliderRow('to',   { min: lo, max: hi, step, value: win[1], format: fmt, onInput: v => { win[1] = v; onChange(); } }),
   ];
 }
 
@@ -4883,17 +5969,31 @@ function addMarkerFiles(list) {
 
 // (Re)builds a markers file's 3D meshes from its current style.
 function buildMarkerGroup(rec) {
-  let material = null;
-  if (rec.group) { material = rec.group.userData.material; scene.remove(rec.group); disposeMarkerGroup(rec.group, true); }
-  rec.mask = markerFilterMask(rec.set, rec.filters);
-  const resolved = resolveMarkerStyle(rec.set, rec.style, markerColormap(rec.style.colormap), rec.mask);
-  rec.group = makeMarkerGroup(rec.set, resolved, material);
+  let materials = null;
+  if (rec.group) { materials = rec.group.userData; scene.remove(rec.group); disposeMarkerGroup(rec.group, true); }
+  // rec.overlay: temporary choices made in a marker's pinned card (see the
+  // marker card below) on top of the settings; they end when the card closes.
+  const ov = rec.overlay;
+  const style = ov && ov.color_by ? { ...rec.style, color_by: ov.color_by, window: undefined } : rec.style;
+  const filters = ov && ov.filters.length ? [...rec.filters, ...ov.filters] : rec.filters;
+  rec.mask = markerFilterMask(rec.set, filters);
+  const resolved = resolveMarkerStyle(rec.set, style, markerColormap(style.colormap), rec.mask);
+  if (ov && ov.highlight) {
+    // Highlight a category: the markers with another value are dimmed.
+    const vals = rec.set.markers.values[ov.highlight.prop] || [];
+    resolved.dim = Uint8Array.from({ length: rec.set.markers.n }, (_, i) => (vals[i] === ov.highlight.value ? 0 : 1));
+  }
+  rec.resolved = resolved;
+  rec.group = makeMarkerGroup(rec.set, resolved, materials && { material: materials.material, baseMaterial: materials.baseMaterial });
+  setMarkerHover(rec.group, markerHover && markerHover.rec === rec ? markerHover.index : null);
   rec.group.visible = rec.visible;
   setMarkerDisplay(rec.group, rec);
   scene.add(rec.group);
 }
 
 function removeMarkerSet(rec, refresh = true) {
+  if (markerCard && markerCard.rec === rec) closeMarkerCard(false);
+  if (markerHover && markerHover.rec === rec) markerHover = null;
   if (rec.group) { scene.remove(rec.group); disposeMarkerGroup(rec.group); rec.group = null; }
   markerSets = markerSets.filter(m => m !== rec);
   if (refresh) { registerMarkerItems(); render3D(); }
@@ -4920,11 +6020,6 @@ function registerMarkerItems() {
     };
     item.buildSettings = (_, el) => {
       buildMarkerStyleSettings(rec, el);
-      el.appendChild(makeSliderRow('OPACITY', {
-        min: 0, max: 100, step: 1, value: Math.round(rec.opacity * 100),
-        format: v => v + '%',
-        onInput: v => { rec.opacity = v / 100; setMarkerDisplay(rec.group, rec); render3D(); },
-      }));
       buildMarkerFilterSettings(rec, el);
       el.appendChild(makeSettingsButton('reset', () => {
         rec.style = { ...rec.set.style.markers };
@@ -4951,21 +6046,24 @@ function buildMarkerStyleSettings(rec, el) {
   const isNumeric = p => p && (p.type === 'number' || p.type === 'integer');
   const restyle = (relayout = false) => { buildMarkerGroup(rec); render3D(); if (relayout) dataStore.refresh(); };
   const propLabel = p => p.name + (p.type === 'categorical' ? '' : ' (' + p.type + ')');
+  // A "by" choice, and its helper settings indented below it.
+  const main = (row, tip) => { attachTip(row, tip); el.appendChild(row); return row; };
+  const helper = (row, tip) => { row.classList.add('dt-helper'); attachTip(row, tip); el.appendChild(row); return row; };
 
-  // ── color
+  // ── color by
   const colorable = props.filter(p => p.type !== 'text');
   const colorProp = set.props.get(st.color_by) || null;
-  el.appendChild(makeChoiceRow('color by', [['', '---'], ...colorable.map(p => [p.name, propLabel(p)])],
+  main(makeChoiceRow('COLOR·BY', [['', '---'], ...colorable.map(p => [p.name, propLabel(p)])],
     colorProp ? colorProp.name : '', v => {
       if (v) st.color_by = v; else delete st.color_by;
       delete st.window; // a new property: its own full range
       restyle(true);
-    }));
-  if (!colorProp) {
+    }), 'What the marker color shows: a category (its legend colors) or a number (a colormap). --- : all markers in the base color.');
+  {
     const row = document.createElement('div');
     row.className = 'dt-choice';
     const lab = document.createElement('label');
-    lab.textContent = 'color';
+    lab.textContent = 'base';
     const pick = document.createElement('input');
     pick.type = 'color';
     pick.className = 'dt-color';
@@ -4977,17 +6075,24 @@ function buildMarkerStyleSettings(rec, el) {
       restyle();
     });
     row.append(lab, pick);
-    el.appendChild(row);
-  } else if (isNumeric(colorProp)) {
-    const cmapId = BUILTIN_COLORMAPS[st.colormap] ? st.colormap : 'viridis';
+    helper(row, !colorProp ? 'Color of all markers.'
+      : isNumeric(colorProp) ? 'Color of the markers outside the from–to window, and of those without a value.'
+      : 'Color of the markers without a value.');
+  }
+  if (!colorProp || isNumeric(colorProp)) helper(makeSliderRow('opacity', {
+    min: 0, max: 100, step: 1, value: Math.round(rec.opacity * 100),
+    format: v => v + '%',
+    onInput: v => { rec.opacity = v / 100; setMarkerDisplay(rec.group, rec); render3D(); },
+  }), 'Opacity of the markers in the base color (and of those without a value). Colored markers stay opaque — lower it to make them stand out. 0: base-colored markers are hidden.');
+
+  if (isNumeric(colorProp)) {
     const [lo, hi] = propertyRange(colorProp);
     if (!Array.isArray(st.window)) st.window = [lo, hi];
     const win = st.window;
-    const wrap = document.createElement('span');
-    wrap.className = 'dt-cmap';
-    const lbl = document.createElement('span');
-    lbl.className = 'dt-cmap-lbl';
-    lbl.textContent = 'colormap';
+    const wrap = document.createElement('div');
+    wrap.className = 'dt-choice';
+    const lbl = document.createElement('label');
+    lbl.textContent = 'map';
     const sel = document.createElement('select');
     sel.className = 'inline-select';
     for (const [id, def] of Object.entries(BUILTIN_COLORMAPS)) {
@@ -4995,7 +6100,8 @@ function buildMarkerStyleSettings(rec, el) {
       o.value = id; o.textContent = def.name;
       sel.appendChild(o);
     }
-    sel.value = cmapId;
+    sel.value = BUILTIN_COLORMAPS[st.colormap] ? st.colormap : 'viridis';
+    sel.style.flex = '0 0 auto';
     const sw = document.createElement('span');
     sw.className = 'dt-cmap-swatch';
     const paintSwatch = () => {
@@ -5007,36 +6113,39 @@ function buildMarkerStyleSettings(rec, el) {
     sel.addEventListener('change', () => { st.colormap = sel.value; paintSwatch(); restyle(); });
     paintSwatch();
     wrap.append(lbl, sel, sw);
-    el.appendChild(wrap);
+    helper(wrap, 'The colormap, spread over the from–to window.');
     const step = colorProp.type === 'integer' ? 1 : (hi - lo) / 500 || 1;
     const fmt = v => String(+v.toPrecision(4)) + (colorProp.unit ? ' ' + colorProp.unit : '');
-    el.appendChild(makeSliderRow('APPLY FROM', { min: lo, max: hi, step, value: win[0], format: fmt,
-      onInput: v => { win[0] = v; paintSwatch(); restyle(); } }));
-    el.appendChild(makeSliderRow('APPLY TO', { min: lo, max: hi, step, value: win[1], format: fmt,
-      onInput: v => { win[1] = v; paintSwatch(); restyle(); } }));
+    helper(makeSliderRow('from', { min: lo, max: hi, step, value: win[0], format: fmt,
+      onInput: v => { win[0] = v; paintSwatch(); restyle(); } }),
+      'Value at the start of the colormap. Markers outside from–to keep the base color. to < from reverses the colormap. Drag, or click to type.');
+    helper(makeSliderRow('to', { min: lo, max: hi, step, value: win[1], format: fmt,
+      onInput: v => { win[1] = v; paintSwatch(); restyle(); } }),
+      'Value at the end of the colormap. Drag, or click to type.');
   }
-
-  // ── shape
-  const shapeProps = props.filter(p => p.type === 'categorical');
+  // ── shape by
+  // Only properties that can actually change the shape / size (see
+  // hasShapes / hasSizes in markers-io.js) — plus the current choice.
+  const shapeProps = props.filter(p => p.type === 'categorical' && (p.hasShapes || p.name === st.shape_by));
   const shapeProp = set.props.get(st.shape_by) || null;
-  if (shapeProps.length) {
-    el.appendChild(makeChoiceRow('shape by', [['', '---'], ...shapeProps.map(p => [p.name, p.name])],
-      shapeProp ? shapeProp.name : '', v => { if (v) st.shape_by = v; else delete st.shape_by; restyle(true); }));
-  }
+  main(makeChoiceRow('SHAPE·BY', [['', '---'], ...shapeProps.map(p => [p.name, p.name])],
+    shapeProp ? shapeProp.name : '', v => { if (v) st.shape_by = v; else delete st.shape_by; restyle(true); }),
+    'What the marker shape shows: a category (shapes from its legend, or automatic for 2–4 values). --- : one shape for all.');
   if (!shapeProp) {
-    el.appendChild(makeChoiceRow('shape', MARKER_SHAPES.map(s => [s, s]),
-      MARKER_SHAPES.includes(st.shape) ? st.shape : 'sphere', v => { st.shape = v; restyle(); }));
+    helper(makeChoiceRow('shape', MARKER_SHAPES.map(s => [s, s]),
+      MARKER_SHAPES.includes(st.shape) ? st.shape : 'sphere', v => { st.shape = v; restyle(); }),
+      'The shape of all markers.');
   }
 
-  // ── size
-  const sizeProps = props.filter(p => p.type !== 'text');
+  // ── size by
+  const sizeProps = props.filter(p => isNumeric(p) || (p.type === 'categorical' && (p.hasSizes || p.name === st.size_by)));
   const sizeProp = set.props.get(st.size_by) || null;
   const spec = sizeSpec(st, 'size');
   const setSize = (unit, min, max) => {
     delete st.size_mm; delete st.size_px;
     st['size_' + unit] = min === max ? min : [min, max];
   };
-  el.appendChild(makeChoiceRow('size by', [['', '---'], ...sizeProps.map(p => [p.name, propLabel(p)])],
+  main(makeChoiceRow('SIZE·BY', [['', '---'], ...sizeProps.map(p => [p.name, propLabel(p)])],
     sizeProp ? sizeProp.name : '', v => {
       if (v) st.size_by = v; else delete st.size_by;
       const p = set.props.get(v);
@@ -5044,25 +6153,593 @@ function buildMarkerStyleSettings(rec, el) {
       if (isNumeric(p) && spec.min === spec.max) setSize(spec.unit, spec.max / 2, spec.max);
       else if (!isNumeric(p) && spec.min !== spec.max) setSize(spec.unit, spec.max, spec.max);
       restyle(true);
-    }));
-  el.appendChild(makeChoiceRow('size in', [['px', 'screen pixels'], ['mm', 'mm (brain)']], spec.unit, v => {
+    }), 'What the marker size shows: a number (from min to max), or a category with sizes in its legend (or an ordered one). --- : one size for all.');
+  helper(makeChoiceRow('unit', [['px', 'screen pixels'], ['mm', 'mm (brain)']], spec.unit, v => {
     const lim = v === 'px' ? [1, 60] : [0.1, 30];
     const c = x => Math.max(lim[0], Math.min(lim[1], x));
     setSize(v, c(spec.min), c(spec.max));
     restyle(true);
-  }, 'pixels: the same size at any zoom; mm: a real size in the brain'));
+  }), 'Screen pixels: the same size at any zoom. mm: a real size in the brain, growing as you zoom in.');
   const [smin, smax, sstep] = spec.unit === 'px' ? [1, 60, 0.5] : [0.1, 30, 0.1];
   const sfmt = v => String(+v.toFixed(2)) + ' ' + spec.unit;
   if (isNumeric(sizeProp)) {
-    el.appendChild(makeSliderRow('SIZE MIN', { min: smin, max: smax, step: sstep, value: spec.min, format: sfmt,
-      onInput: v => { spec.min = v; setSize(spec.unit, spec.min, spec.max); restyle(); } }));
-    el.appendChild(makeSliderRow('SIZE MAX', { min: smin, max: smax, step: sstep, value: spec.max, format: sfmt,
-      onInput: v => { spec.max = v; setSize(spec.unit, spec.min, spec.max); restyle(); } }));
+    helper(makeSliderRow('min', { min: smin, max: smax, step: sstep, value: spec.min, format: sfmt,
+      onInput: v => { spec.min = v; setSize(spec.unit, spec.min, spec.max); restyle(); } }),
+      'Size of the markers with the lowest value.');
+    helper(makeSliderRow('max', { min: smin, max: smax, step: sstep, value: spec.max, format: sfmt,
+      onInput: v => { spec.max = v; setSize(spec.unit, spec.min, spec.max); restyle(); } }),
+      'Size of the markers with the highest value.');
   } else {
-    el.appendChild(makeSliderRow('SIZE', { min: smin, max: smax, step: sstep, value: spec.max, format: sfmt,
-      onInput: v => { setSize(spec.unit, v, v); restyle(); } }));
+    helper(makeSliderRow(sizeProp ? 'max' : 'size', { min: smin, max: smax, step: sstep, value: spec.max, format: sfmt,
+      onInput: v => { setSize(spec.unit, v, v); restyle(); } }),
+      sizeProp ? 'Size of the largest category; the legend gives the others as a fraction of it.' : 'Size of all markers.');
   }
 }
+
+// ── Marker hover and card ─────────────────────────────────
+// Hovering a marker enlarges it and shows a small label (id + the value
+// it's colored by) with » to open the full card. Clicking a marker (or »)
+// pins the card: every property, and per row an action that is TEMPORARY
+// — it lasts while the card is open (rec.overlay):
+//   category row: color by it, and dim the markers with another value;
+//   number row:   color by it (colormap bar with this marker's position);
+//   "only":       show only markers with this value.
+// "keep" turns the coloring and "only" conditions into regular settings.
+let markerHover = null;   // { rec, index } under the mouse
+let markerCard = null;    // { rec, index, el } — the pinned card
+const markerTipEl = document.createElement('div');
+markerTipEl.className = 'hover-tip';
+document.getElementById('middle').appendChild(markerTipEl);
+
+// The marker under a screen point: the one whose on-screen disc contains
+// it, nearest to the camera. Projects every visible marker — a few
+// thousand is well under a millisecond.
+const _pickM = new THREE.Matrix4();
+function pickMarker(clientX, clientY) {
+  if (!markerSets.length) return null;
+  const rect = threeCanvas.getBoundingClientRect();
+  const x = clientX - rect.left, y = clientY - rect.top, W = rect.width, H = rect.height;
+  _pickM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  const e = _pickM.elements, P11 = camera.projectionMatrix.elements[5];
+  let best = null, bestW = Infinity;
+  for (const rec of markerSets) {
+    if (!rec.visible || !rec.resolved) continue;
+    const pos = rec.set.markers.pos, { size, sizeUnit } = rec.resolved, k = rec.sizeScale || 1;
+    for (let i = 0, n = rec.set.markers.n; i < n; i++) {
+      if (!(size[i] > 0)) continue;
+      if (rec.opacity < 0.05 && rec.resolved.base && rec.resolved.base[i]) continue; // invisible
+      const px = pos[3 * i], py = pos[3 * i + 1], pz = pos[3 * i + 2];
+      const w = e[3] * px + e[7] * py + e[11] * pz + e[15];
+      if (w <= 0) continue;
+      const sx = ((e[0] * px + e[4] * py + e[8] * pz + e[12]) / w + 1) / 2 * W;
+      const sy = (1 - (e[1] * px + e[5] * py + e[9] * pz + e[13]) / w) / 2 * H;
+      const r = Math.max(pickPx(5), sizeUnit === 'px' ? size[i] * k / 2 : size[i] * k / 2 * P11 * 0.5 * H / w);
+      const dx = sx - x, dy = sy - y;
+      if (dx * dx + dy * dy <= r * r && w < bestW) {
+        if (hiddenBySolid(rect.left + sx, rect.top + sy, w)) continue; // hidden by the solid brain
+        best = { rec, index: i, sx, sy }; bestW = w;
+      }
+    }
+  }
+  return best;
+}
+
+function setMarkerHoverState(hit) {
+  const same = hit && markerHover && hit.rec === markerHover.rec && hit.index === markerHover.index;
+  if (same || (!hit && !markerHover)) return;
+  if (markerHover && markerHover.rec.group) setMarkerHover(markerHover.rec.group, null);
+  markerHover = hit ? { rec: hit.rec, index: hit.index } : null;
+  if (markerHover) setMarkerHover(markerHover.rec.group, markerHover.index);
+  render3D();
+}
+
+function markerValueText(p, v) {
+  if (v == null || (typeof v === 'number' && !Number.isFinite(v))) return '—';
+  if (p.type === 'categorical') { const e = p.legend[p.index.get(v)]; return e ? e.name : String(v); }
+  if (p.type === 'number') return String(+(+v).toPrecision(4)) + (p.unit ? ' ' + p.unit : '');
+  if (p.type === 'integer') return String(v) + (p.unit ? ' ' + p.unit : '');
+  return String(v);
+}
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function placeTip(el, sx, sy) {
+  const mid = document.getElementById('middle').getBoundingClientRect();
+  const cv = threeCanvas.getBoundingClientRect();
+  let left = cv.left - mid.left + sx + 14, top = cv.top - mid.top + sy + 14;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  if (_touchPick) { // above the finger, centred on it (below only if no room)
+    left = Math.min(Math.max(6, cv.left - mid.left + sx - w / 2), mid.width - 6 - w);
+    top = cv.top - mid.top + sy - 44 - h;
+    if (top < 6) top = cv.top - mid.top + sy + 44;
+  }
+  if (left + w > mid.width - 6) left = Math.max(6, cv.left - mid.left + sx - 14 - w);
+  if (top + h > mid.height - 6) top = Math.max(6, mid.height - 6 - h);
+  el.style.left = left + 'px'; el.style.top = top + 'px';
+}
+
+// The small hover label.
+let _tipHideTimer = null;
+function showMarkerLabel(hit) {
+  if (markerCard) return; // the card is open: no labels meanwhile
+  clearTimeout(_tipHideTimer);
+  const { rec, index } = hit, set = rec.set;
+  const cb = rec.overlay && rec.overlay.color_by || rec.style.color_by;
+  const p = cb && set.props.get(cb);
+  const val = p ? markerValueText(p, set.markers.values[p.name][index]) : null;
+  markerTipEl.className = 'hover-tip mt-small';
+  markerTipEl.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>'
+    + (val != null ? '<span class="mt-val">' + esc(p.name) + ': ' + esc(val) + '</span>' : '')
+    + '<button class="mt-open" title="details (pins the card)">»</button>';
+  markerTipEl.querySelector('.mt-open').addEventListener('click', ev => { ev.stopPropagation(); openMarkerCard(rec, index, hit.sx, hit.sy); });
+  markerTipEl.style.display = 'flex';
+  placeTip(markerTipEl, hit.sx, hit.sy);
+}
+function hideMarkerLabelSoon() {
+  if (markerCard) return;
+  clearTimeout(_tipHideTimer);
+  _tipHideTimer = setTimeout(() => { if (!markerCard) markerTipEl.style.display = 'none'; }, 350);
+}
+markerTipEl.addEventListener('pointerenter', () => clearTimeout(_tipHideTimer));
+markerTipEl.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !markerCard) hideMarkerLabelSoon(); });
+['pointerdown', 'wheel'].forEach(t => markerTipEl.addEventListener(t, ev => ev.stopPropagation()));
+
+function openMarkerCard(rec, index, sx, sy) {
+  // Another file: the old file's temporary choices end. Same file: they
+  // carry over, following the new marker (its category is highlighted).
+  if (markerCard && markerCard.rec !== rec) closeMarkerCard(false);
+  const ov = rec.overlay || (rec.overlay = { color_by: null, highlight: null, filters: [] });
+  if (ov.highlight) ov.highlight = { prop: ov.highlight.prop, value: rec.set.markers.values[ov.highlight.prop][index] };
+  markerCard = { rec, index, sx, sy };
+  buildMarkerGroup(rec);
+  renderMarkerCard();
+  render3D();
+}
+
+function closeMarkerCard(rebuild = true) {
+  if (!markerCard) return;
+  const rec = markerCard.rec;
+  markerCard = null;
+  markerTipEl.style.display = 'none';
+  if (rec.overlay) { rec.overlay = null; if (rebuild && rec.group) { buildMarkerGroup(rec); render3D(); registerMarkerItems(); } }
+}
+
+function renderMarkerCard() {
+  const { rec, index } = markerCard, set = rec.set, ov = rec.overlay;
+  const el = markerTipEl;
+  el.className = 'hover-tip mt-card';
+  el.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'mt-head';
+  head.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>';
+  const close = document.createElement('button');
+  close.className = 'mt-close'; close.textContent = '»'; close.title = 'close (Esc) — ends the temporary coloring and filters';
+  close.addEventListener('click', ev => { ev.stopPropagation(); closeMarkerCard(); });
+  head.appendChild(close);
+  el.appendChild(head);
+  const sub = document.createElement('div');
+  sub.className = 'mt-file'; sub.textContent = set.name;
+  el.appendChild(sub);
+
+  const table = document.createElement('div');
+  table.className = 'mt-rows';
+  const effColor = ov.color_by || rec.style.color_by;
+  for (const p of set.props.values()) {
+    const vals = set.markers.values[p.name];
+    if (!vals) continue;
+    const v = vals[index];
+    const row = document.createElement('div');
+    row.className = 'mt-row' + (p.type === 'text' ? ' mt-text' : ' mt-act') + (ov.color_by === p.name ? ' mt-on' : '');
+    const k = document.createElement('span'); k.className = 'mt-k'; k.textContent = p.name;
+    const val = document.createElement('span'); val.className = 'mt-v';
+    if (p.type === 'categorical' && v != null) {
+      const e = p.legend[p.index.get(v)];
+      const sw = document.createElement('span'); sw.className = 'dt-filter-swatch';
+      sw.style.background = 'rgb(' + e.color.map(c => Math.round(c * 255)).join(',') + ')';
+      val.appendChild(sw);
+    }
+    val.appendChild(document.createTextNode(markerValueText(p, v)));
+    row.append(k, val);
+    if (p.type !== 'text') {
+      row.title = p.type === 'categorical'
+        ? 'color by ' + p.name + ' and highlight this value (click again: off)'
+        : 'color by ' + p.name + ' (click again: off)';
+      row.addEventListener('click', () => {
+        if (ov.color_by === p.name) { ov.color_by = null; ov.highlight = null; }
+        else { ov.color_by = p.name; ov.highlight = p.type === 'categorical' && v != null ? { prop: p.name, value: v } : null; }
+        buildMarkerGroup(rec); render3D(); renderMarkerCard();
+      });
+      if (p.type === 'categorical' && v != null) {
+        const only = document.createElement('button');
+        const on = ov.filters.some(f => f.prop === p.name);
+        only.className = 'mt-only' + (on ? ' mt-on' : '');
+        only.textContent = 'only';
+        only.title = on ? 'show all values again' : 'show only markers with ' + p.name + ' = ' + markerValueText(p, v);
+        only.addEventListener('click', ev => {
+          ev.stopPropagation();
+          ov.filters = ov.filters.filter(f => f.prop !== p.name);
+          if (!on) ov.filters.push({ prop: p.name, values: new Set([v]) });
+          buildMarkerGroup(rec); render3D(); registerMarkerItems(); renderMarkerCard();
+        });
+        row.appendChild(only);
+      }
+    }
+    table.appendChild(row);
+    // A number the markers are colored by: colormap bar with this marker's place.
+    if ((p.type === 'number' || p.type === 'integer') && effColor === p.name && Number.isFinite(v)) {
+      const style = ov.color_by ? { window: null } : rec.style;
+      const [lo, hi] = Array.isArray(style.window) ? style.window : propertyRange(p);
+      const bar = document.createElement('div');
+      bar.className = 'mt-bar';
+      let def = BUILTIN_COLORMAPS[rec.style.colormap] || BUILTIN_COLORMAPS.viridis;
+      if (hi < lo) def = { kind: 'continuous', stops: def.stops.map(([t, c]) => [1 - t, c]) };
+      bar.style.backgroundImage = colormapCSSGradient(def);
+      const t = Math.max(0, Math.min(1, (v - Math.min(lo, hi)) / (Math.abs(hi - lo) || 1)));
+      const tick = document.createElement('span'); tick.className = 'mt-tick'; tick.style.left = (t * 100) + '%';
+      bar.appendChild(tick);
+      const ends = document.createElement('div');
+      ends.className = 'mt-ends';
+      ends.innerHTML = '<span>' + esc(markerValueText(p, Math.min(lo, hi))) + '</span><span>' + esc(markerValueText(p, Math.max(lo, hi))) + '</span>';
+      table.append(bar, ends);
+    }
+  }
+  el.appendChild(table);
+
+  if (ov.color_by || ov.filters.length) {
+    const foot = document.createElement('div');
+    foot.className = 'mt-foot';
+    const note = document.createElement('span');
+    note.textContent = 'temporary — ends when this card closes';
+    const keep = makeSettingsButton('keep', () => {
+      if (ov.color_by) { rec.style.color_by = ov.color_by; delete rec.style.window; }
+      for (const f of ov.filters) { rec.filters = rec.filters.filter(g => g.prop !== f.prop); rec.filters.push(f); }
+      ov.color_by = null; ov.filters = [];
+      buildMarkerGroup(rec); render3D(); registerMarkerItems(); renderMarkerCard();
+    }, 'make the coloring and "only" conditions regular settings (DATA panel)');
+    foot.append(note, keep);
+    el.appendChild(foot);
+  }
+  el.style.display = 'block';
+  placeTip(el, markerCard.sx, markerCard.sy);
+}
+
+// Pointer handling on the 3D view: hover (once per frame), and a click
+// (press + release without moving) on a marker pins its card; on empty
+// space it closes the card.
+let _hoverRaf = 0, _hoverEvt = null, _downAt = null;
+threeCanvas.addEventListener('pointermove', e => {
+  _hoverEvt = e;
+  if (_hoverRaf) return;
+  _hoverRaf = requestAnimationFrame(() => {
+    _hoverRaf = 0;
+    if (!_hoverEvt || (_downAt && _hoverEvt.buttons)) return; // not while orbiting
+    if (_hoverEvt.pointerType === 'touch') return;             // a finger doesn't hover (handleTap)
+    const hit = pickMarker(_hoverEvt.clientX, _hoverEvt.clientY);
+    setMarkerHoverState(hit);
+    if (hit) { hideBundleTooltip(); showMarkerLabel(hit); } else hideMarkerLabelSoon();
+  });
+});
+threeCanvas.addEventListener('pointerleave', e => { if (e.pointerType === 'touch') return; _hoverEvt = null; setMarkerHoverState(null); hideMarkerLabelSoon(); });
+threeCanvas.addEventListener('pointerdown', e => {
+  _downAt = { x: e.clientX, y: e.clientY };
+  if (e.pointerType === 'touch') {
+    _lastTouchAt = performance.now();
+    if (!_touches.size) _multiTouch = false;
+    _touches.add(e.pointerId);
+    if (_touches.size > 1) _multiTouch = true; // a pinch or two-finger pan: never a tap
+  }
+});
+const _endTouch = e => { if (e.pointerType === 'touch') { _touches.delete(e.pointerId); _lastTouchAt = performance.now(); } };
+threeCanvas.addEventListener('pointercancel', e => { _endTouch(e); _downAt = null; });
+threeCanvas.addEventListener('pointerup', e => {
+  const d = _downAt; _downAt = null;
+  if (e.pointerType === 'touch') {
+    _endTouch(e);
+    if (_multiTouch || !d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+    handleTap(e.clientX, e.clientY);
+    return;
+  }
+  if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4 || e.button !== 0) return;
+  const hit = pickMarker(e.clientX, e.clientY);
+  if (hit) { closeBundleCard(); openMarkerCard(hit.rec, hit.index, hit.sx, hit.sy); return; }
+  if (markerCard) closeMarkerCard();
+  const bh = pickBundleEnd(e.clientX, e.clientY);
+  if (bh) { if (hasBundleSettings(groups[bh.gi])) openBundleCard(bh); else showBundleLabel(bh); return; }
+  closeBundleCard();
+  const rect = threeCanvas.getBoundingClientRect();
+  const brain = pickBrain(e.clientX, e.clientY);
+  if (brain) showAnatomyLabel(e.clientX - rect.left, e.clientY - rect.top, brain);
+  else if (pickFrameEdge(e.clientX, e.clientY)) showFramesLabel(e.clientX - rect.left, e.clientY - rect.top);
+});
+
+// ── Touch ────────────────────────────────────────────────
+// A finger doesn't hover, so on touch it takes two taps: the first tap is
+// the mouse's rest (the label; the bundle's ends light up), a second tap
+// on the same thing — or on the label's » — is the click (the card). A tap
+// on empty space closes labels and cards; dragging orbits, pinching zooms
+// (never a tap). The label stays until the next tap, and opens above the
+// finger. Pick radii are larger for a finger (pickPx). Mouse and pen work
+// as before.
+function handleTap(clientX, clientY) {
+  _touchPick = true;
+  try {
+    const rect = threeCanvas.getBoundingClientRect(), sx = clientX - rect.left, sy = clientY - rect.top;
+    const mh = pickMarker(clientX, clientY);
+    if (mh) {
+      hideBundleTooltip(true); closeBundleCard();
+      if (markerCard && markerCard.rec === mh.rec && markerCard.index === mh.index) return;
+      const shown = markerHover && markerHover.rec === mh.rec && markerHover.index === mh.index
+        && markerTipEl.style.display !== 'none';
+      if (shown || markerCard) openMarkerCard(mh.rec, mh.index, mh.sx, mh.sy);
+      else { setMarkerHoverState(mh); showMarkerLabel(mh); }
+      return;
+    }
+    if (markerCard) closeMarkerCard();
+    setMarkerHoverState(null);
+    markerTipEl.style.display = 'none';
+    const bh = pickBundleEnd(clientX, clientY);
+    if (bh) {
+      if (bundleCard && bundleCard.gi === bh.gi) { showHoverEnds(bh.gi, bh.sx, bh.sy); return; }
+      const shown = bundleHover && bundleHover.gi === bh.gi;
+      if ((shown || bundleCard) && hasBundleSettings(groups[bh.gi])) openBundleCard(bh);
+      else showBundleLabel(bh);
+      return;
+    }
+    closeBundleCard();
+    const brain = pickBrain(clientX, clientY);
+    if (brain) { showAnatomyLabel(sx, sy, brain); return; }
+    if (pickFrameEdge(clientX, clientY)) { showFramesLabel(sx, sy); return; }
+    hideBundleTooltip(true);
+  } finally { _touchPick = false; }
+}
+
+// ── Slice frames card ────────────────────────────────────
+// Clicking (not hovering) on the EDGE of a slice frame in 3D — within
+// 5 px of its outline; the inside of a frame stays free for everything
+// else — opens a small card to show/hide each frame. Markers and bundle
+// ends come first: only a click that hits neither checks the frames.
+const _pickF = new THREE.Matrix4();
+function pickFrameEdge(clientX, clientY) {
+  const rect = threeCanvas.getBoundingClientRect();
+  const x = clientX - rect.left, y = clientY - rect.top, W = rect.width, H = rect.height;
+  _pickF.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  const e = _pickF.elements;
+  const proj = (px, py, pz) => {
+    const w = e[3] * px + e[7] * py + e[11] * pz + e[15];
+    if (w <= 0) return null;
+    return [((e[0] * px + e[4] * py + e[8] * pz + e[12]) / w + 1) / 2 * W, (1 - (e[1] * px + e[5] * py + e[9] * pz + e[13]) / w) / 2 * H];
+  };
+  let best = null, bestD = pickPx(5);
+  for (const k of ['sag', 'cor', 'axi']) {
+    const m = planeMeshes[k];
+    if (!m) continue;
+    const pos = m.children[1].geometry.attributes.position.array; // the outline: 5 points (closed)
+    for (let j = 0; j < 4; j++) {
+      const a = proj(pos[3*j], pos[3*j+1], pos[3*j+2]), b = proj(pos[3*j+3], pos[3*j+4], pos[3*j+5]);
+      if (!a || !b) continue;
+      const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2));
+      const d = Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+      if (d < bestD) { bestD = d; best = k; }
+    }
+  }
+  return best;
+}
+// ── Picking the brain (anatomy) in 3D ────────────────────
+// The glass brain has no geometry — the shader walks a ray through the
+// volume per pixel — so it's picked the same way, on the CPU, for the
+// mouse pixel only: the camera ray, in the volume's voxel-index space
+// (the shader's own space, see GLASS_VS/CLIP_SETUP_GLSL in scene3d.js),
+// cut to the volume box and the active clip plane, is stepped in half-
+// voxel steps until the anatomy reaches SETTINGS › background (the rim).
+// Two candidate points:
+//   'brain' — that rim point;
+//   'clip'  — where the ray enters the volume through the clip plane (in
+//             SLICE mode the nearer of its two planes), if there's tissue
+//             there (the cut face).
+// solid and rim-lit: the nearer of the two; glass: the clip point first.
+// Returns { kind: 'brain' | 'clip', ras: [x, y, z] } or null. Costs a few
+// hundred volume samples, only at a mouse pause or a click.
+function pickBrain(clientX, clientY) {
+  const m = glassBrainMesh, anat = currentAnat;
+  if (!m || !m.visible || !anat || !vr.texData || !state.get('anat.file')) return null;
+  const u = m.material.uniforms;
+  const rect = threeCanvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+  const near = new THREE.Vector3(ndc.x, ndc.y, -1).unproject(camera), far = new THREE.Vector3(ndc.x, ndc.y, 1).unproject(camera);
+  const inv = u.u_invModel.value, size = u.u_size.value;
+  const half = new THREE.Vector3(size.x, size.y, size.z).multiplyScalar(0.5);
+  const ro = camera.position.clone().applyMatrix4(inv).add(half);
+  const rd = far.sub(near).normalize().transformDirection(inv); // direction, normalized
+  // volume box [0, size]
+  let t0 = -Infinity, t1 = Infinity;
+  for (const a of ['x', 'y', 'z']) {
+    if (Math.abs(rd[a]) < 1e-12) { if (ro[a] < 0 || ro[a] > size[a]) return null; continue; }
+    const ta = (0 - ro[a]) / rd[a], tb = (size[a] - ro[a]) / rd[a];
+    t0 = Math.max(t0, Math.min(ta, tb)); t1 = Math.min(t1, Math.max(ta, tb));
+  }
+  if (t1 < t0 || t1 < 0) return null;
+  t0 = Math.max(t0, 0);
+  // the clip plane (same rules as CLIP_SETUP_GLSL); tClip = entry through it
+  let tClip = null;
+  for (let i = 0; i < 3; i++) {
+    const dir = u.u_clipDir.value[i];
+    if (!dir) continue;
+    const n = u.u_clipNormal.value[i], q = u.u_clipPoint.value[i];
+    const d0 = (ro.x - q.x) * n.x + (ro.y - q.y) * n.y + (ro.z - q.z) * n.z;
+    const dn = rd.x * n.x + rd.y * n.y + rd.z * n.z;
+    if (u.u_sliceMode.value > 0.5) {
+      const h = u.u_sliceThickness.value * 0.5;
+      if (Math.abs(dn) < 1e-8) { if (Math.abs(d0) > h) return null; continue; }
+      const ta = (-h - d0) / dn, tb = (h - d0) / dn, lo = Math.min(ta, tb);
+      if (lo > t0) { t0 = lo; tClip = lo; }
+      t1 = Math.min(t1, Math.max(ta, tb));
+    } else {
+      const a = d0 * dir, b = dn * dir;
+      if (Math.abs(b) < 1e-8) { if (a < 0) return null; continue; }
+      const tc = -a / b;
+      if (b > 0) { if (tc > t0) { t0 = tc; tClip = tc; } } else t1 = Math.min(t1, tc);
+    }
+  }
+  if (t1 <= t0) return null;
+  // the anatomy, as the shader reads it (trilinear, texel centres at i+0.5)
+  const [nx, ny, nz] = anat.shape, data = vr.texData;
+  const isColor = (anat.channels || 1) === 3;
+  const labelMode = u.u_applyLUT && u.u_applyLUT.value > 0.5 && !isColor;
+  const voxel = (i, j, k) => {
+    i = Math.min(nx - 1, Math.max(0, i)); j = Math.min(ny - 1, Math.max(0, j)); k = Math.min(nz - 1, Math.max(0, k));
+    const o = i + nx * (j + ny * k);
+    if (!isColor) return data[o];
+    const r = (data[4*o] / 255) ** 2, g = (data[4*o+1] / 255) ** 2, b = (data[4*o+2] / 255) ** 2; // sqrt-encoded
+    return Math.sqrt(r*r + g*g + b*b);
+  };
+  const sample = (x, y, z) => {
+    if (labelMode) return voxel(Math.floor(x), Math.floor(y), Math.floor(z)) > 0 ? 1 : 0;
+    x -= 0.5; y -= 0.5; z -= 0.5;
+    const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z), fx = x - i, fy = y - j, fz = z - k;
+    const c00 = voxel(i, j, k) * (1 - fx) + voxel(i + 1, j, k) * fx;
+    const c10 = voxel(i, j + 1, k) * (1 - fx) + voxel(i + 1, j + 1, k) * fx;
+    const c01 = voxel(i, j, k + 1) * (1 - fx) + voxel(i + 1, j, k + 1) * fx;
+    const c11 = voxel(i, j + 1, k + 1) * (1 - fx) + voxel(i + 1, j + 1, k + 1) * fx;
+    const v = (c00 * (1 - fy) + c10 * fy) * (1 - fz) + (c01 * (1 - fy) + c11 * fy) * fz;
+    return u.u_bgInvert.value > 0.5 ? 1 - v : v;
+  };
+  const thr = labelMode ? 0.5 : (u.u_bgInvert.value > 0.5 ? 1 - u.u_background.value : u.u_background.value);
+  const at = t => sample(ro.x + t * rd.x, ro.y + t * rd.y, ro.z + t * rd.z);
+  const toRAS = t => {
+    const p = new THREE.Vector3(ro.x + t * rd.x, ro.y + t * rd.y, ro.z + t * rd.z).sub(half).applyMatrix4(u.u_model.value);
+    return [p.x, p.y, p.z];
+  };
+  // the cut face: tissue right where the ray enters through the clip plane
+  const clipHit = tClip !== null && at(tClip + 1e-3) >= thr ? tClip : null;
+  // the rim: first step reaching the background threshold (a ray that
+  // starts inside tissue without a clip plane — camera in the brain — has
+  // no rim in front of it)
+  let rimHit = null;
+  if (clipHit === null && at(t0) >= thr) rimHit = null;
+  else for (let t = t0 + 0.25; t <= t1; t += 0.5) if (at(t) >= thr) {
+    // refine between the last step outside and this one (bisection), so
+    // the surface depth is accurate to ~0.01 voxel (SOLID visibility tests)
+    let lo = Math.max(t0, t - 0.5), hi = t;
+    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; if (at(m) >= thr) hi = m; else lo = m; }
+    rimHit = hi; break;
+  }
+  let t = null, kind = null;
+  if (renderMode === 'glass' && clipHit !== null) { t = clipHit; kind = 'clip'; }
+  else if (clipHit !== null && (rimHit === null || clipHit <= rimHit)) { t = clipHit; kind = 'clip'; }
+  else if (rimHit !== null) { t = rimHit; kind = 'brain'; }
+  if (t === null) return null;
+  const ras = toRAS(t);
+  // camera depth (clip-space w), comparable with pickMarker/pickBundleEnd's
+  const e = _pickBr.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
+  const w = e[3] * ras[0] + e[7] * ras[1] + e[11] * ras[2] + e[15];
+  // LABEL mode: the label of the voxel touched — the first labelled voxel
+  // just inward of the hit point (up to ~2 voxels in), raw value → LUT
+  let label = null;
+  if (labelMode) {
+    const raw = loadedAnatRaw && loadedAnatShape && loadedAnatShape[0] === nx && loadedAnatShape[1] === ny
+      && loadedAnatShape[2] === nz ? loadedAnatRaw : data;
+    for (let s = 0.05; s <= 2.5 && label === null; s += 0.25) {
+      const x = Math.floor(ro.x + (t + s) * rd.x), y = Math.floor(ro.y + (t + s) * rd.y), z = Math.floor(ro.z + (t + s) * rd.z);
+      if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) continue;
+      const v = Math.round(raw[x + nx * (y + ny * z)]);
+      if (v > 0) label = v;
+    }
+  }
+  // half a voxel along this ray, in mm (rd is a unit step in voxel space):
+  // the SOLID visibility margin — 0.5 mm across 1 mm sections, 0.025 mm
+  // along 50 µm pixels, half the voxel size for isotropic data
+  const r1 = toRAS(t + 1), margin = 0.5 * Math.hypot(r1[0] - ras[0], r1[1] - ras[1], r1[2] - ras[2]);
+  return { kind, ras, w, label, margin };
+}
+const _pickBr = new THREE.Matrix4();
+// SOLID mode: what is nearest to the camera wins — usually the brain's
+// surface (or its cut face), unless a marker or bundle end sticks out in
+// front of it: hiddenBySolid says whether a thing at camera depth w is
+// hidden. GLASS / RIM-LIT keep the fixed order (markers > bundle ends >
+// brain > frames).
+// The test is made along the ray through the thing's own screen position
+// (not the mouse's: an end 10 px away can be behind a different part of
+// the surface). The surface has priority: a thing must be in front of it
+// by more than half a voxel along that ray (pickBrain's margin, so it
+// follows the voxel size and anisotropy) — ends just under the surface
+// stay hidden.
+// With a clip plane, the "surface" is the cut face or the rim behind it,
+// so what is in the clipped-away part is in front of it, as it should be.
+function hiddenBySolid(clientX, clientY, w) {
+  if (renderMode !== 'solid') return false;
+  const b = pickBrain(clientX, clientY);
+  return !!b && w > b.w - b.margin;
+}
+
+// The anatomy label: the bundle hover label's element, with one pulldown
+// to choose the anatomy volume shown; for a label volume (LABEL mode) a
+// second line with the region/tissue of the voxel touched (hit.label).
+function showAnatomyLabel(sx, sy, hit) {
+  clearTimeout(_bundleTipTimer);
+  showHoverEnds(null);
+  bundleHover = { gi: null, anatomy: true, sx, sy, hit };
+  bundleTipEl.className = 'hover-tip mt-small';
+  bundleTipEl.innerHTML = '';
+  const row = document.createElement('label');
+  row.className = 'mt-title frame-row';
+  const t = document.createElement('span'); t.className = 'mt-id'; t.textContent = 'anatomy';
+  const sel = document.createElement('select');
+  sel.className = 'inline-select';
+  volumes.forEach((v, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = v.label; if (v === activeVolume) o.selected = true; sel.appendChild(o); });
+  sel.addEventListener('change', () => { const v = volumes[+sel.value]; if (v) selectVolume(v); });
+  row.append(t, sel);
+  bundleTipEl.appendChild(row);
+  if (hit && hit.label != null) {
+    const entry = lutMap && lutMap.get(hit.label);
+    const reg = document.createElement('div');
+    reg.className = 'mt-region';
+    const sw = document.createElement('span');
+    sw.className = 'mt-region-sw';
+    if (entry) sw.style.background = `rgb(${[entry.r, entry.g, entry.b].map(c => Math.round(255 * Math.min(1, c))).join(',')})`;
+    const nm = document.createElement('span');
+    nm.className = 'mt-id';
+    nm.textContent = entry ? entry.name : 'label ' + hit.label + ' (unmapped)';
+    const id = document.createElement('span');
+    id.className = 'mt-val';
+    id.textContent = String(hit.label);
+    reg.append(sw, nm, id);
+    bundleTipEl.classList.add('mt-stack');
+    bundleTipEl.appendChild(reg);
+  }
+  bundleTipEl.style.display = 'flex';
+  placeTip(bundleTipEl, sx, sy);
+}
+
+// The frames label: the bundle hover label's element, with one checkbox.
+// Unchecking hides the frames (SETTINGS › frames switches them on again);
+// it disappears like the bundle label when the mouse moves elsewhere.
+function showFramesLabel(sx, sy) {
+  clearTimeout(_bundleTipTimer);
+  showHoverEnds(null);
+  bundleHover = { gi: null, frames: true, sx, sy };
+  bundleTipEl.className = 'hover-tip mt-small';
+  bundleTipEl.innerHTML = '';
+  const row = document.createElement('label');
+  row.className = 'mt-title frame-row';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = framesVisible;
+  cb.addEventListener('change', () => {
+    const s = document.getElementById('clip-frames');
+    s.checked = cb.checked; s.dispatchEvent(new Event('change'));
+  });
+  const t = document.createElement('span'); t.className = 'mt-id'; t.textContent = 'frames';
+  row.append(cb, t);
+  bundleTipEl.appendChild(row);
+  bundleTipEl.style.display = 'flex';
+  placeTip(bundleTipEl, sx, sy);
+}
+document.addEventListener('keydown', e => {
+  const ae = document.activeElement;
+  const typing = ae && (/^(TEXTAREA|SELECT)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !/^(checkbox|radio|color|range|button)$/.test(ae.type)));
+  if (e.key !== 'Escape' || typing) return;
+  if (markerCard) closeMarkerCard();
+  else if (bundleCard) closeBundleCard();
+});
 
 // SHOW ONLY: filters on the marker properties, combined with AND. A
 // categorical filter is a list of values to keep (any of them: OR); a
@@ -5074,7 +6751,7 @@ function buildMarkerFilterSettings(rec, el) {
   box.className = 'dt-filters';
   const title = document.createElement('div');
   title.className = 'dt-fields-title';
-  title.textContent = rec.filters.length ? 'SHOW ONLY (all conditions)' : 'SHOW ONLY';
+  title.textContent = 'FILTER·BY';
   box.appendChild(title);
 
   for (const f of rec.filters) {
@@ -5097,7 +6774,8 @@ function buildMarkerFilterSettings(rec, el) {
       head.appendChild(makeSettingsButton('✕', () => { rec.filters = rec.filters.filter(x => x !== f); refilter(); }, 'remove this condition'));
       box.appendChild(head);
       const list = document.createElement('div');
-      list.className = 'dt-filter-values' + (entries.length > 10 ? ' dt-filter-scroll' : '');
+      list.className = 'dt-filter-values dt-helper' + (entries.length > 10 ? ' dt-filter-scroll' : '');
+      attachTip(list, 'Show only markers with one of the ticked values.');
       for (const e of entries) {
         const lab = document.createElement('label');
         lab.className = 'dt-filter-value';
@@ -5122,10 +6800,13 @@ function buildMarkerFilterSettings(rec, el) {
       const [lo, hi] = p.dataRange || propertyRange(p);
       const step = p.type === 'integer' ? 1 : (hi - lo) / 500 || 1;
       const fmt = v => String(+v.toPrecision(4)) + (p.unit ? ' ' + p.unit : '');
-      box.appendChild(makeSliderRow('FROM', { min: lo, max: hi, step, value: f.range[0], format: fmt,
-        onInput: v => { f.range[0] = v; refilterQuiet(); } }));
-      box.appendChild(makeSliderRow('TO', { min: lo, max: hi, step, value: f.range[1], format: fmt,
-        onInput: v => { f.range[1] = v; refilterQuiet(); } }));
+      const fr = makeSliderRow('from', { min: lo, max: hi, step, value: f.range[0], format: fmt,
+        onInput: v => { f.range[0] = v; refilterQuiet(); } });
+      const to = makeSliderRow('to', { min: lo, max: hi, step, value: f.range[1], format: fmt,
+        onInput: v => { f.range[1] = v; refilterQuiet(); } });
+      for (const r of [fr, to]) { r.classList.add('dt-helper'); box.appendChild(r); }
+      attachTip(fr, 'Show only markers with ' + p.name + ' from this value …');
+      attachTip(to, '… up to this value (both included).');
     }
   }
   // While dragging a range: update the view and the row's count without
@@ -5141,13 +6822,15 @@ function buildMarkerFilterSettings(rec, el) {
   const avail = [...set.props.values()].filter(p => set.markers.values[p.name] && p.type !== 'text'
     && !rec.filters.some(f => f.prop === p.name));
   if (avail.length) {
-    box.appendChild(makeChoiceRow('+ condition', [['', '---'], ...avail.map(p => [p.name, p.name])], '', v => {
+    const add = makeChoiceRow('+ condition', [['', '---'], ...avail.map(p => [p.name, p.name])], '', v => {
       const p = set.props.get(v);
       if (!p) return;
       if (p.type === 'categorical') rec.filters.push({ prop: p.name, values: new Set(p.legend.map(e => e.value)) });
       else rec.filters.push({ prop: p.name, range: [...(p.dataRange || propertyRange(p))] });
       refilter();
-    }, 'show only markers that meet this condition too'));
+    });
+    attachTip(add, 'Add a condition. Markers are shown only when they meet ALL conditions; within a category, ANY ticked value.');
+    box.appendChild(add);
   }
   el.appendChild(box);
 }
@@ -5207,6 +6890,7 @@ document.body.addEventListener('drop',async e=>{
   set('yaw-slider',          0,                ['yaw-val',         '0°']);
   set('roll-slider',         0,                ['roll-val',        '0°']);
   set('radius-slider',       radius,           ['radius-val',      radius.toFixed(2)+' mm']);
+  set('context-slider',      Math.round(probeContext * 100), ['context-val', Math.round(probeContext * 100) + '%']);
   set('slab-slider',         slabMultiplier,   ['slab-val',        slabMultiplier.toFixed(1)+'×']);
   set('brain-alpha-slider',  50,               ['brain-alpha-val', '50%']);
   set('brain-thresh-slider', 0,                 ['brain-thresh-val', cutoutT1.toFixed(2)]);
@@ -5294,6 +6978,16 @@ resizeAll();
     });
   }
 
+  // The STREAMLINE PROBE switch hides the probe panel (left) and its
+  // separator; switching it back on restores the panel's width.
+  window.setLeftPanelHidden = hidden => {
+    const d = hidden ? 'none' : '';
+    if (left.style.display === d) return;
+    left.style.display = d;
+    sepL.style.display = d;
+    resizeAll();
+  };
+
   // Left separator: dragging right narrows left panel (or widens it leftward)
   makeDragger(sepL,
     () => left.getBoundingClientRect().width,
@@ -5348,7 +7042,7 @@ resizeAll();
   }
 
   // Wire pills
-  document.querySelectorAll('.row-pill').forEach(pill => {
+  document.querySelectorAll('.row-pill[data-plane]').forEach(pill => {
     pill.addEventListener('click', () => {
       if (pill.classList.contains('disabled')) return;
       const plane = pill.dataset.plane;

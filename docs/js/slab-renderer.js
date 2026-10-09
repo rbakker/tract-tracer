@@ -35,6 +35,7 @@ attribute float instanceFile; // row in u_fileStyle (width, opacity, field windo
 uniform vec2  u_resolution;
 uniform vec3  u_sliceNormal;
 uniform vec3  u_slicePt;
+uniform float u_slabHalf;
 varying vec3  vColor;
 varying vec3  vBundleColor;
 varying vec2  vFieldSE;
@@ -50,6 +51,7 @@ void main() {
   vSegPos      = position.y;
   vFieldRow    = instanceField.z;
   vStyle       = fileStyle(instanceFile);
+  vDensity     = instanceDensity;
   // Skip segments this pass can't draw (see segmentMayDraw in scene3d.js).
 #if defined(NEAR_PASS) && defined(FAINT_PASS)
   if (!segmentMayDraw(instanceField, vStyle, 1)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
@@ -61,6 +63,20 @@ void main() {
 
   vec4 worldStart = modelMatrix * vec4(instanceStart, 1.0);
   vec4 worldEnd   = modelMatrix * vec4(instanceEnd,   1.0);
+  // Skip segments wholly outside this pass's half of the slab before
+  // rasterizing them: the fragment shader would discard every pixel
+  // anyway, but only after the GPU had covered the segment's whole
+  // screen footprint — with every visible streamline drawn (probe
+  // highlight mode) that was most of the 2D panels' time. Exact, since
+  // the signed distance is linear along the segment.
+  float dS = dot(worldStart.xyz - u_slicePt, u_sliceNormal);
+  float dE = dot(worldEnd.xyz   - u_slicePt, u_sliceNormal);
+  float dLo = min(dS, dE), dHi = max(dS, dE);
+#if defined(NEAR_PASS)
+  if (dHi < 0.0 || dLo > u_slabHalf) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+#elif defined(FAR_PASS)
+  if (dLo >= 0.0 || dHi < -u_slabHalf) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+#endif
   vec3 worldPos   = mix(worldStart.xyz, worldEnd.xyz, position.y);
   vSignedDist = dot(worldPos - u_slicePt, u_sliceNormal);
 
@@ -151,11 +167,10 @@ export class SlabRenderer {
     this._dmatSrcNear = null;  this._dmatSrcFar  = null;
     this._dmatTgtNear = null;  this._dmatTgtFar  = null;
 
-    this._meshNear    = null;  this._meshFar     = null;  this._meshNearFaint = null;
+    this._lineClones  = new WeakMap(); // ribbon mesh -> its pass meshes, see _linePasses
     this._dotsSrcNear = null;  this._dotsSrcFar  = null;
     this._dotsTgtNear = null;  this._dotsTgtFar  = null;
 
-    this._cachedSelMesh = null;
     this._cachedSrcMesh = null;
     this._cachedTgtMesh = null;
 
@@ -205,6 +220,8 @@ export class SlabRenderer {
       u_colormap:    { value: null }, // set per render from selMesh — see setLine
       u_fileStyle:     { value: null }, // likewise
       u_fileStyleSize: { value: 1 },
+      u_context:       { value: -1 }, // probe highlight mode, copied from selMesh
+      u_dimming:       { value: 0.15 }, // likewise
       // Ribbon-specific — see SLAB_VS.
       u_resolution:  { value: new THREE.Vector2(1, 1) },
     };
@@ -251,24 +268,26 @@ export class SlabRenderer {
   }
 
   invalidate(selMesh) {
-    this._meshNear = null; this._meshFar = null; this._meshNearFaint = null;
+    this._lineClones = new WeakMap();
     this._dotsSrcNear = null; this._dotsSrcFar = null;
     this._dotsTgtNear = null; this._dotsTgtFar = null;
-    this._cachedSelMesh = null;
     this._cachedSrcMesh = null;
     this._cachedTgtMesh = null;
   }
 
-  _ensureLineMeshes(selMesh) {
-    if (this._meshNear && this._cachedSelMesh === selMesh) return;
+  // This renderer's three pass meshes (far, near, near-faint) for one
+  // ribbon mesh, cached per mesh.
+  _linePasses(mesh) {
+    if (!this._lineClones) this._lineClones = new WeakMap();
+    let c = this._lineClones.get(mesh);
+    if (c) return c;
     this._ensureMats();
     // clone(false): not the 3D faint-pass child (see makeRibbonLines) —
     // this renderer does its own passes on the shared geometry.
-    const mk = (mat) => { const m = selMesh.clone(false); m.geometry = selMesh.geometry; m.material = mat; return m; };
-    this._meshNear = mk(this._matNear);
-    this._meshFar  = mk(this._matFar);
-    this._meshNearFaint = mk(this._matNearFaint);
-    this._cachedSelMesh = selMesh;
+    const mk = (mat) => { const m = mesh.clone(false); m.geometry = mesh.geometry; m.material = mat; return m; };
+    c = { near: mk(this._matNear), far: mk(this._matFar), nearFaint: mk(this._matNearFaint) };
+    this._lineClones.set(mesh, c);
+    return c;
   }
 
   _ensureDotMeshes(srcMesh, tgtMesh) {
@@ -286,15 +305,20 @@ export class SlabRenderer {
     this._cachedTgtMesh = tgtMesh;
   }
 
-  // opts: { selMesh, srcMesh, tgtMesh, slabMultiplier, lineColor, srcColor, tgtColor, endsPx }
+  // opts: { selMesh, lineMeshes, srcMesh, tgtMesh, slabMultiplier, lineColor, srcColor, tgtColor, endsPx }
+  // lineMeshes (optional): the ribbon meshes to draw, e.g. a thinner
+  // context sample plus the probe's highlighted lines (probe highlight
+  // mode); default [selMesh]. They must share selMesh's materials
+  // (uniforms and style textures are borrowed from it).
   render(canvas2d, planeKey, cursor, tag, vr, vox_mm, viewCentre, opts) {
     const { selMesh, srcMesh, tgtMesh } = opts;
     if (!selMesh) return;
+    const lineMeshes = (opts.lineMeshes || [selMesh]).filter(Boolean);
     const W = canvas2d.width, H = canvas2d.height;
     if (W <= 0 || H <= 0) return;
     this._ensureRT(W, H);
     this._ensureMats();
-    this._ensureLineMeshes(selMesh);
+    const passes = lineMeshes.map(m => this._linePasses(m));
     this._ensureDotMeshes(srcMesh || null, tgtMesh || null);
 
     const r   = this._r;
@@ -359,6 +383,8 @@ export class SlabRenderer {
       u.u_colormap.value = su.u_colormap?.value ?? null;
       u.u_fileStyle.value = su.u_fileStyle?.value ?? null;
       u.u_fileStyleSize.value = su.u_fileStyleSize?.value ?? 1;
+      u.u_context.value = su.u_context?.value ?? -1;
+      u.u_dimming.value = su.u_dimming?.value ?? 0.15;
     };
     const setDot = (mat, c) => {
       const u = mat.uniforms;
@@ -391,14 +417,19 @@ export class SlabRenderer {
     r.clear();
     r.autoClear = false;
 
+    const drawPass = key => {
+      for (const p of passes) this._scene.add(p[key]);
+      r.render(this._scene, cam);
+      for (const p of passes) this._scene.remove(p[key]);
+    };
     // Pass 0 — far lines
-    if (showLines) { this._scene.add(this._meshFar);  r.render(this._scene, cam); this._scene.remove(this._meshFar); }
+    if (showLines) drawPass('far');
     // Pass 1 — near lines, opaque parts
-    if (showLines) { this._scene.add(this._meshNear); r.render(this._scene, cam); this._scene.remove(this._meshNear); }
+    if (showLines) drawPass('near');
     // Pass 1b — near lines, faint (translucent) parts, over the opaque ones.
     // Skipped when no file is below full opacity (opts.hasFaint false).
     const hasFaint = opts.hasFaint !== false;
-    if (showLines && hasFaint) { this._scene.add(this._meshNearFaint); r.render(this._scene, cam); this._scene.remove(this._meshNearFaint); }
+    if (showLines && hasFaint) drawPass('nearFaint');
     // Pass 2 — dots on top (far sub-pass)
     if (showSrc) this._scene.add(this._dotsSrcFar);
     if (showTgt) this._scene.add(this._dotsTgtFar);

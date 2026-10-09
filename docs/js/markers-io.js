@@ -13,7 +13,6 @@ export const MARKERS_VERSION = 1;
 export const MARKER_SHAPES = ['sphere', 'cube', 'diamond', 'cross'];
 export const DEFAULT_MARKER_SIZE_PX = 10;
 export const DEFAULT_LINK_WIDTH_PX = 2;
-const MISSING_RGB = [0.5, 0.5, 0.5];     // no value for the color_by property
 const DEFAULT_RGB = [1, 1, 1];
 const PROPERTY_TYPES = ['number', 'integer', 'categorical', 'text'];
 
@@ -123,6 +122,16 @@ function completeLegend(prop, arrays) {
     prop.legend.push({ value: v, name: String(v), color: null, shape: null, size: null, auto: true });
   }
   prop.legend.forEach((e, i) => { if (!e.color) e.color = autoColor(i); });
+  // Sizes and shapes only where they mean something: sizes from the
+  // legend, or — for an ordered category — evenly growing along the order
+  // (0.4 … 1); shapes from the legend, or automatic for at most as many
+  // values as there are shapes. Otherwise the property can't drive
+  // size/shape (hasSizes / hasShapes false) and the viewer doesn't offer it.
+  const L = prop.legend, m = L.length;
+  if (!L.some(e => e.size != null) && prop.ordered && m > 1) L.forEach((e, i) => { e.size = 0.4 + 0.6 * i / (m - 1); });
+  prop.hasSizes = L.some(e => e.size != null);
+  if (!L.some(e => e.shape) && m >= 2 && m <= MARKER_SHAPES.length) L.forEach((e, i) => { e.shape = MARKER_SHAPES[i]; });
+  prop.hasShapes = L.some(e => e.shape);
   prop.index = new Map(prop.legend.map((e, i) => [e.value, i]));
 }
 
@@ -290,6 +299,9 @@ export function resolveMarkerStyle(set, st, colormap, mask = null) {
   const { n, values } = set.markers;
   const prop = k => (k && set.props.has(k) ? set.props.get(k) : null);
   const color = new Float32Array(3 * n), shape = new Uint8Array(n), size = new Float32Array(n);
+  // base[i] = 1: drawn in the base color (no color_by, outside the window,
+  // or no value) — those markers get the style's opacity, see the shader.
+  const base = new Uint8Array(n);
 
   // shape
   const baseShape = Math.max(0, MARKER_SHAPES.indexOf(st.shape));
@@ -314,19 +326,19 @@ export function resolveMarkerStyle(set, st, colormap, mask = null) {
   const win = cp && (cp.type === 'number' || cp.type === 'integer')
     ? (Array.isArray(st.window) && st.window.length === 2 && st.window.every(isNum) ? st.window : propertyRange(cp)) : null;
   for (let i = 0; i < n; i++) {
-    let c = fixed;
+    let c = fixed, isBase = 1;
     if (cp && cp.type === 'categorical') {
       const v = cv ? cv[i] : null;
-      c = v == null ? MISSING_RGB : cp.legend[cp.index.get(v)].color;
+      if (v != null) { c = cp.legend[cp.index.get(v)].color; isBase = 0; } // no value: base color
     } else if (win) {
       const v = cv ? cv[i] : NaN;
-      if (!Number.isFinite(v)) c = MISSING_RGB;
-      else {
+      if (Number.isFinite(v)) {
         const [a, b] = win, lo = Math.min(a, b), hi = Math.max(a, b);
         const eps = 1e-9 * Math.max(1, Math.abs(hi - lo));
-        if (v >= lo - eps && v <= hi + eps) c = colormap(a === b ? 0.5 : Math.max(0, Math.min(1, (v - a) / (b - a))));
+        if (v >= lo - eps && v <= hi + eps) { c = colormap(a === b ? 0.5 : Math.max(0, Math.min(1, (v - a) / (b - a)))); isBase = 0; }
       }
     }
+    base[i] = isBase;
     color[3 * i] = c[0]; color[3 * i + 1] = c[1]; color[3 * i + 2] = c[2];
   }
 
@@ -346,5 +358,5 @@ export function resolveMarkerStyle(set, st, colormap, mask = null) {
     }
     size[i] = mask && !mask[i] ? 0 : s;
   }
-  return { color, shape, size, sizeUnit: spec.unit };
+  return { color, shape, size, sizeUnit: spec.unit, base };
 }

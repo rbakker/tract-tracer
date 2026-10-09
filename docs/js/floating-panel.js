@@ -271,7 +271,7 @@ class PanelDockGroup {
     this.panels = [];
     this.focusClass = focusClass;
     document.addEventListener('click', () => {
-      for (const p of this.panels) if (p.isOpen && !p.pinned) p.close();
+      for (const p of this.panels) if (p.isOpen && !p.pinned && !p.keepOnOutsideClick) p.close();
     });
   }
 
@@ -293,4 +293,53 @@ class PanelDockGroup {
   refresh() { PanelStack.refresh(); }
 }
 
-export { FloatingPanel, PanelDockGroup, clampPanelPos, INTERACTIVE_SELECTOR };
+// A small FloatingPanel made on the fly for a context card — e.g. the
+// settings of a bundle opened from the 3D view. It opens next to a screen
+// point; once the user has dragged it somewhere, later cards open there
+// instead (so it stays out of the way of the data). Same titlebar, close
+// button, dragging and stacking as the other panels; give it its own
+// PanelDockGroup so opening it never closes those.
+//   title: set via card.titleEl (an element; fill it freely)
+//   body:  card.body
+//   onClose: called whenever it closes (× button, Esc via the caller, …)
+class CardPanel extends FloatingPanel {
+  constructor({ group, className = '', width = 270, onClose = null } = {}) {
+    const el = document.createElement('div');
+    el.className = 'app-panel card-panel' + (className ? ' ' + className : '');
+    el.style.width = width + 'px';
+    el.innerHTML = '<div class="app-panel-titlebar"><span class="grip">⠿</span>'
+      + '<span class="app-panel-title"></span>'
+      + '<button class="app-panel-close" title="close (Esc)">×</button></div>'
+      + '<div class="app-panel-body"></div>';
+    document.body.appendChild(el);
+    super({ panelEl: el, defaultPos: { left: 0, top: 0 }, group });
+    this.titleEl = el.querySelector('.app-panel-title');
+    this.body = el.querySelector('.app-panel-body');
+    this.onClose = onClose;
+    // The caller decides when a card closes (it's usually opened BY a
+    // click elsewhere, which would otherwise close it right away).
+    this.keepOnOutsideClick = true;
+  }
+
+  // Opens beside the screen point (clientX, clientY), kept on screen —
+  // unless the user has moved the card before: then where they left it.
+  openAt(clientX, clientY) {
+    this.defaultPos = { left: clientX + 14, top: clientY + 14 };
+    this.open();
+    if (this.pinned) return;
+    const r = this.el.getBoundingClientRect();
+    let left = r.left, top = r.top;
+    if (r.right > window.innerWidth - 6) left = Math.max(6, clientX - 14 - r.width);
+    if (r.bottom > window.innerHeight - 6) top = Math.max(6, window.innerHeight - 6 - r.height);
+    this.el.style.left = left + 'px';
+    this.el.style.top = top + 'px';
+  }
+
+  close() {
+    const was = this.isOpen;
+    super.close();
+    if (was && this.onClose) this.onClose();
+  }
+}
+
+export { FloatingPanel, PanelDockGroup, CardPanel, clampPanelPos, INTERACTIVE_SELECTOR };

@@ -59,7 +59,11 @@ Only `value` is required. `name` defaults to the value; `color` is `[r, g, b]`
 0–255; `shape` is one of the shapes below; `size` multiplies the base size (or
 width). Values that occur in the data but have no legend entry — or a
 categorical property without any legend, e.g. 100 subject IDs — get
-automatic colors, the default shape and size 1.
+automatic colors, the default shape and size 1. Without any `size` in the legend, an
+`ordered` property gets sizes growing evenly along its order (0.4 … 1);
+without any `shape`, a property with 2 to 4 values gets the shapes in the
+order sphere, cube, diamond, cross. A property with neither can't drive
+size or shape.
 
 ## Tables
 
@@ -165,7 +169,8 @@ gets the color of the value arriving there, blended along the line.
   one. Give `size_mm` / `width_mm` when size should mean something in the
   brain (a 4 mm stimulation site).
 - No shape or color given: white spheres; links colored `"ends"`.
-- A marker without a value for the `color_by` property is grey; without a
+- A marker without a value for the `color_by` property gets the base
+  `color` (default white); without a
   `size_by` value, base size; without a `shape_by` value, the default shape.
 - A numeric value outside `range` is clamped to it.
 

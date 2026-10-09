@@ -19,6 +19,11 @@ export const MARKER_VS = `
 attribute vec3  iCenter;
 attribute vec3  iColor;
 attribute float iSize;      // diameter, in mm or CSS px (u_sizeInPx)
+uniform float u_opacity;    // opacity of base-colored markers (iBase)
+attribute float iIndex;     // marker index in its file (for u_hover)
+attribute float iDim;       // 1: dimmed (not the highlighted category)
+attribute float iBase;      // 1: drawn in the base color — gets u_opacity
+uniform float u_hover;      // index of the hovered marker, or -1
 uniform float u_sizeInPx;   // 1: iSize is in CSS pixels
 uniform float u_pxScale;    // device pixels per CSS pixel
 uniform vec2  u_resolution; // drawing-buffer size in device pixels
@@ -29,6 +34,7 @@ uniform float u_slabHalf;
 varying vec3  vColor;
 varying vec3  vNormalV;
 varying float vSignedDist;
+varying float vAlpha;
 void main() {
   vec4 cView = modelViewMatrix * vec4(iCenter, 1.0);
   vec4 cClip = projectionMatrix * cView;
@@ -36,6 +42,9 @@ void main() {
   // S * P[1][1] / w * resolution.y / 2 pixels, for a perspective and an
   // orthographic camera alike (w = 1 there).
   float d = iSize * u_sizeScale;
+  bool hovered = abs(iIndex - u_hover) < 0.5;
+  if (hovered) d *= 1.35;
+  else if (iDim > 0.5) d *= 0.7;
   if (u_sizeInPx > 0.5) d = d * u_pxScale * cClip.w / (projectionMatrix[1][1] * 0.5 * u_resolution.y);
   vSignedDist = dot(iCenter - u_slicePt, u_sliceNormal);
   if (d <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; } // hidden (size 0)
@@ -45,14 +54,15 @@ void main() {
 #elif defined(FAR_PASS)
   if (vSignedDist >= 0.0 || vSignedDist < -u_slabHalf - 0.5 * d) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
 #endif
-  vColor = iColor;
+  vAlpha = (iBase > 0.5 && !hovered) ? u_opacity : 1.0;
+  vColor = hovered ? min(iColor * 1.25 + 0.15, vec3(1.0)) : iDim > 0.5 ? iColor * 0.28 + 0.06 : iColor;
   vNormalV = normalize(normalMatrix * normal);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(iCenter + position * d, 1.0);
 }`;
 
 export const MARKER_FS = `
 precision highp float;
-uniform float u_opacity;
+varying float vAlpha;
 varying vec3  vColor;
 varying vec3  vNormalV;
 varying float vSignedDist;
@@ -68,7 +78,7 @@ void main() {
 #ifdef FAR_PASS
   col *= 0.7; // behind the section plane, as the streamlines
 #endif
-  gl_FragColor = vec4(col, u_opacity);
+  gl_FragColor = vec4(col, vAlpha);
 }`;
 
 // Unit-diameter base glyphs (centered on the origin).
@@ -95,6 +105,7 @@ export function makeMarkerMaterial(defines = { FULL_PASS: 1 }, uniforms = null) 
       u_pxScale:     { value: 1 },
       u_resolution:  { value: new THREE.Vector2(1, 1) },
       u_sizeScale:   { value: 1 },
+      u_hover:       { value: -1 },
       u_opacity:     { value: 1 },
       u_sliceNormal: { value: new THREE.Vector3(0, 0, 1) },
       u_slicePt:     { value: new THREE.Vector3() },
@@ -112,56 +123,88 @@ export function makeMarkerMaterial(defines = { FULL_PASS: 1 }, uniforms = null) 
 // Returns the group; group.userData.material is the shared material (its
 // uniforms: u_sizeScale, u_opacity, ... — see setMarkerDisplay), and each
 // mesh's userData.markerIndex maps instance → marker index (for picking).
-export function makeMarkerGroup(set, resolved, material = null) {
+export function makeMarkerGroup(set, resolved, materials = null) {
   const { n, pos } = set.markers;
-  material = material || makeMarkerMaterial();
+  // Two materials sharing one set of uniforms: markers in their own color
+  // (always opaque) and markers in the base color (get the opacity). They
+  // must be separate: a translucent marker mustn't write depth — it would
+  // hide whatever is drawn after it (slice frames, streamlines) — while an
+  // opaque one must.
+  const material = (materials && materials.material) || makeMarkerMaterial();
+  const baseMaterial = (materials && materials.baseMaterial) || makeMarkerMaterial({ FULL_PASS: 1 }, material.uniforms);
   material.uniforms.u_sizeInPx.value = resolved.sizeUnit === 'px' ? 1 : 0;
   const group = new THREE.Group();
   group.userData.material = material;
+  group.userData.baseMaterial = baseMaterial;
   const base = baseGeometries();
-  MARKER_SHAPES.forEach((shapeName, s) => {
-    const idx = [];
-    for (let i = 0; i < n; i++) if (resolved.shape[i] === s) idx.push(i);
-    if (!idx.length) return;
-    const k = idx.length;
-    const center = new Float32Array(3 * k), color = new Float32Array(3 * k), size = new Float32Array(k);
-    idx.forEach((i, j) => {
-      center.set(pos.subarray(3 * i, 3 * i + 3), 3 * j);
-      color.set(resolved.color.subarray(3 * i, 3 * i + 3), 3 * j);
-      size[j] = resolved.size[i];
-    });
-    const g = new THREE.InstancedBufferGeometry();
-    const b = base[shapeName];
-    g.index = b.index;
-    g.setAttribute('position', b.attributes.position);
-    g.setAttribute('normal', b.attributes.normal);
-    g.setAttribute('iCenter', new THREE.InstancedBufferAttribute(center, 3));
-    g.setAttribute('iColor', new THREE.InstancedBufferAttribute(color, 3));
-    g.setAttribute('iSize', new THREE.InstancedBufferAttribute(size, 1));
-    g.instanceCount = k;
-    // Glyphs are placed in the shader, so three's own bounds (from the
-    // unit glyph at the origin) would cull them wrongly.
-    g.boundingSphere = markerBoundingSphere(pos);
-    const mesh = new THREE.Mesh(g, material);
-    mesh.frustumCulled = false;
-    mesh.userData.markerIndex = Int32Array.from(idx);
-    // Pixel-sized glyphs need the target's size and pixel ratio.
-    mesh.onBeforeRender = renderer => {
-      renderer.getDrawingBufferSize(material.uniforms.u_resolution.value);
-      material.uniforms.u_pxScale.value = renderer.getPixelRatio();
-    };
-    group.add(mesh);
-  });
+  const isBase = i => (resolved.base ? resolved.base[i] : 1) === 1;
+  MARKER_SHAPES.forEach((shapeName, s) => addShapeMeshes(s, shapeName));
+  // One mesh per shape for own-colored markers, one for base-colored ones.
+  function addShapeMeshes(s, shapeName) {
+    for (const wantBase of [false, true]) {
+      const idx = [];
+      for (let i = 0; i < n; i++) if (resolved.shape[i] === s && isBase(i) === wantBase && resolved.size[i] > 0) idx.push(i);
+      if (!idx.length) continue;
+      const k = idx.length;
+      const center = new Float32Array(3 * k), color = new Float32Array(3 * k), size = new Float32Array(k);
+      const index = new Float32Array(k), dim = new Float32Array(k), baseF = new Float32Array(k);
+      idx.forEach((i, j) => {
+        center.set(pos.subarray(3 * i, 3 * i + 3), 3 * j);
+        color.set(resolved.color.subarray(3 * i, 3 * i + 3), 3 * j);
+        size[j] = resolved.size[i];
+        index[j] = i;
+        dim[j] = resolved.dim ? resolved.dim[i] : 0;
+        baseF[j] = wantBase ? 1 : 0;
+      });
+      const g = new THREE.InstancedBufferGeometry();
+      const b = base[shapeName];
+      g.index = b.index;
+      g.setAttribute('position', b.attributes.position);
+      g.setAttribute('normal', b.attributes.normal);
+      g.setAttribute('iCenter', new THREE.InstancedBufferAttribute(center, 3));
+      g.setAttribute('iColor', new THREE.InstancedBufferAttribute(color, 3));
+      g.setAttribute('iSize', new THREE.InstancedBufferAttribute(size, 1));
+      g.setAttribute('iIndex', new THREE.InstancedBufferAttribute(index, 1));
+      g.setAttribute('iDim', new THREE.InstancedBufferAttribute(dim, 1));
+      g.setAttribute('iBase', new THREE.InstancedBufferAttribute(baseF, 1));
+      g.instanceCount = k;
+      // Glyphs are placed in the shader, so three's own bounds (from the
+      // unit glyph at the origin) would cull them wrongly.
+      g.boundingSphere = markerBoundingSphere(pos);
+      const mesh = new THREE.Mesh(g, wantBase ? baseMaterial : material);
+      mesh.frustumCulled = false;
+      mesh.userData.markerIndex = Int32Array.from(idx);
+      mesh.userData.isBase = wantBase;
+      // Pixel-sized glyphs need the target's size and pixel ratio.
+      mesh.onBeforeRender = renderer => {
+        renderer.getDrawingBufferSize(material.uniforms.u_resolution.value);
+        material.uniforms.u_pxScale.value = renderer.getPixelRatio();
+      };
+      group.add(mesh);
+    }
+  }
   return group;
 }
 
-// Size multiplier and opacity (FILE panel sliders).
+// Which marker (index in its file) is drawn as hovered; -1 for none.
+export function setMarkerHover(group, index) {
+  group.userData.material.uniforms.u_hover.value = index == null ? -1 : index;
+}
+
+// Size multiplier and the opacity of base-colored markers. 100%: drawn
+// like any opaque object. Below that: blended, without writing depth, so
+// they don't hide what's behind them. 0%: not drawn at all.
 export function setMarkerDisplay(group, { sizeScale = 1, opacity = 1 } = {}) {
-  const m = group.userData.material;
+  const m = group.userData.material, bm = group.userData.baseMaterial;
   m.uniforms.u_sizeScale.value = sizeScale;
   m.uniforms.u_opacity.value = opacity;
   const transparent = opacity < 0.999;
-  if (m.transparent !== transparent) { m.transparent = transparent; m.needsUpdate = true; }
+  if (bm.transparent !== transparent) {
+    bm.transparent = transparent;
+    bm.depthWrite = !transparent;
+    bm.needsUpdate = true;
+  }
+  for (const mesh of group.children) if (mesh.userData.isBase) mesh.visible = opacity > 0.004;
 }
 
 export function disposeMarkerGroup(group, keepMaterial = false) {
@@ -174,7 +217,7 @@ export function disposeMarkerGroup(group, keepMaterial = false) {
     mesh.geometry.index = null;
     mesh.geometry.dispose();
   }
-  if (!keepMaterial) group.userData.material.dispose();
+  if (!keepMaterial) { group.userData.material.dispose(); group.userData.baseMaterial.dispose(); }
 }
 
 export function markerBoundingSphere(pos) {

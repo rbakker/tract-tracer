@@ -1469,9 +1469,26 @@ export function makePlaneMesh(planeKey, vr, viewCentre) {
 // A vertex shader using this passes vFieldSE = instanceField.xy,
 // vSegPos = position.y, vFieldRow = instanceField.z, vStyle = file style.
 export const FIELD_COLOR_GLSL = `
+varying float vDensity;
+// SETTINGS › dimming: the opacity of every dimmed part — streamlines the
+// highlight probe doesn't hit, those outside the focused bundles, and the
+// parts of a data-colored streamline outside its color window.
+uniform float u_dimming;
+// Density-compensated opacity of a translucent segment: where n lines of
+// the same file overlap (vDensity, see computeRibbonDensity), each gets a
+// lower alpha so that the n together look like sqrt(n) lines at the
+// file's opacity o: (1 - a)^n = (1 - o)^sqrt(n). A lone line (n = 1)
+// keeps o exactly; 0% and 100% are left alone.
+float plainAlpha(float o) {
+  if (o <= 0.001 || o >= 0.999) return o;
+  return 1.0 - pow(1.0 - o, inversesqrt(max(vDensity, 1.0)));
+}
 vec4 fieldShade(vec3 base) {
-  vec4 plain = vec4(base, vStyle.y);
-  if (abs(vFieldRow) < 1e-5) return plain;
+  // vStyle.y: this streamline's opacity — 1, or the dimming for a dimmed
+  // one (see fileStyle()). With a data field, the parts outside its
+  // window are dimmed too; the parts inside keep the line's opacity.
+  if (abs(vFieldRow) < 1e-5) return vec4(base, plainAlpha(vStyle.y));
+  vec4 plain = vec4(base, plainAlpha(min(vStyle.y, u_dimming)));
   float n = float(COLORMAP_SIZE);
   float lo = vStyle.z, hi = vStyle.w;
   float u;
@@ -1488,16 +1505,28 @@ vec4 fieldShade(vec3 base) {
     // texel centres: tw=0 -> first texel's centre, tw=1 -> last's
     u = (clamp(tw, 0.0, 1.0) * (n - 1.0) + 0.5) / n;
   }
-  return vec4(texture2D(u_colormap, vec2(u, abs(vFieldRow))).rgb, 1.0);
+  return vec4(texture2D(u_colormap, vec2(u, abs(vFieldRow))).rgb, plainAlpha(vStyle.y));
 }
 `;
 
 // Fetches a file's style texel (see FIELD_COLOR_GLSL) in a vertex shader.
 export const FILE_STYLE_VS_GLSL = `
+// Lines of the same file overlapping here (see computeRibbonDensity);
+// the vertex shader copies it into vDensity for plainAlpha().
+attribute float instanceDensity;
+varying float vDensity;
+// Probe highlight mode: 1 = a streamline the probe highlights, 0 = context.
+attribute float instanceHighlight;
+// < 0: two-set mode (probe highlight / focus) off. Otherwise the opacity
+// of the dimmed (context) lines; highlighted lines are drawn solid.
+uniform float u_context;
+uniform float u_dimming;  // see FIELD_COLOR_GLSL
 uniform sampler2D u_fileStyle;
 uniform float     u_fileStyleSize;
 vec4 fileStyle(float fileIndex) {
-  return texture2D(u_fileStyle, vec2((fileIndex + 0.5) / u_fileStyleSize, 0.5));
+  vec4 st = texture2D(u_fileStyle, vec2((fileIndex + 0.5) / u_fileStyleSize, 0.5));
+  st.y = (u_context >= 0.0 && instanceHighlight < 0.5) ? u_context : 1.0;
+  return st;
 }
 // Can this segment produce any fragment in a given pass? Decided once per
 // segment in the vertex shader, so a pass skips segments it would only
@@ -1510,17 +1539,19 @@ vec4 fileStyle(float fileIndex) {
 //   pass 0 = opaque parts (alpha 1), 1 = faint parts (0 < alpha < 1),
 //        2 = anything visible at all
 bool segmentMayDraw(vec3 f, vec4 st, int pass) {
-  float o = st.y;
+  float o = st.y;          // the line's opacity (parts inside a field window)
+  float od = o;            // opacity of the other parts
   bool anyIn = false, allIn = false;
   if (abs(f.z) > 1e-5) {
     float a = min(f.x, f.y), b = max(f.x, f.y);
     float wlo = min(st.z, st.w), whi = max(st.z, st.w);
-    anyIn = b >= wlo - 1e-3 && a <= whi + 1e-3;   // some part may be highlighted (loose)
-    allIn = a >= wlo && b <= whi;                 // the whole segment is highlighted (strict)
-  }
-  if (pass == 0) return anyIn || o >= 0.999;
-  if (pass == 1) return o > 0.001 && o < 0.999 && !allIn;
-  return anyIn || o > 0.001;
+    anyIn = b >= wlo - 1e-3 && a <= whi + 1e-3;   // some part may be inside the window (loose)
+    allIn = a >= wlo && b <= whi;                 // the whole segment is inside (strict)
+    od = min(o, u_dimming);
+  } else { anyIn = true; allIn = true; }          // no field: the whole line has opacity o
+  if (pass == 0) return (anyIn && o >= 0.999) || (!allIn && od >= 0.999);
+  if (pass == 1) return (anyIn && o > 0.001 && o < 0.999) || (!allIn && od > 0.001 && od < 0.999);
+  return (anyIn && o > 0.001) || (!allIn && od > 0.001);
 }
 `;
 
@@ -1771,6 +1802,7 @@ void main() {
   vSegPos      = position.y;
   vFieldRow    = instanceField.z;
   vStyle       = fileStyle(instanceFile);
+  vDensity     = instanceDensity;
 #ifdef FAINT_PASS
   if (!segmentMayDraw(instanceField, vStyle, 1)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
 #else
@@ -1864,6 +1896,8 @@ export function makeRibbonMaterial(colormapTex = null, styleTex = null, faint = 
       u_colormap:     { value: colormapTex || defaultColormapTexture() },
       u_fileStyle:     { value: styleTex },
       u_fileStyleSize: { value: styleTex ? styleTex.image.width : 1 },
+      u_context:      { value: -1 }, // probe highlight mode off — see FILE_STYLE_VS_GLSL
+      u_dimming:      { value: 0.15 }, // see FIELD_COLOR_GLSL
       u_resolution:   { value: new THREE.Vector2(1, 1) },
       u_widthNearPx:  { value: 3.0 },
       u_widthFarPx:   { value: 1.0 },
@@ -2089,7 +2123,8 @@ export function hexToRgbRaw(hex) {
 // perTractRow[i] is that streamline's colormap row as colormapRowV(),
 // negated for a categorical field (see FIELD_COLOR_GLSL).
 // styleInfo (optional): { fileIndex: per-tract file index (row of tex),
-// tex: makeFileStyleTexture(), materials: {opaque, faint} }. Omitted:
+// tex: makeFileStyleTexture(), materials: {opaque, faint},
+// highlight: per-tract 1/0 for the probe's highlight mode (default 1) }. Omitted:
 // every tract is file 0 of a private 1-texel texture with width
 // widthNearPx, opacity 1.
 // materials: pass the previous mesh's pair (mesh.material and
@@ -2112,6 +2147,10 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
   const instBCol  = new Float32Array(segCount * 3);
   const instField = new Float32Array(segCount * 3); // zeros = no field
   const instFile  = new Float32Array(segCount);     // file index per segment
+  const instDens  = new Float32Array(segCount).fill(1); // see computeRibbonDensity
+  const instHl    = new Float32Array(segCount);     // see setRibbonHighlight
+  const hlTract   = styleInfo && styleInfo.highlight;
+  const instTract = new Int32Array(segCount);       // streamline per segment (CPU only)
   const fileIdx   = styleInfo && styleInfo.fileIndex;
   const perTract  = fieldInfo && fieldInfo.perTract;
   const perRow    = fieldInfo && fieldInfo.perTractRow;
@@ -2152,6 +2191,8 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
         instField[3*si] = fv; instField[3*si+1] = fv; instField[3*si+2] = fRow;
       }
       instFile[si] = fIdx;
+      instTract[si] = ti2;
+      instHl[si] = hlTract ? hlTract[ti2] : 1;
       si++;
     }
   }
@@ -2178,6 +2219,10 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
   geo.setAttribute('instanceBundleColor', new THREE.InstancedBufferAttribute(instBCol, 3));
   geo.setAttribute('instanceField', new THREE.InstancedBufferAttribute(instField, 3));
   geo.setAttribute('instanceFile',  new THREE.InstancedBufferAttribute(instFile, 1));
+  geo.setAttribute('instanceDensity', new THREE.InstancedBufferAttribute(instDens, 1));
+  geo.setAttribute('instanceHighlight', new THREE.InstancedBufferAttribute(instHl, 1));
+  geo.userData.instanceTract = instTract;
+  geo.userData.densityFiles = new Set(); // files whose density is filled in
   geo.instanceCount = si;
 
   let styleTex = styleInfo && styleInfo.tex, ownStyleTex = null;
@@ -2282,28 +2327,23 @@ export function makeDotsMaterial3d(endsPx = 6) {
   });
 }
 
-// Endpoint dots — builds src (closest to cursor) and tgt (farthest) geometries in one pass.
+// Endpoint dots — splits all streamline ends into two sets in one pass:
+// src = the ends inside the probe sphere ("inside ends"), tgt = all other
+// ends ("ends").
 //
-// probedEnds: Uint8Array per-tract, or null (pass-through mode).
-//   0 = start was probed  → src=start, tgt=end
-//   1 = end was probed    → src=end,   tgt=start
-//   2 = both probed       → both go to src, nothing to tgt
-//   null (pass-through)   → assign by Euclidean distance to cursor
-//
-// cursor: [cx,cy,cz] RAS mm.
+// probe: { cursor: [cx,cy,cz], radius } in RAS mm, or null when the probe
+// is off (or set to ALL) — then every end goes to tgt.
 // endsPx: dot screen size (in CSS pixels; scaled to framebuffer pixels via
 // pixelRatio, which the caller should pass as whatever the renderer is
 // ACTUALLY using — renderer.getPixelRatio() — not window.devicePixelRatio
 // directly, since those two can differ (e.g. a capped render resolution).
 // bundleInfo (optional): { idPerStreamline: Int32Array|null, palette: [r,g,b][] },
-// same shape makeRibbonLines takes. Endpoint dots dropped RAS coloring
-// entirely (never a useful signal for a single point, per design
-// discussion) — the 'color' attribute now carries bundle color instead,
-// falling back to a neutral placeholder when there's no bundle (in that
-// case the "Bundle" UI option resolves to the flat default color instead
-// of this attribute — see index.html's color-resolution logic).
+// same shape makeRibbonLines takes; the 'color' attribute carries the
+// bundle color (the "Bundle" UI option), a neutral placeholder without one.
+// skipTract (optional): i => true / 3 for streamlines that get no dots at
+// all, 1 / 2 to skip only the start / end dot (dimmed lines and parts).
 // Returns { src: THREE.Points, tgt: THREE.Points }
-export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRatio = window.devicePixelRatio, bundleInfo = null) {
+export function makeEndpointDots(tracts, probe, endsPx = 6, pixelRatio = window.devicePixelRatio, bundleInfo = null, skipTract = null) {
   const n = tracts.length;
   const srcPos = new Float32Array(n * 6), srcCol = new Float32Array(n * 6);
   const tgtPos = new Float32Array(n * 6), tgtCol = new Float32Array(n * 6);
@@ -2311,14 +2351,15 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRa
   // bundle each dot belongs to, for hover/click lookups later (see
   // index.html's bundle-name tooltip). -1 = no bundle info available.
   // si/ti (below) are their own counters, separate from the loop index i
-  // (the "both probed" case adds twice to src per streamline, so point
+  // (a streamline can put both its ends in the same set, so point
   // index in the geometry is NOT the same as streamline index i) — bId
   // needs computing from i and then written out at the SAME si/ti
   // position the matching position/color just went to.
   const srcBundleId = new Int32Array(n * 2), tgtBundleId = new Int32Array(n * 2);
   let si = 0, ti = 0;
 
-  const [cx, cy, cz] = cursor || [0, 0, 0];
+  const [cx, cy, cz] = probe ? probe.cursor : [0, 0, 0];
+  const r2 = probe ? probe.radius * probe.radius : -1;
 
   const NEUTRAL_RGB = [1, 1, 1];
   // A bit brighter than the matching line color, not a separate palette —
@@ -2338,7 +2379,10 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRa
 
   for (let i = 0; i < n; i++) {
     const t = tracts[i];
-    if (t.length < 6) continue;
+    // skipTract(i): true (or 3) = no dots for this streamline; 1 = not
+    // its start; 2 = not its end.
+    const sk = skipTract ? +skipTract(i) : 0;
+    if (t.length < 6 || sk === 3 || sk === true) continue;
     const np = t.length / 3;
 
     const sx = t[0], sy = t[1], sz = t[2];
@@ -2359,17 +2403,9 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRa
       tgtCol[ti*3]=c[0]; tgtCol[ti*3+1]=c[1]; tgtCol[ti*3+2]=c[2]; tgtBundleId[ti]=bId; ti++;
     };
 
-    if (probedEnds) {
-      const flag = probedEnds[i];
-      if      (flag === 0) { addSrc(sx,sy,sz,sCol); addTgt(ex,ey,ez,eCol); }
-      else if (flag === 1) { addSrc(ex,ey,ez,eCol); addTgt(sx,sy,sz,sCol); }
-      else                 { addSrc(sx,sy,sz,sCol); addSrc(ex,ey,ez,eCol); }
-    } else {
-      const ds2 = (sx-cx)**2 + (sy-cy)**2 + (sz-cz)**2;
-      const de2 = (ex-cx)**2 + (ey-cy)**2 + (ez-cz)**2;
-      if (ds2 <= de2) { addSrc(sx,sy,sz,sCol); addTgt(ex,ey,ez,eCol); }
-      else            { addSrc(ex,ey,ez,eCol); addTgt(sx,sy,sz,sCol); }
-    }
+    // Each end on its own: inside the probe sphere -> src, else tgt.
+    if (!(sk & 1)) { if ((sx-cx)**2 + (sy-cy)**2 + (sz-cz)**2 <= r2) addSrc(sx,sy,sz,sCol); else addTgt(sx,sy,sz,sCol); }
+    if (!(sk & 2)) { if ((ex-cx)**2 + (ey-cy)**2 + (ez-cz)**2 <= r2) addSrc(ex,ey,ez,eCol); else addTgt(ex,ey,ez,eCol); }
   }
 
   const makePoints = (pos, col, bundleIdArr, count) => {
@@ -2391,4 +2427,154 @@ export function makeEndpointDots(tracts, probedEnds, cursor, endsPx = 6, pixelRa
     src: makePoints(srcPos, srcCol, srcBundleId, si),
     tgt: makePoints(tgtPos, tgtCol, tgtBundleId, ti),
   };
+}
+
+// ── Density for translucent streamlines ─────────────────────
+// Fills a ribbon mesh's instanceDensity (see plainAlpha in
+// FIELD_COLOR_GLSL) for the given files: per segment, about how many
+// lines of the same file pass through the same spot. Counted on a voxel
+// grid (voxelMm, scaled to the data by the caller): each line counts once
+// per voxel it passes through (sampled every half voxel along each
+// segment), then the grid is lightly blurred (3x3x3) and each segment reads
+// it, trilinearly interpolated, at its midpoint — so opacity changes
+// smoothly along a line, without visible voxel steps.
+// Works on the mesh's own geometry (shared with the 2D slab panels): no
+// streamline rebuild. Files already done for this geometry are skipped.
+export function computeRibbonDensity(mesh, files, voxelMm) {
+  if (!mesh || !(voxelMm > 0)) return;
+  const geo = mesh.geometry;
+  const done = geo.userData.densityFiles, tractOf = geo.userData.instanceTract;
+  const todo = [...files].filter(f => !done.has(f));
+  if (!todo.length || !tractOf) return;
+  const S = geo.attributes.instanceStart.array, E = geo.attributes.instanceEnd.array;
+  const F = geo.attributes.instanceFile.array, dens = geo.attributes.instanceDensity;
+  const D = dens.array, n = geo.instanceCount;
+  const inv = 1 / voxelMm;
+  for (const file of todo) {
+    // this file's segments and their bounding box
+    const segs = [];
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (F[i] !== file) continue;
+      segs.push(i);
+      for (const A of [S, E]) {
+        const x = A[3*i], y = A[3*i+1], z = A[3*i+2];
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (z < z0) z0 = z; if (z > z1) z1 = z;
+      }
+    }
+    done.add(file);
+    if (!segs.length) continue;
+    // grid with a one-voxel margin (for the blur and the interpolation)
+    const ox = x0 - voxelMm, oy = y0 - voxelMm, oz = z0 - voxelMm;
+    const nx = Math.ceil((x1 - ox) * inv) + 2, ny = Math.ceil((y1 - oy) * inv) + 2, nz = Math.ceil((z1 - oz) * inv) + 2;
+    const cells = nx * ny * nz;
+    if (cells > 64e6) continue; // absurd voxel size: leave density 1
+    const count = new Float32Array(cells), last = new Int32Array(cells).fill(-1);
+    const cell = (x, y, z) => {
+      const ix = Math.floor((x - ox) * inv), iy = Math.floor((y - oy) * inv), iz = Math.floor((z - oz) * inv);
+      return (iz * ny + iy) * nx + ix;
+    };
+    for (const i of segs) {
+      const t = tractOf[i];
+      const ax = S[3*i], ay = S[3*i+1], az = S[3*i+2];
+      const dx = E[3*i] - ax, dy = E[3*i+1] - ay, dz = E[3*i+2] - az;
+      const steps = Math.max(1, Math.ceil(Math.sqrt(dx*dx + dy*dy + dz*dz) * inv * 2));
+      for (let k = 0; k <= steps; k++) {
+        const u = k / steps, c = cell(ax + u*dx, ay + u*dy, az + u*dz);
+        if (last[c] !== t) { last[c] = t; count[c]++; }
+      }
+    }
+    // separable 3x3x3 blur, weights 1/4 1/2 1/4 per axis: gentle enough
+    // that a thin bundle keeps most of its count, enough to smooth the
+    // noisy low counts at a bundle's edge
+    const tmp = new Float32Array(cells);
+    const blur = (src, dst, stride, len, dimIndex) => {
+      for (let c = 0; c < cells; c++) {
+        const p = dimIndex(c);
+        let v = 0.5 * src[c];
+        if (p > 0) v += 0.25 * src[c - stride];
+        if (p < len - 1) v += 0.25 * src[c + stride];
+        dst[c] = v; // the grid margin is empty, so the edges never matter
+      }
+    };
+    blur(count, tmp, 1, nx, c => c % nx);
+    blur(tmp, count, nx, ny, c => Math.floor(c / nx) % ny);
+    blur(count, tmp, nx * ny, nz, c => Math.floor(c / (nx * ny)));
+    // trilinear lookup at each segment's midpoint (voxel centres at +0.5)
+    for (const i of segs) {
+      const fx = ((S[3*i] + E[3*i]) * 0.5 - ox) * inv - 0.5;
+      const fy = ((S[3*i+1] + E[3*i+1]) * 0.5 - oy) * inv - 0.5;
+      const fz = ((S[3*i+2] + E[3*i+2]) * 0.5 - oz) * inv - 0.5;
+      const ix = Math.max(0, Math.min(nx - 2, Math.floor(fx))), iy = Math.max(0, Math.min(ny - 2, Math.floor(fy))), iz = Math.max(0, Math.min(nz - 2, Math.floor(fz)));
+      const u = Math.max(0, Math.min(1, fx - ix)), v = Math.max(0, Math.min(1, fy - iy)), w = Math.max(0, Math.min(1, fz - iz));
+      const at = (a, b, c) => tmp[((iz + c) * ny + iy + b) * nx + ix + a];
+      const val =
+        (1-w) * ((1-v) * ((1-u) * at(0,0,0) + u * at(1,0,0)) + v * ((1-u) * at(0,1,0) + u * at(1,1,0))) +
+           w  * ((1-v) * ((1-u) * at(0,0,1) + u * at(1,0,1)) + v * ((1-u) * at(0,1,1) + u * at(1,1,1)));
+      D[i] = Math.max(1, val);
+    }
+  }
+  dens.needsUpdate = true;
+}
+
+// ── Back-to-front order for translucent streamlines ─────────
+// The translucent (faint) pass blends without writing depth, so whatever
+// is drawn last looks in front. This reorders a ribbon mesh's segments
+// (all its per-segment attributes, in place) far-to-near along viewDir —
+// the camera's forward direction, normalized — so the blending order
+// matches depth: per segment (its midpoint), not per bundle, so bundles
+// that weave through each other blend correctly too. A bucket (counting)
+// sort over SORT_BUCKETS depth layers: one pass, no comparison sort. The
+// opaque pass doesn't care about the order (depth test), and the 2D slab
+// panels share the geometry unchanged in meaning.
+// Returns the time it took in ms (for the caller's throttling).
+const SORT_BUCKETS = 1024;
+export function sortRibbonByDepth(mesh, viewDir) {
+  const t0 = performance.now();
+  const geo = mesh.geometry, n = geo.instanceCount;
+  if (!n) return 0;
+  const S = geo.attributes.instanceStart.array, E = geo.attributes.instanceEnd.array;
+  const [fx, fy, fz] = [viewDir.x, viewDir.y, viewDir.z];
+  const depth = new Float32Array(n);
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const d = (S[3*i] + E[3*i]) * fx + (S[3*i+1] + E[3*i+1]) * fy + (S[3*i+2] + E[3*i+2]) * fz; // 2x midpoint depth
+    depth[i] = d;
+    if (d < lo) lo = d; if (d > hi) hi = d;
+  }
+  // far first: larger depth along the forward direction = farther away
+  const scale = hi > lo ? (SORT_BUCKETS - 1) / (hi - lo) : 0;
+  const bucket = new Uint16Array(n), start = new Uint32Array(SORT_BUCKETS + 1);
+  for (let i = 0; i < n; i++) { const b = SORT_BUCKETS - 1 - Math.floor((depth[i] - lo) * scale); bucket[i] = b; start[b + 1]++; }
+  for (let b = 0; b < SORT_BUCKETS; b++) start[b + 1] += start[b];
+  const order = new Uint32Array(n); // order[newIndex] = oldIndex
+  for (let i = 0; i < n; i++) order[start[bucket[i]]++] = i;
+  // permute every per-instance attribute (and the CPU-only tract ids)
+  const permute = (arr, k) => {
+    const src = arr.slice(0, n * k);
+    for (let j = 0; j < n; j++) { const o = order[j] * k, d = j * k; for (let c = 0; c < k; c++) arr[d + c] = src[o + c]; }
+  };
+  for (const name in geo.attributes) {
+    const a = geo.attributes[name];
+    if (!a.isInstancedBufferAttribute) continue;
+    permute(a.array, a.itemSize);
+    a.needsUpdate = true;
+  }
+  if (geo.userData.instanceTract) permute(geo.userData.instanceTract, 1);
+  geo.userData.sortDir = viewDir.clone();
+  return performance.now() - t0;
+}
+
+// Probe highlight mode: rewrites which segments are highlighted (1) or
+// context (0) from a per-streamline flag (index = the streamline's
+// position in the tracts passed to makeRibbonLines), without rebuilding
+// the mesh. Uses the segments' streamline ids, so it is correct after
+// sortRibbonByDepth too.
+export function setRibbonHighlight(mesh, perTract) {
+  const geo = mesh.geometry, a = geo.attributes.instanceHighlight, tr = geo.userData.instanceTract;
+  const H = a.array, n = geo.instanceCount;
+  for (let i = 0; i < n; i++) H[i] = perTract[tr[i]];
+  a.needsUpdate = true;
 }

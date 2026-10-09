@@ -57,6 +57,9 @@ class LoadedItem {
     this.onVisibilityChange = null; // (item, visible) => void
     this.onSelect = null;           // (item) => void — radio selection
     this.onColorChange = null;      // (item, hex) => void — swatch edit (bundles)
+    this.onFocusToggle = null;      // (item, event) => void — focus icon (bundles); shown when set
+    this.onInfo = null;             // (item) => void — info icon before the swatch (e.g. the file header); shown when set
+    this.focused = false;           // the focus icon's state
     // Per-item settings, shown INLINE under the row when its settings
     // toggle (» at the row's right end) is open. The app fills the area:
     // (item, containerEl) => void, called on every render while open —
@@ -234,6 +237,36 @@ class LoadedDataStore {
 }
 
 // A standard button for an item's settings area (see buildSettings).
+// The focus icon: a small sun — a disc with rays; lit when on (CSS .focus-btn.on).
+const FOCUS_ICON_SVG = '<svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">'
+  + '<circle class="fi-core" cx="7" cy="7" r="2.3"/><g class="fi-rays">'
+  + [0, 45, 90, 135, 180, 225, 270, 315].map(a => {
+      const r = a * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+      return '<line x1="' + (7 + 3.9 * c).toFixed(2) + '" y1="' + (7 + 3.9 * s).toFixed(2)
+           + '" x2="' + (7 + 6.1 * c).toFixed(2) + '" y2="' + (7 + 6.1 * s).toFixed(2) + '"/>';
+    }).join('') + '</g></svg>';
+function makeFocusButton(on, onClick, title = null) {
+  const b = document.createElement('button');
+  b.className = 'focus-btn' + (on ? ' on' : '');
+  b.innerHTML = FOCUS_ICON_SVG;
+  if (title) b.title = title;
+  b.addEventListener('click', e => { e.stopPropagation(); onClick(e); });
+  return b;
+}
+
+// The info icon: a bold italic serif "i" (e.g. a file's header).
+function makeInfoButton(onClick, title = 'info') {
+  const b = document.createElement('button');
+  b.className = 'info-btn';
+  b.title = title;
+  // viewBox cropped to the glyph, so the button is only as wide as the "i"
+  b.innerHTML = '<svg viewBox="4.7 0 7.8 16" width="7" height="13" aria-hidden="true" fill="currentColor">'
+    + '<circle cx="10.1" cy="2.6" r="2"/>'
+    + '<path d="M5.3 6.4L10.6 5.9L8.3 12.6C8.1 13.2 8.6 13.3 9.7 12.3L10.4 13C8.7 14.9 7.3 15.5 6.2 15.3C5.2 15.1 5 14.3 5.4 13.1L7.1 8.1C7.3 7.5 6.9 7.3 5.2 7.4Z"/></svg>';
+  b.addEventListener('click', e => { e.stopPropagation(); onClick(e); });
+  return b;
+}
+
 function makeSettingsButton(label, onClick, title = null) {
   const b = document.createElement('button');
   b.className = 'accent-link dt-set-btn';
@@ -270,6 +303,13 @@ class DataTreeView {
     for (const item of roots) this.container.appendChild(this._renderNode(item, 0, item.isCategory ? 1 : 0));
   }
 
+  // Left padding of a row at this depth: 14 px per level below the main
+  // rows; the main rows under a category heading aren't indented at all
+  // (space is scarce — the heading's own style sets it apart).
+  _indent(depth, topDepth) {
+    return 8 + Math.max(0, depth - topDepth) * 14;
+  }
+
   // topDepth: the depth of the tree's "main" rows — 1 under a category
   // heading — which get the brighter top-level label style; deeper rows
   // are sub-rows.
@@ -278,7 +318,7 @@ class DataTreeView {
     if (item.kind === 'toolbar') {
       const bar = document.createElement('div');
       bar.className = 'dt-row dt-toolbar';
-      bar.style.paddingLeft = (8 + depth * 14) + 'px';
+      bar.style.paddingLeft = this._indent(depth, topDepth) + 'px';
       item.build(item, bar);
       wrap.appendChild(bar);
       return wrap;
@@ -287,7 +327,7 @@ class DataTreeView {
     const row = document.createElement('div');
     row.className = 'dt-row' + (item.isCategory ? ' dt-cat' : depth > topDepth ? ' dt-sub' : '')
                   + (item.dimmed ? ' dt-dim' : '') + (item.isError ? ' dt-err' : '');
-    row.style.paddingLeft = (8 + depth * 14) + 'px';
+    row.style.paddingLeft = this._indent(depth, topDepth) + 'px';
 
     const hasChildren = item.children.length > 0;
     const caret = document.createElement('span');
@@ -362,6 +402,13 @@ class DataTreeView {
       });
     }
 
+    // Focus icon (bundles): "select this bundle, dim the others".
+    let focusBtn = null;
+    if (item.onFocusToggle) {
+      focusBtn = makeFocusButton(item.focused, e => item.onFocusToggle(item, e),
+        item.focused ? 'focused — click: unfocus' : 'focus: draw this bundle solid, dim the others (adds to the focused bundles)');
+    }
+
     let swatch = null;
     if (item.kind === 'bundle' && item.colorHex) {
       // A real <input type=color> sized/stripped to look exactly like
@@ -409,6 +456,8 @@ class DataTreeView {
 
     row.appendChild(caret);
     if (!item.isCategory || item.selectAll) row.appendChild(selector);
+    if (focusBtn) row.appendChild(focusBtn);
+    if (item.onInfo) row.appendChild(makeInfoButton(() => item.onInfo(item), item.infoTitle || 'info'));
     if (swatch) row.appendChild(swatch);
     row.appendChild(label);
     if (tag) row.appendChild(tag);
@@ -418,7 +467,7 @@ class DataTreeView {
     if (item.buildSettings && item.settingsOpen) {
       const panel = document.createElement('div');
       panel.className = 'dt-settings';
-      panel.style.paddingLeft = (8 + (depth + 1) * 14 + 20) + 'px';
+      panel.style.paddingLeft = (this._indent(depth, topDepth) + 20) + 'px';
       item.buildSettings(item, panel);
       wrap.appendChild(panel);
     }
@@ -430,4 +479,4 @@ class DataTreeView {
   }
 }
 
-export { LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton };
+export { LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton };

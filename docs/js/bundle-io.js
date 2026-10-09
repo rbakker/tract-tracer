@@ -160,7 +160,12 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
   let raw;
   try { raw = JSON.parse(text); } catch (e) { throw 'index.json is not valid JSON: ' + e; }
   const manifest = parseManifest(raw);
-  const autoColors = autoBundlePalette(manifest.bundles.length);
+  // Streamline files in the drop that the manifest doesn't list are loaded
+  // too, after the listed ones, named after their file and colored from the
+  // same automatic palette (continuing after the listed bundles' slots).
+  const listed = new Set(manifest.bundles.map(b => b.file));
+  const extra = tractFiles.filter(f => !listed.has(f.name));
+  const autoColors = autoBundlePalette(manifest.bundles.length + extra.length);
   const missing = [];
   const entries = manifest.bundles.map((b, i) => {
     const f = byName.get(b.file);
@@ -172,6 +177,7 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
     return { file: f, color: b.color || autoColors[i], name: b.name || stripPathExt(f ? f.name : b.file) };
   });
   if (missing.length) throw `index.json references file(s) not present in the drop: ${missing.join(', ')}`;
+  extra.forEach((f, j) => entries.push({ file: f, color: autoColors[manifest.bundles.length + j], name: stripPathExt(f.name) }));
   return { manifest, entries };
 }
 
