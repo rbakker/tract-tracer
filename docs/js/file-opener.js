@@ -75,8 +75,11 @@ export class MultiFileOpener {
     const dataFiles = [];
     for (const file of files) {
       const name = file.name;
+      // The manifest goes on to be classified (pass 2) — it ended in the
+      // .json skip below before, so a manifest's "volumes" section was
+      // never read.
+      if (name.toLowerCase() === MANIFEST_FILENAME) { dataFiles.push(file); continue; }
       if (name.toLowerCase().endsWith('.json')) continue; // json files are targets' sidecars, not targets themselves
-      if (name.toLowerCase() === MANIFEST_FILENAME) continue;
 
       for (const cand of baseNameCandidates(name)) {
         const jsonName = cand + '.json';

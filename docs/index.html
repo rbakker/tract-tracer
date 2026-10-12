@@ -108,7 +108,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
    corners and both stay up at once. */
 .app-panel{position:fixed;
   z-index:200;width:340px;max-height:calc(100vh - 80px);
-  background:rgba(8,11,15,0.95);border:2px solid var(--border);
+  background:rgb(8,11,15);border:2px solid var(--border);
   backdrop-filter:blur(6px);display:none;pointer-events:all;
   flex-direction:column;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,0.55);}
 .app-panel.open{display:flex;}
@@ -204,7 +204,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .solo-btn .lamp-fill{fill:currentColor;stroke:none;}
 .solo-btn .lamp-beam{stroke-width:1.1;}
 /* the bundle's swatch in its 3D label and card title */
-.hover-tip .dt-swatch,.card-panel .dt-swatch{width:10px;height:10px;margin-right:2px;}
+.hover-tip .dt-swatch,.card-panel .dt-swatch{margin-right:2px;} /* same size as in DATA (a 10 px one showed a dark ring inside its outline) */
 .card-panel .app-panel-title,.hover-tip .mt-title{gap:5px;}
 .dt-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   color:var(--bright);font-size:10px;letter-spacing:0.03em;
@@ -264,6 +264,32 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .hover-tip .mt-id{color:var(--bright);font-size:11px;}
 .hover-tip.mt-stack{flex-direction:column;align-items:flex-start;gap:3px;padding-top:4px;padding-bottom:4px;}
 .hover-tip .mt-region{display:flex;align-items:center;gap:6px;}
+/* the 3D context label (showContextLabel): a small heading per thing over its one-line menu */
+.hover-tip.ctx-label{position:fixed;z-index:5000;gap:1px;padding:4px 6px 5px 8px;}
+.hover-tip .ctx-head{font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);opacity:0.95;margin-top:7px;margin-bottom:1px;}
+.hover-tip .ctx-head:first-child{margin-top:0;}
+.hover-tip .ctx-line{display:flex;align-items:center;gap:5px;min-height:16px;}
+.hover-tip .ctx-click{cursor:pointer;}
+.mt-id.ctx-off{opacity:0.55;}
+.card-panel .ctx-region .mt-id.ctx-cur{font-weight:bold;}
+.mode-btn{flex:none;background:none;border:none;padding:0;margin:0 1px;width:15px;height:15px;cursor:pointer;color:var(--dim);
+  display:inline-flex;align-items:center;justify-content:center;}
+.mode-btn:hover{color:var(--bright);}
+.card-panel .ctx-sub{flex-basis:100%;margin-top:4px;}
+.card-panel .ctx-region{display:flex;align-items:center;gap:6px;padding:2px 0;}
+.card-panel .ctx-region .mt-region-sw{flex:none;width:9px;height:9px;border-radius:2px;}
+.card-panel .ctx-region .mt-id{color:var(--bright);font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.card-panel .ctx-region .mt-val{color:var(--dim);font-size:9px;}
+/* the marker card inside its CardPanel: the .hover-tip styles, without the floating box */
+.hover-tip.mt-in-panel{position:static;display:block;width:auto !important;max-width:none;border:none;background:none;
+  box-shadow:none;padding:0;max-height:none;overflow:visible;}
+.hover-tip.mt-in-panel > *{zoom:1;}
+.dt-swatch-static{display:inline-block;cursor:default;}
+.dt-swatch-static:hover{transform:none;}
+.dt-scroll{max-height:calc(50vh / var(--ui));overflow-y:auto;overflow-x:hidden;}
+.dt-note{color:var(--dim);font-size:9px;white-space:normal;padding:2px 0 2px 4px;}
+.dt-labels{flex-basis:100%;min-width:0;}
+.dt-labels .dt-row{padding-left:0;}
 .hover-tip .mt-region-sw{flex:none;width:9px;height:9px;border-radius:2px;background:#888;}
 .hover-tip .mt-val{color:var(--dim);}
 .hover-tip .mt-open,.hover-tip .mt-close{background:none;border:none;color:var(--dim);cursor:pointer;
@@ -358,9 +384,9 @@ a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
    the same .app-panel/FloatingPanel machinery as FILE/SETTINGS/ABOUT —
    draggable, pins on drag — just wider, accent-bordered, and default-
    positioned near the top-left corner instead of under the top-btn row. */
-#hdr-panel{width:430px;max-height:70vh;}
+#hdr-panel{width:calc(430px * var(--ui));max-height:70vh;}
 #hdr-panel-pre{color:var(--text);font-size:9px;line-height:1.7;
-  white-space:pre-wrap;word-break:break-all;user-select:text;margin:0;}
+  white-space:pre-wrap;word-break:break-all;user-select:text;margin:0;cursor:text;outline:none;}
 /* about.html ships as an unstyled fragment (text + logos) — give it
    sensible defaults here so it reads well without needing its own CSS. */
 #about-panel-content{color:var(--text);font-size:11px;line-height:1.7;}
@@ -419,6 +445,15 @@ input[type=file]{display:none;}
   white-space:nowrap;min-width:64px;}
 .ctl-row input[type=range]{flex:1;accent-color:var(--accent2);min-width:0;}
 .ctl-val{color:var(--text);font-size:9px;min-width:42px;text-align:right;}
+.view-dir{background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:3px;cursor:pointer;
+  font-family:'JetBrains Mono',monospace;font-size:9px;line-height:1;padding:4px 6px;}
+.view-dir:hover{background:var(--accent);color:#090909;}
+.view-num,.view-json{background:rgba(255,255,255,0.06);color:var(--text);border:1px solid rgba(255,255,255,0.18);border-radius:3px;
+  font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 4px;min-width:0;}
+.view-num{width:52px;margin-right:4px;text-align:right;}
+#panel-tools .dt-set-btn{margin-right:10px;}
+.view-json{flex:1;}
+.view-num:focus,.view-json:focus{outline:none;border-color:var(--accent);}
 .ctl-val.tools-status{flex:1;text-align:left;color:var(--dim);margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* reset button */
 .plane-toggles{display:flex;gap:10px;margin-bottom:4px;margin-left:62px;}
@@ -667,6 +702,7 @@ input[type=file]{display:none;}
 <div class="ctl-row probe-setting" data-tip="Color of the streamline ends inside the probe sphere (also the color of the probe sphere and ring). None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
   <label>inner·ends</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="hide"> None</label>
+  <label class="radio-opt" data-tip="the color of the brain region each end lies in (the label volume shown, or the last one shown)"><input type="radio" autocomplete="off" name="src-color" value="label"> Label</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat" checked><input type="color" autocomplete="off" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
@@ -692,30 +728,27 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="flat"><input type="color" autocomplete="off" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="Directional sheen strength (Kajiya-Kay tangent shading). A streamline lights up brightest where it runs ORTHOGONAL to the light direction, and goes dark where it points straight at (or away from) it — same as a real cylindrical strand: light traveling along a strand's own axis never faces any point on its surface head-on, since a cylinder's surface normals all point outward, perpendicular to that axis; light hitting the strand from the side illuminates the half facing it normally. 0 = flat color, no directional shading at all; 1 = normal strength; higher exaggerates it.">
+<div class="ctl-row" data-tip="Directional sheen strength (Kajiya-Kay tangent shading). A streamline lights up brightest where it runs ORTHOGONAL to the light direction, and goes dark where it points straight at (or away from) it — same as a real cylindrical strand: light traveling along a strand's own axis never faces any point on its surface head-on, since a cylinder's surface normals all point outward, perpendicular to that axis; light hitting the strand from the side illuminates the half facing it normally. 0 = flat color, no directional shading at all; 1 = full shading and sheen.">
   <label>reflectance</label>
-  <input type="range" id="reflectance-slider" min="0" max="2" step="0.05" value="1">
+  <input type="range" id="reflectance-slider" min="0" max="1" step="0.05" value="0.5">
   <span class="slider-val" id="reflectance-val">1.00</span>
 </div>
 <div class="ctl-row" data-tip="Color of the streamline ends; with the probe on: of those outside the probe sphere. None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
   <label>ends·color</label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="hide"> None</label>
+  <label class="radio-opt" data-tip="the color of the brain region each end lies in (the label volume shown, or the last one shown)"><input type="radio" autocomplete="off" name="tgt-color" value="label"> Label</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="flat" checked><input type="color" autocomplete="off" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="Size of the end dots (ends and inner ends) in screen pixels.">
+<div class="ctl-row" data-tip="Size of the end dots (ends and inner ends) in screen pixels. 0: no end dots.">
   <label>ends·size</label>
-  <input type="range" id="ends-size" min="1" max="16" step="0.5" value="6">
+  <input type="range" id="ends-size" min="0" max="16" step="0.5" value="6">
   <span class="slider-val" id="ends-size-val">6</span>
 </div>
 
-<div id="ao-controls">
-<div class="ctl-row" data-tip="Combines AO's reach (radius, mm), how sharply it falls off within that reach, and its overall darkening strength into one dial — all three individually make the effect stronger, so one slider steps through them together rather than needing three separate tweaks. Radius is scaled to the loaded data's own size; the other two range across N8AO's own full range. 0 = off entirely, and also re-enables the depth-darkening cue below (which AO otherwise replaces — see its own note), rather than needing a separate on/off switch. Its rendering library (self-hosted, not CDN) is only fetched the first time you move this off 0, not before. No measurable performance difference across the range once loaded — these are all post-hoc math on an already-fixed-cost sampling pass; GPU tier maps to one of N8AO's own quality presets (sample count), which is the setting that actually affects performance.">
-  <label>AO·strength</label>
-  <input type="range" id="ao-strength-slider" min="0" max="1" step="0.02" value="0">
-  <span class="slider-val" id="ao-strength-val">0%</span>
-  <span class="slider-val" id="ao-status"></span>
-</div>
+<div class="ctl-row" data-tip="Streamlines shading each other, like light through hair: the more streamlines between a spot and the light, the darker it gets — shows where streamlines run and end behind others. 0 = off. Strongest with the light from the side (LIGHT: left or right).">
+  <label>shadowing</label>
+  <input type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
+  <span class="slider-val" id="shadow-val">0%</span>
 </div>
 
     <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.\nAll three sliders default to their centre (raw=50) position — the mathematically 'neutral' reference value for each.">VOLUME RENDERING</div>
@@ -850,6 +883,39 @@ input[type=file]{display:none;}
     </div>
     <div class="app-panel-body">
     <div id="panel-content-tools" class="panel-content">
+    <div class="cfg-section" data-tip="The 3D view: from where the brain is seen, the centre it turns around, and how large it is shown. Copy it to come back to it later, share it, or put it in a zip's index.json as its opening view.">VIEW</div>
+    <div class="ctl-row" data-tip="Turn the brain to be seen from this side: Left, Right, Anterior, Posterior, Superior, Inferior.">
+      <label>from</label>
+      <div class="clip-radio-row">
+        <button class="view-dir" data-dir="left">L</button><button class="view-dir" data-dir="right">R</button>
+        <button class="view-dir" data-dir="anterior">A</button><button class="view-dir" data-dir="posterior">P</button>
+        <button class="view-dir" data-dir="superior">S</button><button class="view-dir" data-dir="inferior">I</button>
+      </div>
+      <span class="ctl-val tools-status" id="view-from-text"></span>
+    </div>
+    <div class="ctl-row" data-tip="The centre the brain turns around: world coordinates in mm (type and press Enter).">
+      <label>center</label>
+      <input class="view-num" id="view-cx" type="text" inputmode="decimal"><input class="view-num" id="view-cy" type="text" inputmode="decimal"><input class="view-num" id="view-cz" type="text" inputmode="decimal">
+    </div>
+    <div class="ctl-row"><label></label>
+      <button class="accent-link dt-set-btn" id="view-center-cursor" data-tip="Turn around the 2D cursor (the cursor sections' point).">cursor</button>
+      <button class="accent-link dt-set-btn" id="view-center-auto" data-tip="Back to the automatic centre.">auto</button>
+    </div>
+    <div class="ctl-row" data-tip="How large the brain is shown: the radius in mm of the sphere that fills the window (smaller = closer).">
+      <label>radius</label>
+      <input class="view-num" id="view-r" type="text" inputmode="decimal"><span class="ctl-val tools-status">mm</span>
+    </div>
+    <div class="ctl-row" data-tip="The view as text: copy it to come back to it, send it to a colleague, or put it in a zip's index.json as &quot;view&quot;. Paste a view here and press apply (or Enter) to go there.">
+      <label>view</label>
+      <input class="view-json" id="view-json" type="text" spellcheck="false">
+    </div>
+    <div class="ctl-row"><label></label>
+      <button class="accent-link dt-set-btn" id="view-copy">copy</button>
+      <button class="accent-link dt-set-btn" id="view-apply">apply</button>
+      <button class="accent-link dt-set-btn" id="view-reset" data-tip="The automatic view: framed on the scene's reference, from the right.">reset</button>
+      <span class="ctl-val tools-status" id="view-status"></span>
+    </div>
+
     <div class="cfg-section" data-tip="Save one view as a PNG image: only the picture itself, without labels, buttons or panels on top of it.">SCREENSHOT</div>
     <div class="ctl-row" data-tip="Which view to save.">
       <label>view</label>
@@ -873,7 +939,7 @@ input[type=file]{display:none;}
     </div>
     <div class="ctl-row"><label></label><button class="accent-link dt-set-btn" id="shot-save">save PNG</button><span class="ctl-val tools-status" id="shot-status"></span></div>
 
-    <div class="cfg-section" data-tip="A movie of the 3D view turning once around (360°) the screen's vertical axis, starting from the current view. Rendered frame by frame, so it is smooth however long it takes.">ROTATION MOVIE</div>
+    <div class="cfg-section" data-tip="A movie of the 3D view turning once around (360°) the brain's inferior–superior axis (through the rotation centre), starting from the current view: the brain spins about its own vertical axis, however the view is tilted. Rendered frame by frame, so it is smooth however long it takes.">ROTATION MOVIE</div>
     <div class="ctl-row" data-tip="Length of one full turn, in seconds. The movie ends where it started, so a player set to loop plays it seamlessly.">
       <label>length</label>
       <input type="range" id="mov-len" min="2" max="30" step="1" value="6">
@@ -938,7 +1004,7 @@ input[type=file]{display:none;}
       <button class="app-panel-close" title="close">×</button>
     </div>
     <div class="app-panel-body">
-      <pre id="hdr-panel-pre"></pre>
+      <pre id="hdr-panel-pre" class="selectable" tabindex="0"></pre>
     </div>
   </div>
 
@@ -1009,9 +1075,6 @@ input[type=file]{display:none;}
     "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
     "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js",
-    "three/examples/jsm/postprocessing/Pass.js": "./js/vendor/three/Pass.js",
-    "postprocessing": "./js/vendor/postprocessing/postprocessing.js",
-    "n8ao": "./js/vendor/n8ao/N8AO.js",
     "mediabunny": "./js/mediabunny.mjs"
   }
 }
@@ -1019,12 +1082,12 @@ input[type=file]{display:none;}
 <script type="module">
 import * as THREE from 'three';
 import { parseNifti, parseMif, parseWebmCodecs as parseWebm } from './js/volume-io.js';
-import { parseLUT } from './js/lut-io.js';
+import { parseLUT, buildLutRGBA } from './js/lut-io.js';
 import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
          parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
 import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
-import { LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
+import { LabelItem, LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
 import { FloatingPanel, PanelDockGroup, CardPanel } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
@@ -1034,8 +1097,9 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
          makeRibbonLines, makeEndpointDots, computeRibbonDensity, sortRibbonByDepth, setRibbonHighlight, hexToRgbRaw, makeColormapTexture,
          setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE,
          BUILTIN_COLORMAPS, writeColormapRow, colormapCSSGradient, sampleStops,
-         makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo } from './js/scene3d.js';
+         makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo, dimDensity, lightPosition, DEFAULT_LIGHT_FALLOFF, DEFAULT_AMBIENT } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
+import { LineShadows } from './js/line-shadows.js';
 import { parseMarkers, resolveMarkerStyle, markerFilterMask, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
 import { makeMarkerGroup, setMarkerDisplay, setMarkerHover, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
 
@@ -1262,7 +1326,7 @@ function updateProbeRadiusRange(setDefault) {
     // guarded against.
     // The radius itself always gets the 1/5 default, so switching the
     // probe on later starts from a useful size.
-    radius = nearestInSeq(radiusMaxMm / 5, seq);
+    radius = nearestInSeq(radiusMaxMm / 10, seq); // 1/50 of the diameter
   } else if (wasShowAll) {
     radius = radiusMaxMm; // preserve Show All across a rescale rather than falling out of it
   } else {
@@ -1496,8 +1560,8 @@ function drawSlice(planeKey, tag) {
 	  tgtMesh: tgtDots,
 	  slabMultiplier,
 	  lineStyle,
-	  srcStyle,
-	  tgtStyle,
+	  srcStyle: endsPx > 0 ? effDotStyle(srcStyle) : { mode: 'hide' },
+	  tgtStyle: endsPx > 0 ? effDotStyle(tgtStyle) : { mode: 'hide' },
 	  endsPx,
 	  // 2D width is a flat constant (see slab-renderer.js's SLAB_VS) —
 	  // half the 3D near-end width, floored at 1 so it never rounds away
@@ -1591,8 +1655,8 @@ function updateSlicesB() { for (const k of ['sag','cor','axi']) drawSlice(k, 'tg
 
 function updateCoordLabel(planeKey, cursor, tag) {
   if (!state.get('anat.file')) return;
-  const invAb = state.get('anat.invAb')
-  const vox  = mat3mulVec(invAb, cursor).map(Math.round);
+  const invAb = state.get('anat.invAb'), off = state.get('anat.cropOffset') || [0, 0, 0];
+  const vox  = mat3mulVec(invAb, cursor).map((v, i) => Math.round(v) + off[i]); // indices of the original file
   const ids  = { sag: `coord-sag-${tag}`, cor: `coord-cor-${tag}`, axi: `coord-axi-${tag}` };
   const axes = { sag: 'x', cor: 'y', axi: 'z' };
   const idx  = { sag: 0,   cor: 1,   axi: 2 };
@@ -1802,106 +1866,249 @@ slabRenderer = new SlabRenderer(renderer3);
 renderer3.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer3.setClearColor(0x080b0f);
 const scene=new THREE.Scene();
-// Explicit scene.background (not just the renderer's clear color) matters
-// once N8AOPass exists: it renders its own internal "beauty" pass to an
-// offscreen target that IT clears to transparent black internally (confirmed
-// in the vendored source, not assumed), independently of renderer3's own
-// clear color. Two of this app's own materials use genuine alpha blending
-// (GLASS/shell mode's translucent shell, the faint slice-plane wireframe),
-// so blending against transparent black instead of an opaque background
-// there leaves them with corrupted partial alpha carried through AO's
-// compositing — plausibly the mechanism behind "everything looks brighter
-// with AO on", specifically because those are the two things reported.
-// scene.background gets painted as an OPAQUE fill at the start of ANY
-// render() call regardless of the target's prior clear state, which
-// neutralizes that regardless of what N8AO does internally. Matches
-// setClearColor's color exactly, so the plain (non-AO) render path is
-// visually unaffected — same color, different mechanism.
+// The background as an opaque fill (same color as the clear color).
 scene.background = new THREE.Color(0x080b0f);
 const camera=new THREE.PerspectiveCamera(45,1,0.1,5000);
 camera.position.set(0,0,200);
 window._scene = scene; window._camera = camera; window._renderer3 = renderer3;  // debug access
 
-// ── AO (N8AO, ULTRA tier only) ──────────────────────────────
-// Lazily loaded: n8ao + postprocessing (both self-hosted, see
-// js/vendor/README.md) plus three's own EffectComposer/OutputPass addons
-// are only fetched/parsed the first time AO is actually switched on, so
-// LOW/HIGH-tier sessions — which can never even see the toggle, since
-// the whole AO settings block is hidden outside ULTRA — never pay any
-// part of this cost. Off by default even at ULTRA: real per-frame cost,
-// opt-in rather than automatic.
-let aoEnabled = false;
-let aoComposer = null, aoPass = null, aoLoadPromise = null;
-// The Kajiya-Kay sheen isn't redundant with AO the way the depth-darkening
-// cue is (see applyLineShadingFlags below) — a plain, always-visible
-// strength control (REFLECTANCE, below LINE·COLOR), not tied to AO or
-// ULTRA tier at all. 0 = flat color, 1 = normal strength, >1 exaggerated.
-let reflectance = 1.0;
+// The Kajiya-Kay sheen: a plain strength control (REFLECTANCE, below
+// LINE·COLOR). 0 = flat color, 1 = full shading and sheen.
+let reflectance = 0.5;
 
-// Pushes aoEnabled/reflectance onto selMesh's CURRENT material uniforms.
-// Needs calling from three places: after selMesh is (re)built in
-// updateProbe (a fresh material has fresh default uniform values, same
-// reason lightCam/depthTarget get resynced there too), and whenever
-// either flag itself changes via its own UI control.
+// Pushes reflectance onto selMesh's CURRENT material uniforms — after
+// selMesh is (re)built in updateProbe (a fresh material has fresh default
+// uniform values) and whenever REFLECTANCE changes.
 function applyLineShadingFlags() {
   if (!selMesh) return;
-  const u = selMesh.material.uniforms;
-  // u_depthAttenEnabled: OFF whenever AO is on, automatically — not a
-  // separate user choice. The view-axis depth-darkening cue was always a
-  // stand-in for real occlusion; stacking both multiplies their
-  // darkening together (atten * (AO's own darkening)), crushing the far
-  // side of the volume toward black and fighting AO's more precise
-  // per-fragment signal rather than complementing it.
-  u.u_depthAttenEnabled.value = aoEnabled ? 0 : 1;
-  u.u_reflectance.value = reflectance;
+  selMesh.material.uniforms.u_reflectance.value = reflectance;
 }
 
-// N8AO ships its own quality presets (sample count — the actual
-// performance-relevant AO setting, distinct from and not affected by
-// AO·STRENGTH's radius/falloff/intensity, which are all free post-hoc
-// math regardless of preset). Uses N8AO's own extremes directly: Performance
-// (cheapest) at our LOW, Neural-Medium (the attention-based denoiser —
-// verified in the vendored source to be a fully self-contained preset,
-// configuring every setting its neural path needs consistently by
-// itself, same setQualityMode() call as any other preset, no extra
-// plumbing required) at our ULTRA.
-const TIER_TO_N8AO_QUALITY = { low: 'Performance', high: 'Medium', ultra: 'Neural-Medium' };
-
-async function ensureAOComposer() {
-  if (aoComposer) return aoComposer;
-  if (aoLoadPromise) return aoLoadPromise;
-  aoLoadPromise = (async () => {
-    const [{ EffectComposer }, { OutputPass }, { N8AOPass }] = await Promise.all([
-      import('three/addons/postprocessing/EffectComposer.js'),
-      import('three/addons/postprocessing/OutputPass.js'),
-      import('n8ao'),
-    ]);
-    const composer = new EffectComposer(renderer3);
-    const pass = new N8AOPass(scene, camera, threeCanvas.clientWidth, threeCanvas.clientHeight);
-    composer.addPass(pass);
-    composer.addPass(new OutputPass());
-    // gammaCorrection defaults true in N8AOPass; OutputPass (added right
-    // after it) already handles output color space, so leaving both on
-    // double-corrects. This exact mismatch is what made colors look
-    // visibly different (lighter, more saturated) between N8AO and a
-    // from-scratch attempt during the prototype comparison — caught
-    // there, so it's set correctly from the start here.
-    pass.configuration.gammaCorrection = false;
-    // World-unit radius, NOT screenSpaceRadius mode — keeps AO's reach
-    // consistent with the existing zoom-invariant depth cue
-    // (u_depthTarget/u_depthRadius in RIBBON_VS/LINE_FS), which is
-    // anchored to the loaded data's own geometry rather than the camera;
-    // screenSpaceRadius would make AO the one effect in the app whose
-    // reach changes with zoom while the others deliberately don't.
-    pass.configuration.screenSpaceRadius = false;
-    aoComposer = composer;
-    aoPass = pass;
-    pass.setQualityMode(TIER_TO_N8AO_QUALITY[qualityTier] || 'Medium');
-    applyAOParamsToPass();
-    return composer;
-  })();
-  return aoLoadPromise;
+// ── SHADOWING (js/line-shadows.js) ──────────────────────────
+// The streamlines' light volume: rebuilt (density, CPU) when the drawn
+// streamlines change — right away the first time, else after a short pause,
+// so dragging the probe isn't slowed down (the old shadows stay meanwhile);
+// re-lit (GPU) in render3D when the light moves. 0% frees it all. Default
+// 50% at every GPU tier; the low tier re-lights a light volume at half the
+// density's resolution (8x less work, a little softer), see shadowLightDiv.
+const lineShadows = new LineShadows(renderer3);
+const shadowLightDiv = () => qualityTier === 'low' ? 2 : 1;
+lineShadows.lightDiv = shadowLightDiv();
+// Slider → darkening per (compressed, normalized) density unit: exponential,
+// 0.05 at the far left, 0.32 halfway, 2 at the far right (extreme). Shadows
+// only take away direct light: the darkest shadow keeps the ambient level.
+const shadowK = a => 0.05 * Math.pow(40, a);
+let shadowAmount = 0.5; // the slider, 0..1 — on at every GPU tier
+let _shadowTimer = null;
+function buildShadowsNow() {
+  clearTimeout(_shadowTimer); _shadowTimer = null;
+  if (!(shadowAmount > 0) || !selMesh) { lineShadows.clear(); return; }
+  _brainShadowKey = brainShadowKey(); // the occluder goes with the build
+  _brainBoxKey = brainBoxKey();
+  lineShadows.occluderFn = brainOccluder();
+  lineShadows.build(selMesh, densityVoxelMm(), faintSegments(selMesh), _brainBoxKey === 'none' ? null : brainWorldBox());
 }
+
+// Which segments of a ribbon mesh are drawn translucent (dimmed): the
+// context lines in probe highlight / focus mode, and the parts of a
+// data-colored line outside its color window (the same tests as scene3d.js
+// fileStyle()/fieldShade(), the field value at the segment's middle). They
+// cast no shadows (and receive none: LINE_FS). null when nothing is dimmed.
+function faintSegments(mesh) {
+  if (!(probeContext < 0.999)) return null;            // dimming 100%: drawn solid
+  const geo = mesh.geometry, H = geo.attributes.instanceHighlight.array;
+  const Fl = geo.attributes.instanceField.array, Fi = geo.attributes.instanceFile.array;
+  const ctx = highlightActive();
+  const win = groups.map(g => { if (!g.activeField) return null; const [a, b] = fieldWindowNorm(g.activeField); return [Math.min(a, b) - 1e-4, Math.max(a, b) + 1e-4]; });
+  if (!ctx && !win.some(Boolean)) return null;
+  return i => {
+    if (ctx && H[i] < 0.5) return true;
+    const w = win[Fi[i]];
+    if (!w || Math.abs(Fl[3 * i + 2]) < 1e-5) return false;
+    const mid = 0.5 * (Fl[3 * i] + Fl[3 * i + 1]);
+    return mid < w[0] || mid > w[1];
+  };
+}
+
+// ── Shadows between the solid brain and the streamlines ──
+// Streamlines shade the brain (SOLID: outer surface and cut face; GLASS: the
+// cut face): the
+// brain's shader reads the streamlines' light volume — high/ultra GPU tier
+// only. For that the shadow grid also covers the brain's box (a bigger
+// grid: a bit more work per density build and per re-light).
+// The brain shading the streamlines (console: setBrainShadows(true), off by
+// default): in SOLID mode the brain is an occluder in the shadow density
+// (line-shadows.js setOccluder), sampled on the CPU — what is drawn solid
+// as far as BACKGROUND and the clip plane / SLICE go (shown labels in LABEL
+// mode); CUTOUT is not taken into account, so with a cutout it is wrong.
+// Re-sampled (after a short pause) when any of that changes.
+let brainCastsShadows = false;
+window.setBrainShadows = on => { brainCastsShadows = !!on; render3D(); return brainCastsShadows; };
+const brainReceivesShadows = () => qualityTier !== 'low';
+// Whether (and which) brain box the shadow grid must cover.
+function brainBoxKey() {
+  const m = glassBrainMesh;
+  if (!m || !m.visible || !currentAnat || !(brainReceivesShadows() || brainCastsShadows)) return 'none';
+  return [activeVolume && activeVolume.file.name, m.material.uniforms.u_size.value.toArray().join(',')].join('|');
+}
+let _brainBoxKey = 'none';
+// The brain's uniforms for the received shadows (every frame).
+function syncBrainShadowUniforms() {
+  const m = glassBrainMesh;
+  if (!m || !m.material.uniforms.u_brainShadowOn) return;
+  const u = m.material.uniforms, su = lineShadows.uniforms;
+  const on = brainReceivesShadows() && lineShadows.active && _brainBoxKey !== 'none'; // GLASS: the cut face only (scene3d.js)
+  u.u_brainShadowOn.value = on ? 1 : 0;
+  if (!on) return;
+  u.u_shadowTex.value = su.u_shadowTex.value;
+  u.u_shadowMin.value.copy(su.u_shadowMin.value);
+  u.u_shadowSize.value.copy(su.u_shadowSize.value);
+  u.u_shadowVoxMm.value = lineShadows.vox || 1;
+}
+function brainWorldBox() {
+  const m = glassBrainMesh;
+  if (!m || !m.visible || !m.material.uniforms.u_size) return null;
+  const u = m.material.uniforms, sz = u.u_size.value, M = u.u_model.value;
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  const p = new THREE.Vector3();
+  for (const x of [0, 1]) for (const y of [0, 1]) for (const z of [0, 1]) {
+    p.set((x - 0.5) * sz.x, (y - 0.5) * sz.y, (z - 0.5) * sz.z).applyMatrix4(M);
+    p.toArray().forEach((v, c) => { min[c] = Math.min(min[c], v); max[c] = Math.max(max[c], v); });
+  }
+  return { min, max };
+}
+// Everything the occluder depends on, as a string (rebuild when it changes).
+function brainShadowKey() {
+  const m = glassBrainMesh;
+  if (!brainCastsShadows || !m || !m.visible || renderMode !== 'solid' || !currentAnat || !vr.texData) return 'none';
+  const u = m.material.uniforms;
+  const hid = activeVolume && activeVolume.hiddenLabels ? [...activeVolume.hiddenLabels].sort((a, b) => a - b).join(',') : '';
+  return [activeVolume && activeVolume.file.name, u.u_applyLUT.value, u.u_background.value, u.u_bgInvert.value,
+    u.u_sliceMode.value, u.u_sliceThickness.value, hid,
+    ...[0, 1, 2].map(i => [u.u_clipDir.value[i], u.u_clipNormal.value[i].toArray().map(v => v.toFixed(4)), u.u_clipPoint.value[i].toArray().map(v => v.toFixed(3))].join(':'))].join('|');
+}
+// fn(world x, y, z) → 1 inside the solid brain, else 0 (same classification
+// as pickBrain and the SOLID shader's outer surface).
+function brainOccluder() {
+  if (brainShadowKey() === 'none') return null;
+  const u = glassBrainMesh.material.uniforms, anat = currentAnat;
+  const [nx, ny, nz] = anat.shape, data = vr.texData;
+  const isColor = (anat.channels || 1) === 3;
+  const labelMode = u.u_applyLUT.value > 0.5 && !isColor;
+  const inv = u.u_invModel.value.clone(), size = u.u_size.value.clone(), half = size.clone().multiplyScalar(0.5);
+  const invert = u.u_bgInvert.value > 0.5;
+  const thr = labelMode ? 0.5 : (invert ? 1 - u.u_background.value : u.u_background.value);
+  const hiddenL = labelMode && activeVolume && activeVolume.hiddenLabels && activeVolume.hiddenLabels.size ? activeVolume.hiddenLabels : null;
+  const rawL = loadedAnatRaw && loadedAnatShape && loadedAnatShape[0] === nx && loadedAnatShape[1] === ny && loadedAnatShape[2] === nz ? loadedAnatRaw : null;
+  const planes = [0, 1, 2].filter(i => u.u_clipDir.value[i]).map(i => ({ dir: u.u_clipDir.value[i], n: u.u_clipNormal.value[i].clone(), q: u.u_clipPoint.value[i].clone() }));
+  const slice = u.u_sliceMode.value > 0.5, hSlice = u.u_sliceThickness.value * 0.5;
+  const voxel = (i, j, k) => {
+    i = Math.min(nx - 1, Math.max(0, i)); j = Math.min(ny - 1, Math.max(0, j)); k = Math.min(nz - 1, Math.max(0, k));
+    const o = i + nx * (j + ny * k);
+    if (!isColor) return data[o];
+    const r = (data[4*o] / 255) ** 2, g = (data[4*o+1] / 255) ** 2, b = (data[4*o+2] / 255) ** 2;
+    return Math.sqrt(r*r + g*g + b*b);
+  };
+  const p = new THREE.Vector3();
+  return (x, y, z) => {
+    p.set(x, y, z).applyMatrix4(inv).add(half);       // local voxel-index space
+    if (p.x < 0 || p.y < 0 || p.z < 0 || p.x > size.x || p.y > size.y || p.z > size.z) return 0;
+    for (const c of planes) {                           // what the clip plane / SLICE removes
+      const d0 = (p.x - c.q.x) * c.n.x + (p.y - c.q.y) * c.n.y + (p.z - c.q.z) * c.n.z;
+      if (slice ? Math.abs(d0) > hSlice : d0 * c.dir < 0) return 0;
+    }
+    if (labelMode) {
+      const i = Math.floor(p.x), j = Math.floor(p.y), k = Math.floor(p.z);
+      if (voxel(i, j, k) <= 0) return 0;
+      if (hiddenL && rawL && i < nx && j < ny && k < nz && hiddenL.has(Math.round(rawL[i + nx * (j + ny * k)]))) return 0;
+      return 1;
+    }
+    const v = voxel(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+    return (invert ? 1 - v : v) >= thr ? 1 : 0;
+  };
+}
+let _brainShadowKey = 'none', _brainShadowTimer = null;
+// Called every 3D frame: re-samples the brain (after a short pause) when
+// anything it depends on changed.
+function checkBrainShadow() {
+  if (!lineShadows.lineDens) return;
+  const key = brainShadowKey(), boxKey = brainBoxKey();
+  if (key === _brainShadowKey && boxKey === _brainBoxKey) return;
+  // the grid's box changed (a brain shown or gone, the tier, the switch): rebuild it all
+  const boxChanged = boxKey !== _brainBoxKey;
+  _brainShadowKey = key; _brainBoxKey = boxKey;
+  clearTimeout(_brainShadowTimer);
+  _brainShadowTimer = setTimeout(() => {
+    if (boxChanged) buildShadowsNow();
+    else lineShadows.setOccluder(brainOccluder());
+    render3D();
+  }, 200);
+}
+function shadowsChanged() {
+  if (!(shadowAmount > 0)) { lineShadows.clear(); return; }
+  clearTimeout(_shadowTimer);
+  if (!lineShadows.densTex) { buildShadowsNow(); return; }
+  _shadowTimer = setTimeout(() => { buildShadowsNow(); render3D(); }, 200);
+}
+function setShadowAmount(a) {
+  const was = shadowAmount;
+  shadowAmount = a;
+  lineShadows.setStrength(shadowK(a));
+  if (!(a > 0)) lineShadows.clear();
+  else if (!(was > 0)) buildShadowsNow();
+  lineShadows.setStrength(shadowK(a)); // (build/clear reset the on-flag)
+}
+const _shLightPos = new THREE.Vector3();
+// The light: a point light (at the camera with LIGHT centered, scene3d.js
+// lightPosition) whose direct light falls off linearly with depth, for the
+// streamlines and the brain alike. Console, for tuning:
+//   setPointLight(false)  the parallel light (as before), true: the point light
+//   setLightFalloff(0.5)  direct light at the back of the data = 1 - this
+//   setAmbient(0.25)      the light every line and brain surface gets, lit or not
+//                         (all that's left in full shadow)
+let pointLightOn = true, lightFalloff = DEFAULT_LIGHT_FALLOFF, ambientLight = DEFAULT_AMBIENT;
+function syncLightUniforms() {
+  for (const m of [selMesh, glassBrainMesh]) {
+    if (!m || !m.material || !m.material.uniforms || !m.material.uniforms.u_falloff) continue;
+    const u = m.material.uniforms;
+    u.u_pointLight.value = pointLightOn ? 1 : 0;
+    u.u_falloff.value = lightFalloff;
+    u.u_ambient.value = ambientLight;
+    m.userData.depthTarget = controls.target;   // by reference: panning follows
+    m.userData.sceneRadius = sceneRadius || 1;
+  }
+}
+window.setPointLight = on => { pointLightOn = !!on; lineShadows._dirty = true; render3D(); return pointLightOn; };
+window.setAmbient = v => { ambientLight = Math.max(0, Math.min(1, +v)); render3D(); return ambientLight; };
+window.setLightFalloff = v => { lightFalloff = Math.max(0, Math.min(1, +v)); render3D(); return lightFalloff; };
+const _shCamR = new THREE.Vector3(), _shCamU = new THREE.Vector3(), _shCamF = new THREE.Vector3(), _shLight = new THREE.Vector3();
+function updateShadowLight() {
+  if (!lineShadows.active || !selMesh || !selMesh.parent) return;
+  camera.updateMatrixWorld();
+  const lc = selMesh.userData.lightCam;
+  _shCamR.setFromMatrixColumn(camera.matrixWorld, 0);
+  _shCamU.setFromMatrixColumn(camera.matrixWorld, 1);
+  _shCamF.setFromMatrixColumn(camera.matrixWorld, 2).multiplyScalar(-1);
+  // the line shader's u_lightDir (scene3d.js attachStreamlineShading)
+  // u_lightDir is the direction the light TRAVELS (lightCam z = +1 points
+  // along the view, a headlamp); the march goes the other way, to the light
+  _shLight.set(0, 0, 0).addScaledVector(_shCamR, lc.x).addScaledVector(_shCamU, lc.y).addScaledVector(_shCamF, lc.z).normalize();
+  // point light (default): at the camera with LIGHT centered — see lightPosition
+  const point = selMesh.material.uniforms.u_pointLight.value > 0.5;
+  if (point) lightPosition(camera, controls.target, _shLight, _shLightPos);
+  _shLight.negate();
+  lineShadows.update(_shLight, point ? _shLightPos : null);
+}
+lineShadows.setStrength(shadowK(shadowAmount));
+// console tuning: setShadowParams({ gamma: 1/3, blur: 1, lightDiv: 1 }) — density
+// compression, blur passes, light volume coarseness; rebuilds the shadows
+window.setShadowParams = ({ gamma, blur, lightDiv } = {}) => {
+  if (gamma != null) lineShadows.gamma = gamma;
+  if (blur != null) lineShadows.blurPasses = blur;
+  if (lightDiv != null) lineShadows.lightDiv = lightDiv;
+  buildShadowsNow(); render3D();
+  return { gamma: lineShadows.gamma, blur: lineShadows.blurPasses, lightDiv: lineShadows.lightDiv, buildMs: Math.round(lineShadows.buildMs || 0) };
+};
 
 // Translucent streamlines are blended in drawing order, so their segments
 // are kept sorted far-to-near for the current view (sortRibbonByDepth in
@@ -1926,44 +2133,11 @@ function sortTranslucentForView(force = false) {
 
 function render3D() {
   sortTranslucentForView(); tMark('sort');
-  if (aoEnabled && aoComposer) {
-    // None of this app's own hand-written shaders (scene3d.js: LINE_FS,
-    // GLASS_ONLY_FS, SOLID_ONLY_FS, DOTS_FS, ...) include three's
-    // `colorspace_fragment` chunk — confirmed by grep, not assumed — so
-    // this app has NEVER applied an output gamma/colorspace transfer
-    // anywhere; every gl_FragColor a custom shader here writes has
-    // always BEEN the final displayed value. OutputPass (the AO
-    // composer's final pass) is the first thing in this app to ever
-    // apply one, since it reads renderer.outputColorSpace directly
-    // regardless of what any individual material does — its default
-    // (SRGBColorSpace) introduces an encode this app's whole
-    // custom-shader visual design was never built around, and an sRGB
-    // encode boosts darker input values (the glass brain, the faint
-    // slice-plane wireframe — previously dark and intentionally low-
-    // contrast against the background) far more aggressively than
-    // brighter ones, which matches exactly what got reported as "way
-    // brighter" while the background looked about the same.
-    // LinearSRGBColorSpace (not NoColorSpace, tried first and confirmed
-    // wrong: NoColorSpace has no entry in ColorManagement's `spaces[]`
-    // registry at all, so anything that looks up
-    // `spaces[colorSpace].outputColorSpaceConfig` on it — as
-    // WebGLRenderer/OutputPass do internally — crashes on undefined,
-    // exactly the error this produced) has transfer: LinearTransfer,
-    // verified in three's own ColorManagement.js, giving the same
-    // "OutputPass skips its encode" result via a value that actually
-    // exists in the registry. Scoped to ONLY this branch, restored
-    // immediately after — the plain render path has always run with the
-    // renderer's default (SRGBColorSpace) and has always looked correct,
-    // so it's left completely untouched rather than risking a regression
-    // there for a setting that, per the above, never actually mattered
-    // to it anyway.
-    const savedColorSpace = renderer3.outputColorSpace;
-    renderer3.outputColorSpace = THREE.LinearSRGBColorSpace;
-    aoComposer.render();
-    renderer3.outputColorSpace = savedColorSpace;
-  } else {
-    renderer3.render(scene, camera);
-  }
+  syncLightUniforms();
+  checkBrainShadow();
+  updateShadowLight();
+  syncBrainShadowUniforms();
+  renderer3.render(scene, camera);
 }
 
 const controls=new TrackballControls(camera,threeCanvas);
@@ -2048,9 +2222,38 @@ function pickBundleEnd(clientX, clientY) {
       if (++tested > 24) break;                  // bound the ray walks
       if (hiddenBySolid(rect.left + sx, rect.top + sy, w)) continue;
     }
-    if (d < bestD - 4 || (d <= bestD + 4 && w < bestW)) { best = { gi: _endPick.gid[j >> 1], sx: x, sy: y }; bestD = d; bestW = w; }
+    if (d < bestD - 4 || (d <= bestD + 4 && w < bestW)) { best = { gi: _endPick.gid[j >> 1], sx: x, sy: y, ex: sx, ey: sy }; bestD = d; bestW = w; }
   }
-  return best && groups[best.gi] ? best : null;
+  if (!best || !groups[best.gi]) return null;
+  best.near = bundlesNearEnd(best, rect);
+  return best;
+}
+// Every bundle with an end within NEAR_PX (screen) of the picked end, the
+// picked bundle first, then by distance — for the bundle card's list.
+// SOLID: only ends in view (a few ray walks per bundle at most).
+const NEAR_PX = 30;
+function bundlesNearEnd(best, rect) {
+  const R2 = pickPx(NEAR_PX) ** 2, byGi = new Map();
+  forEachEndOnScreen((j, sx, sy, w) => {
+    const d = (sx - best.ex) ** 2 + (sy - best.ey) ** 2;
+    if (d > R2) return;
+    const gi = _endPick.gid[j >> 1];
+    if (gi === best.gi || !groups[gi]) return;
+    let a = byGi.get(gi); if (!a) byGi.set(gi, a = []);
+    a.push([d, sx, sy, w]);
+  });
+  const found = [];
+  for (const [gi, a] of byGi) {
+    a.sort((p, q) => p[0] - q[0]);
+    let dmin = null;
+    for (const [d, sx, sy, w] of a.slice(0, renderMode === 'solid' ? 4 : 1)) {
+      if (renderMode === 'solid' && hiddenBySolid(rect.left + sx, rect.top + sy, w)) continue;
+      dmin = d; break;
+    }
+    if (dmin !== null) found.push([dmin, gi]);
+  }
+  found.sort((p, q) => p[0] - q[0]);
+  return [best.gi, ...found.map(f => f[1])];
 }
 // Lights up bundle gi's ends within 50 px of (sx, sy): the same dots in
 // their own colors, slightly larger, on top. null: off.
@@ -2095,7 +2298,9 @@ function showHoverEnds(gi, sx, sy) {
 
 const bundleTipEl = document.createElement('div');
 bundleTipEl.className = 'hover-tip';
-document.getElementById('middle').appendChild(bundleTipEl);
+// On <body>, not in #middle: #middle is its own stacking layer, under the
+// floating cards — the label must stay in front of a pinned card.
+document.body.appendChild(bundleTipEl);
 let bundleHover = null;   // { gi, sx, sy } — the label
 let bundleCard = null;    // { gi } — the open card (bundleCardPanel)
 let _bundleTipTimer = null, _overBundleTip = false;
@@ -2153,19 +2358,6 @@ function fillBundleTitle(el, g) {
   const ib = makeInfoButton(() => showBundleHeader(g), 'header of ' + g.source.name);
   el.append(sb, fb, ib, sw, name); // the swatch next to the name it colors
 }
-function showBundleLabel(hit) {
-  clearTimeout(_bundleTipTimer); // a hide pending from the previous label must not hide this one
-  const g = groups[hit.gi];
-  bundleHover = hit;
-  bundleTipEl.className = 'hover-tip mt-small';
-  bundleTipEl.innerHTML = '<span class="mt-title"></span>'
-    + (hasBundleSettings(g) ? '<button class="mt-open" title="settings (pins the card)">»</button>' : '');
-  fillBundleTitle(bundleTipEl.querySelector('.mt-title'), g);
-  bundleTipEl.querySelector('.mt-open')?.addEventListener('click', ev => { ev.stopPropagation(); openBundleCard(hit); });
-  bundleTipEl.style.display = 'flex';
-  placeTip(bundleTipEl, hit.sx, hit.sy);
-  showHoverEnds(hit.gi, hit.sx, hit.sy);
-}
 // The card: a CardPanel (floating-panel.js) — movable like the other
 // panels; once moved, later cards open where it was left.
 const bundleCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => {
@@ -2177,38 +2369,90 @@ bundleCardPanel.el.addEventListener('pointerdown', () => { _cardBusy = true; }, 
 window.addEventListener('pointerup', () => { if (_cardBusy) { _cardBusy = false; dataStore.refresh(); } });
 bundleCardPanel.el.addEventListener('focusout', () => { if (bundleCard) dataStore.refresh(); });
 function openBundleCard(hit) {
+  const at = cardAnchor(hit.sx, hit.sy);
   if (typeof closeMarkerCard === 'function') closeMarkerCard();
+  if (typeof closeVolumeCard === 'function') closeVolumeCard();
   _overBundleTip = false;
   bundleHover = null;
   bundleTipEl.style.display = 'none';
-  bundleCard = { gi: hit.gi, sx: hit.sx, sy: hit.sy };
+  bundleCard = { gi: hit.gi, sx: hit.sx, sy: hit.sy, near: (hit.near || [hit.gi]).slice() }; // the list stays while the card is open
   renderBundleCard();
-  const rect = threeCanvas.getBoundingClientRect();
-  bundleCardPanel.openAt(rect.left + hit.sx, rect.top + hit.sy);
+  bundleCardPanel.openAt(...at);
   showHoverEnds(hit.gi, hit.sx, hit.sy);
 }
 function closeBundleCard() {
   if (bundleCard) bundleCardPanel.close();
 }
 let _cardBusy = false;    // a control in the card is being used: don't rebuild it
+// The card: the bundle's title and settings, then — when more bundles end
+// near the picked spot — every one of them (as the volume card lists the
+// regions): spotlight, on/off, color, name; a click on a name shows that
+// bundle's settings. The list is the one found when the card opened, so a
+// bundle switched off here stays listed (and can be switched on again).
 function renderBundleCard() {
   const g = bundleCard && groups[bundleCard.gi];
-  if (!g || !g.visible || !hasBundleSettings(g)) { closeBundleCard(); return; }
+  const near = bundleCard ? bundleCard.near.filter(gi => groups[gi]) : [];
+  if (!g || (!hasBundleSettings(g) && near.length < 2)) { closeBundleCard(); return; }
   // The title's color input stays while its picker is open.
   if (!colorPickerIn(bundleCardPanel.titleEl)) fillBundleTitle(bundleCardPanel.titleEl, g);
   const body = bundleCardPanel.body;
+  if (near.length > 1 && colorPickerIn(body)) return; // a row's color picker is open
   body.innerHTML = '';
   const settings = document.createElement('div');
   settings.className = 'dt-settings';
-  buildBundleSettings(g, settings);
+  if (hasBundleSettings(g) && g.visible) buildBundleSettings(g, settings);
+  if (near.length > 1) {
+    const head = document.createElement('div');
+    head.className = 'dt-toolbar-lbl ctx-sub';
+    head.textContent = near.length + ' bundles here, nearest first';
+    settings.appendChild(head);
+    const list = document.createElement('div');
+    list.className = 'dt-labels';
+    for (const gi of near) {
+      const row = document.createElement('div');
+      row.className = 'dt-row ctx-region';
+      row.append(...bundleRowControls(gi));
+      list.appendChild(row);
+    }
+    settings.appendChild(list);
+  }
   body.append(settings);
+}
+// One bundle's row in the card: spotlight, checkbox, color, name.
+function bundleRowControls(gi) {
+  const g = groups[gi], out = [];
+  const solo = isSoloFocus(g);
+  const lb = document.createElement('button');
+  lb.className = 'solo-btn' + (solo ? ' on' : '');
+  lb.innerHTML = lampIconSVG(solo);
+  lb.title = solo ? 'focus all bundles again' : 'focus only this bundle (dim all others)';
+  lb.addEventListener('click', e => { e.stopPropagation(); soloFocus(g); });
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = !!g.visible;
+  cb.title = cb.checked ? 'shown — click: switch off' : 'switched off — click: show';
+  cb.addEventListener('click', e => e.stopPropagation());
+  cb.addEventListener('change', () => { if (g.item) g.item.visible = cb.checked; dataStore.refresh(); renderBundleCard(); });
+  const sw = document.createElement('input');
+  sw.type = 'color'; sw.className = 'dt-swatch';
+  sw.value = rgbRawToHex(g.color || [1, 1, 1]);
+  sw.title = 'change bundle color';
+  sw.addEventListener('click', e => e.stopPropagation());
+  sw.addEventListener('input', () => setBundleColor(g, sw.value));
+  const nm = document.createElement('span');
+  nm.className = 'mt-id' + (g.visible ? '' : ' ctx-off') + (gi === bundleCard.gi ? ' ctx-cur' : '');
+  nm.textContent = g.name;
+  nm.style.cursor = 'pointer';
+  nm.title = 'show this bundle\'s settings';
+  nm.addEventListener('click', e => { e.stopPropagation(); bundleCard.gi = gi; renderBundleCard(); showHoverEnds(gi, bundleCard.sx, bundleCard.sy); });
+  out.push(lb, cb, sw, nm);
+  return out;
 }
 // Something about the bundles changed (here or in the DATA panel): redraw
 // the open card — unless one of its own controls is in use.
 function bundleChanged() {
   if (bundleCard && !_cardBusy) renderBundleCard();
-  if (bundleHover && groups[bundleHover.gi] && !colorPickerIn(bundleTipEl))
-    fillBundleTitle(bundleTipEl.querySelector('.mt-title'), groups[bundleHover.gi]);
+  if (bundleHover && bundleHover.ctx && bundleHover.hits.bundle && !colorPickerIn(bundleTipEl))
+    showContextLabel(bundleHover.hits);
 }
 bundleTipEl.addEventListener('pointerdown', ev => ev.stopPropagation());
 bundleTipEl.addEventListener('wheel', ev => ev.stopPropagation());
@@ -2220,30 +2464,261 @@ bundleTipEl.addEventListener('pointerleave', e => { if (e.pointerType === 'touch
 let _hoverDebounceTimer = null, _lastPointerEvent = null;
 function doBundleHoverHitTest() {
   if (!_lastPointerEvent || _overBundleTip) return;
-  if (typeof markerHover !== 'undefined' && (markerHover || markerCard)) return; // a marker's label/card has the say
-  const hit = pickBundleEnd(_lastPointerEvent.clientX, _lastPointerEvent.clientY);
-  let brainHit = null;
-  // Lit-up ends follow the mouse: only where it rests near a bundle's ends.
-  if (hit) {
-    if (!bundleCard || hit.gi !== bundleCard.gi) showBundleLabel(hit);
-    else showHoverEnds(hit.gi, hit.sx, hit.sy);
-  } else if ((brainHit = pickBrain(_lastPointerEvent.clientX, _lastPointerEvent.clientY))) {
-    clearTimeout(_bundleTipTimer); // still on the brain: keep the label
-    // a new label — or the same one on another region (LABEL mode)
-    if (!(bundleHover && bundleHover.anatomy && (bundleHover.hit && bundleHover.hit.label) === brainHit.label)) {
-      const rect = threeCanvas.getBoundingClientRect();
-      showAnatomyLabel(_lastPointerEvent.clientX - rect.left, _lastPointerEvent.clientY - rect.top, brainHit);
-    }
-  } else if (pickFrameEdge(_lastPointerEvent.clientX, _lastPointerEvent.clientY)) {
-    clearTimeout(_bundleTipTimer); // still on a frame: keep the label
-    if (!(bundleHover && bundleHover.frames)) {
-      const rect = threeCanvas.getBoundingClientRect();
-      showFramesLabel(_lastPointerEvent.clientX - rect.left, _lastPointerEvent.clientY - rect.top);
-    }
-  } else {
+  const h = collectHits(_lastPointerEvent.clientX, _lastPointerEvent.clientY);
+  if (hitsEmpty(h)) {
     if (_hoverEnds) showHoverEnds(null);
     clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
+    return;
   }
+  clearTimeout(_bundleTipTimer); // still on something: keep (or update) the label
+  // lit-up ends follow the mouse: only where it rests near a bundle's ends
+  if (bundleHover && bundleHover.key === hitsKey(h)) { if (h.bundle) showHoverEnds(h.bundle.gi, h.bundle.sx, h.bundle.sy); return; }
+  // only the bundle whose card is open: no label for it
+  if (bundleCard && h.bundle && h.bundle.gi === bundleCard.gi && !h.marker && !h.brain && !h.frames) {
+    showHoverEnds(h.bundle.gi, h.bundle.sx, h.bundle.sy); return;
+  }
+  showContextLabel(h);
+}
+
+// ── The 3D context label ─────────────────────────────────────
+// Everything under the mouse in one label: a small heading per thing
+// (volume, marker, bundle, frame) over its one-line menu. Order: in SOLID
+// mode the volume first (it is in front), else marker, bundle, volume;
+// frames last. Using a line's control does its action AND pins that
+// thing's card (movable; bundle, marker or volume — the volume card lists
+// every region under the cursor and the anatomy switch). Frames: just the
+// checkbox, as before.
+function collectHits(clientX, clientY) {
+  const rect = threeCanvas.getBoundingClientRect();
+  return {
+    sx: clientX - rect.left, sy: clientY - rect.top,
+    marker: pickMarker(clientX, clientY),
+    bundle: pickBundleEnd(clientX, clientY),
+    brain: pickBrain(clientX, clientY, { labels: true }),
+    frames: !!pickFrameEdge(clientX, clientY),
+  };
+}
+const hitsEmpty = h => !h.marker && !h.bundle && !h.brain && !h.frames;
+const hitsKey = h => [h.marker ? 'm' + h.marker.rec.file.name + ':' + h.marker.index : '',
+  h.bundle ? 'b' + h.bundle.gi : '',
+  h.brain ? 'v' + (activeVolume ? activeVolume.file.name : '') + ':' + (h.brain.labels && h.brain.labels.length ? h.brain.labels[0] : '') : '',
+  h.frames ? 'f' : ''].join('|');
+const ctxCount = h => (h.marker ? 1 : 0) + (h.bundle ? 1 : 0) + (h.brain ? 1 : 0) + (h.frames ? 1 : 0);
+// A control in a line: its own action first, then the card (deferred, so
+// the action's click handler — which stops the event — runs first).
+// Where a card opens: on the side of the point where the context label
+// is (placeTip may have put it left of / above the mouse), at its top.
+// Returns openAt arguments [x, y, opts].
+function cardAnchor(sx, sy) {
+  const rect = threeCanvas.getBoundingClientRect();
+  const x = rect.left + sx, y = rect.top + sy;
+  if (bundleTipEl.style.display !== 'none') {
+    const r = bundleTipEl.getBoundingClientRect();
+    if (r.width) return [x, y, { left: r.right <= x, top: r.top }];
+  }
+  return [x, y, {}];
+}
+function pinOnUse(line, open, skip = () => false) {
+  line.addEventListener('click', e => { if (!skip(e)) setTimeout(open, 0); }, true);
+}
+function showContextLabel(h) {
+  clearTimeout(_bundleTipTimer);
+  bundleHover = { ctx: true, sx: h.sx, sy: h.sy, hits: h, key: hitsKey(h) };
+  const el = bundleTipEl;
+  el.className = 'hover-tip mt-small mt-stack ctx-label';
+  el.innerHTML = '';
+  const order = renderMode === 'solid' ? ['volume', 'marker', 'bundle', 'frame'] : ['marker', 'bundle', 'volume', 'frame'];
+  for (const kind of order) {
+    const line = ctxLine(kind, h);
+    if (!line) continue;
+    const head = document.createElement('div');
+    head.className = 'ctx-head';
+    head.textContent = kind === 'bundle' ? 'streamline bundle'
+      : kind === 'volume' ? (labelsShown() ? 'label volume' : 'anatomical volume') : kind;
+    el.append(head, line);
+  }
+  el.style.display = 'flex';
+  placeTip(el, h.sx, h.sy);
+  if (h.bundle) showHoverEnds(h.bundle.gi, h.bundle.sx, h.bundle.sy); else if (_hoverEnds) showHoverEnds(null);
+}
+function ctxLine(kind, h) {
+  const line = document.createElement('div');
+  line.className = 'mt-title ctx-line';
+  const openBtn = (open, title) => {
+    const b = document.createElement('button');
+    b.className = 'mt-open'; b.textContent = '»'; b.title = title;
+    b.addEventListener('click', e => { e.stopPropagation(); open(); });
+    return b;
+  };
+  if (kind === 'bundle') {
+    if (!h.bundle) return null;
+    const g = groups[h.bundle.gi];
+    fillBundleTitle(line, g);
+    const more = (h.bundle.near || []).length - 1;
+    if (more > 0) {
+      const m = document.createElement('span'); m.className = 'mt-val'; m.textContent = '+' + more;
+      m.title = more + ' more bundle' + (more > 1 ? 's' : '') + ' here: see the card (»)';
+      line.appendChild(m);
+    }
+    if (hasBundleSettings(g) || more > 0) {
+      line.appendChild(openBtn(() => openBundleCard(h.bundle), more > 0 ? 'all bundles here and settings (pins the card)' : 'settings (pins the card)'));
+      pinOnUse(line, () => openBundleCard(h.bundle), e => !!e.target.closest('input[type=color], .mt-open'));
+    }
+    return line;
+  }
+  if (kind === 'marker') {
+    if (!h.marker) return null;
+    const { rec, index } = h.marker, set = rec.set;
+    const cb = rec.overlay && rec.overlay.color_by || rec.style.color_by;
+    const p = cb && set.props.get(cb);
+    const val = p ? markerValueText(p, set.markers.values[p.name][index]) : null;
+    line.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>'
+      + (val != null ? '<span class="mt-val">' + esc(p.name) + ': ' + esc(val) + '</span>' : '');
+    line.classList.add('ctx-click');
+    const open = () => openMarkerCard(rec, index, h.marker.sx, h.marker.sy);
+    line.appendChild(openBtn(open, 'details (pins the card)'));
+    line.addEventListener('click', e => { if (!e.target.closest('.mt-open')) open(); });
+    return line;
+  }
+  if (kind === 'volume') {
+    if (!h.brain || !activeVolume) return null;
+    const open = () => openVolumeCard(h);
+    const labels = h.brain.labels;
+    if (labels && labels.length) {
+      line.append(...regionControls(labels[0])); // the FIRST region the ray meets, on or off (solid/glass: in the card)
+      pinOnUse(line, open, e => !!e.target.closest('.mt-open'));
+    } else {
+      line.appendChild(renderModeToggle()); // anatomy: the solid/glass switch in the line too (label volumes: in the card only)
+      const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = activeVolume.label;
+      line.appendChild(nm);
+      pinOnUse(line, open, e => !!e.target.closest('.mt-open'));
+    }
+    line.appendChild(openBtn(open, 'details (pins the card)'));
+    return line;
+  }
+  if (kind === 'frame') {
+    if (!h.frames) return null;
+    const lab = document.createElement('label');
+    lab.className = 'frame-row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = framesVisible;
+    cb.addEventListener('change', () => {
+      const sEl = document.getElementById('clip-frames');
+      sEl.checked = cb.checked; sEl.dispatchEvent(new Event('change'));
+    });
+    const t = document.createElement('span'); t.className = 'mt-id'; t.textContent = 'frames';
+    lab.append(cb, t);
+    line.appendChild(lab);
+    return line;
+  }
+  return null;
+}
+// One region's controls: lamp (only this region / all again), checkbox
+// (shown or not — all regions may be switched off: the context label still
+// finds them), swatch, name, number.
+function regionControls(v) {
+  const out = [];
+  const info = labelInfoOf(activeVolume), hidden = hiddenLabelsOf(activeVolume);
+  if (info && info.values) {
+    const solo = labelsShownCount() === 1 && !hidden.has(v);
+    const lb = document.createElement('button');
+    lb.className = 'solo-btn' + (solo ? ' on' : '');
+    lb.innerHTML = lampIconSVG(solo);
+    lb.title = solo ? 'show all regions again' : 'show only this region';
+    lb.addEventListener('click', e => { e.stopPropagation(); soloLabel(v); });
+    out.push(lb);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'dt-check';
+    cb.checked = !hidden.has(v);
+    cb.title = cb.checked ? 'shown in 3D — click: switch off' : 'switched off — click: show in 3D';
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => setLabelShown(v, cb.checked));
+    out.push(cb);
+  }
+  const [name, hex] = labelEntry(v);
+  const sw = labelSwatch(v, hex);
+  const nm = document.createElement('span'); nm.className = 'mt-id' + (hidden.has(v) ? ' ctx-off' : ''); nm.textContent = name;
+  const id = document.createElement('span'); id.className = 'mt-val'; id.textContent = String(v);
+  out.push(sw, nm, id);
+  return out;
+}
+// SOLID ⇄ GLASS for the anatomy: a square, half solid, half checkerboard.
+let _modeIconId = 0;
+function renderModeToggle() {
+  const b = document.createElement('button');
+  b.className = 'mode-btn';
+  // The transparency metaphor: a rounded square, solid on its left part,
+  // checkered on its right part, split by a slanted line; the current
+  // mode's part bright, the other dimmer. Clip ids are unique per icon (an id shared
+  // with a hidden icon would stop rendering).
+  const id = 'rmIc' + (++_modeIconId), solid = renderMode === 'solid';
+  let checks = '';
+  const c = 14 / 6;
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++)
+    if ((i + j) % 2 === 0) checks += '<rect x="' + (1 + i * c).toFixed(2) + '" y="' + (1 + j * c).toFixed(2) + '" width="' + c.toFixed(2) + '" height="' + c.toFixed(2) + '"/>';
+  b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><defs>'
+    + '<clipPath id="' + id + 'r"><rect x="1" y="1" width="14" height="14" rx="2.6"/></clipPath>'
+    + '<clipPath id="' + id + 't"><polygon points="12,1 4,15 15,15 15,0"/></clipPath></defs>'
+    + '<g clip-path="url(#' + id + 'r)" fill="#fff">'
+    + '<polygon points="0,0 12,0 4,16, 0,16" opacity="' + (solid ? 0.85 : 0.6) + '"/>'
+    + '<g clip-path="url(#' + id + 't)" opacity="' + (solid ? 0.6 : 0.85) + '">' + checks + '</g></g>'
+    + '<rect x="1.4" y="1.4" width="13.2" height="13.2" rx="2.3" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.6"/>'
+    + '<polyline points="12,0 4,16" stroke="#fff" stroke-width="1.5"/>'
+    + '</svg>';
+  b.title = renderMode === 'solid' ? 'solid — click: glass' : 'glass — click: solid';
+  b.addEventListener('click', e => { e.stopPropagation(); setRenderMode(renderMode === 'solid' ? 'glass' : 'solid'); });
+  return b;
+}
+function setRenderMode(mode) {
+  const r = document.querySelector('input[name="render-mode"][value="' + mode + '"]');
+  if (!r) return;
+  r.checked = true; r.dispatchEvent(new Event('change'));
+  if (bundleHover && bundleHover.ctx) showContextLabel(bundleHover.hits);
+  if (volumeCard) renderVolumeCard();
+}
+
+// The volume card: the anatomy switch, the solid/glass toggle, and (LABEL
+// mode) every region under the cursor, on or off.
+let volumeCard = null; // { hits }
+const volumeCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => { volumeCard = null; } });
+function openVolumeCard(h) {
+  const at = cardAnchor(h.sx, h.sy);
+  closeBundleCard(); if (typeof closeMarkerCard === 'function') closeMarkerCard();
+  _overBundleTip = false; bundleHover = null; bundleTipEl.style.display = 'none'; showHoverEnds(null);
+  volumeCard = { hits: h };
+  renderVolumeCard();
+  if (!volumeCardPanel.isOpen) volumeCardPanel.openAt(...at);
+}
+function closeVolumeCard() { if (volumeCard) volumeCardPanel.close(); }
+function renderVolumeCard() {
+  if (!volumeCard || !activeVolume) { closeVolumeCard(); return; }
+  const title = volumeCardPanel.titleEl;
+  title.innerHTML = '';
+  const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = activeVolume.label;
+  title.append(renderModeToggle(), nm);
+  const body = volumeCardPanel.body;
+  body.innerHTML = '';
+  const st = document.createElement('div');
+  st.className = 'dt-settings';
+  st.appendChild(makeChoiceRow('anatomy', volumes.map((v, i) => [String(i), v.label]), String(volumes.indexOf(activeVolume)),
+    value => { const v = volumes[+value]; if (v) selectVolume(v).then(() => renderVolumeCard()); }, 'the volume shown'));
+  const labels = volumeCard.hits.brain && volumeCard.hits.brain.labels;
+  if (labels && labels.length && labelsShown()) {
+    const head = document.createElement('div');
+    head.className = 'dt-toolbar-lbl ctx-sub';
+    head.textContent = labels.length === 1 ? 'region under the cursor' : labels.length + ' regions under the cursor, front to back';
+    st.appendChild(head);
+    const list = document.createElement('div');
+    list.className = 'dt-labels';
+    for (const v of labels) {
+      const row = document.createElement('div');
+      row.className = 'dt-row ctx-region';
+      row.append(...regionControls(v));
+      list.appendChild(row);
+    }
+    st.appendChild(list);
+  }
+  body.appendChild(st);
 }
 threeCanvas.addEventListener('mousemove', e => {
   if (recentTouch()) return; // the mouse events a browser fakes after a tap
@@ -2510,6 +2985,7 @@ function buildGlassBrainLocal(anat) {
   // Static per-tier step count — see applyGlassSteps.
   applyGlassSteps();
   updateGlassBrainUniforms();
+  applyLabelVisibility(false);
 }
 
 function updateGlassBrainUniforms() {
@@ -2578,115 +3054,10 @@ function setQualityTier(tier) {
   applyGlassSteps();
   if (glassBrainMesh) render3D();
   if (gridIdx) updateProbe(); // re-applies the new MAX_RENDER_POINTS budget to the current selection immediately
-  applyAOQualityMode();
+  // shadows: the light volume's resolution follows the tier (no other action needed)
+  if (lineShadows.lightDiv !== shadowLightDiv()) { lineShadows.lightDiv = shadowLightDiv(); if (shadowAmount > 0) { buildShadowsNow(); render3D(); } }
 }
 
-// Re-applies the GPU-tier -> N8AO quality-preset mapping to an ALREADY-
-// loaded AO pass — a no-op if AO has never been touched (aoPass is null
-// until the AO·STRENGTH slider first moves off 0), so switching GPU tier
-// before ever using AO doesn't force-load it.
-function applyAOQualityMode() {
-  if (!aoPass) return;
-  aoPass.setQualityMode(TIER_TO_N8AO_QUALITY[qualityTier] || 'Medium');
-}
-
-// radius/falloff/intensity ALL individually make AO stronger when
-// increased (confirmed by hand: falloff=0.5/intensity=4 read as
-// noticeably stronger than N8AO's own defaults 0.2/3), so one 0..1
-// AO·STRENGTH dial linearly steps through all three together rather than
-// needing three separate tweaks. Each parameter's endpoints reuse the
-// SAME bounds the old individual sliders had — falloff and intensity
-// span N8AO's own full sensible range regardless of dataset; radius's
-// bounds come from aoRadiusMinMm/MaxMm (rescaled from sceneRadius, see
-// rescaleAORadiusBounds), so AO·STRENGTH's physical reach still scales
-// with whatever's actually loaded, same as before, just no longer a
-// separate dial for it. No performance difference across this range:
-// falloff and intensity are pure math on an already-computed per-pixel
-// AO value (one extra ratio in the sampling loop, one pow() in the
-// final composite); radius only changes WHERE the sampling kernel's
-// fixed sample count is placed in screen space, not how many samples are
-// taken — the actual performance-relevant knob (sample count / N8AO's
-// own quality preset) isn't exposed as a control at all here and stays
-// at N8AO's own default.
-let aoRadiusMinMm = 0.2, aoRadiusMaxMm = 50;
-
-function applyAOParamsToPass() {
-  if (!aoPass) return;
-  const s = +document.getElementById('ao-strength-slider').value; // 0..1
-  aoPass.configuration.aoRadius = aoRadiusMinMm + (aoRadiusMaxMm - aoRadiusMinMm) * s;
-  aoPass.configuration.distanceFalloff = 0.05 + 0.95 * s;
-  aoPass.configuration.intensity = 0.5 + 5.5 * s;
-}
-
-// AO radius is in world-mm (screenSpaceRadius is off, see
-// ensureAOComposer), so its sensible range scales with whatever's
-// actually loaded — same reasoning as the probe RADIUS slider's own
-// diameter-based rescale. Only updates the bounds, not the AO·STRENGTH
-// slider's own value — reloading different data changes what "100%"
-// physically means in mm, but doesn't silently change the dial position
-// a user already chose.
-// Correcting an earlier misreading here: found by hand that radius only
-// has visible effect within roughly 0-10mm (on a dataset with sceneRadius
-// around 100mm) — NOT that small values were wasted, but that everything
-// from ~10mm up to whatever the old max was (tens of mm) looked
-// identical, i.e. the useful range sits at the LOW end and saturates
-// quickly above it (makes sense: once radius comfortably exceeds typical
-// inter-fiber spacing, there's nothing further away left to newly
-// discover as an occluder, so more radius stops changing the result).
-// The earlier fix raised the MINIMUM, which was backwards — this instead
-// caps the MAXIMUM close to where the effect actually saturated, so the
-// slider's whole travel stays inside the range that does something,
-// expressed as a fraction of sceneRadius so it still generalizes rather
-// than hardcoding an absolute 10mm.
-function rescaleAORadiusBounds() {
-  const r = sceneRadius || 100;
-  aoRadiusMinMm = Math.max(0.02, r * 0.0005);
-  aoRadiusMaxMm = Math.max(0.5, r * 0.10);
-  applyAOParamsToPass();
-}
-
-document.getElementById('ao-strength-slider').addEventListener('input', async e => {
-  const s = +e.target.value;
-  document.getElementById('ao-strength-val').textContent = Math.round(s * 100) + '%';
-  const statusEl = document.getElementById('ao-status');
-  if (s <= 0) {
-    // 0 means genuinely off, not just "weak" — and restores the
-    // depth-darkening cue AO otherwise replaces, via applyLineShadingFlags.
-    aoEnabled = false;
-    applyLineShadingFlags();
-    render3D();
-    return;
-  }
-  if (!aoComposer) {
-    // First time the slider has ever moved off 0 — lazy-load n8ao +
-    // postprocessing (self-hosted, see js/vendor/README.md) now, not
-    // before. Not disabling the slider itself while this is in flight —
-    // it's mid-drag when this usually fires, and disabling a range input
-    // mid-gesture is liable to interrupt the drag in some browsers.
-    statusEl.textContent = 'loading…';
-    try {
-      await ensureAOComposer();
-      statusEl.textContent = '';
-    } catch (err) {
-      // Non-fatal — the rest of the app keeps working fine without AO, so
-      // this snaps back to 0 and reports inline rather than using
-      // showCrashBanner's "reload to recover" framing, which would
-      // overstate a failure that doesn't actually affect anything else.
-      console.error('AO failed to load:', err);
-      statusEl.textContent = 'load failed — see console';
-      e.target.value = 0;
-      document.getElementById('ao-strength-val').textContent = '0%';
-      aoEnabled = false;
-      applyLineShadingFlags();
-      render3D();
-      return;
-    }
-  }
-  aoEnabled = true;
-  applyAOParamsToPass();
-  applyLineShadingFlags(); // couples the depth-darkening cue's on/off to AO's — see its own comment
-  render3D();
-});
 document.getElementById('reflectance-slider').addEventListener('input', e => {
   reflectance = +e.target.value;
   document.getElementById('reflectance-val').textContent = reflectance.toFixed(2);
@@ -2706,9 +3077,27 @@ let lightBias = 0.0;
 // mesh turns this into its own world-space u_lightDir independently
 // on the next frame (see their respective onBeforeRender), this just
 // sets the common camera-relative angle both start from.
+// The direction the light TRAVELS (camera space): RIGHT (s > 0) puts the
+// light at the right, so it travels left (and down: the light sits above).
+// A smooth path: the circle on the unit sphere through the far-left
+// direction, the headlamp (0, 0, 1) and the far-right direction, walked at
+// constant angular speed (before: straight lines with a kink at center).
+const LIGHT_END_RIGHT = new THREE.Vector3(-0.45, -0.6, 0.65).normalize(); // s = +1 (as before)
+const _lightArc = (() => {
+  const C = new THREE.Vector3(0, 0, 1), B = LIGHT_END_RIGHT.clone();
+  const A = B.clone().setX(-B.x);                                      // s = -1: mirrored
+  const n = new THREE.Vector3().subVectors(B, C).cross(new THREE.Vector3().subVectors(A, C)).normalize();
+  const p0 = n.clone().multiplyScalar(n.dot(C));                       // the circle's centre
+  const u = new THREE.Vector3().subVectors(C, p0), ub = new THREE.Vector3().subVectors(B, p0);
+  const phi = u.angleTo(ub);                                           // centre -> far right
+  // rotating u about n by +phi must land on B; otherwise turn the other way
+  const sign = u.clone().applyAxisAngle(n, phi).distanceTo(ub) < 1e-6 ? 1 : -1;
+  return { p0, u, n, phi: phi * sign };
+})();
 function lightCamFromBias(s) {
-  const mag = Math.abs(s);
-  return [s * 0.45, -mag * 0.6, THREE.MathUtils.lerp(1.0, 0.65, mag)];
+  const { p0, u, n, phi } = _lightArc;
+  const v = u.clone().applyAxisAngle(n, s * phi).add(p0).normalize();
+  return [v.x, v.y, v.z];
 }
 function updateLightBias(s) {
   lightBias = s;
@@ -2944,6 +3333,7 @@ function updateProbe(opts = {}){
     for (const id of hits) isHit[id] = 1;
     _renderHighlight = Uint8Array.from(_hl.renderIds, id => isHit[id]);
     setRibbonHighlight(selMesh, _renderHighlight);
+    shadowsChanged(); // context lines cast weaker shadows
     tMark('flags');
     setStreamlines = hits.map(i => allStreamlines[i]);
     showSelectionStats(hits.length, _hl.renderIds.length, true, _hl.thinned);
@@ -3051,7 +3441,8 @@ function updateProbe(opts = {}){
     // does need a resync here, same as lightCam above.
     selMesh.userData.depthTarget = controls.target;
     selMesh.userData.sceneRadius = sceneRadius || 1;
-    applyLineShadingFlags(); // fresh material -> fresh default uniforms, resync AO/lighting state onto it
+    applyLineShadingFlags(); // fresh material -> fresh default uniforms, resync the lighting state onto it
+    Object.assign(selMesh.material.uniforms, lineShadows.uniforms); // SHADOWING (shared by both passes)
     // Highlight mode's 2D meshes (see lineMeshes2D): a thinner context
     // sample, unless the 3D mesh already fits the 2D budget.
     if (hl) {
@@ -3064,6 +3455,7 @@ function updateProbe(opts = {}){
     _lastRenderFileIdx = styleInfo.fileIndex;
     buildEndPickList(renderIds);
     updateRibbonDensity(); tMark('density');
+    shadowsChanged(); tMark('shadows');
     ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip()));
     tMark('end dots');
   }
@@ -3113,6 +3505,62 @@ function rebuildDots() {
   updateScene3d();
 }
 
+// ── End dots colored by brain region (ends·color / inner·ends: Label) ──
+// Each end takes the color of the label at its position (plain lookup,
+// background 0: gray) in the label volume shown — or, when none is shown,
+// the last one that was: its labels are kept (a compact copy) so the colors
+// stay when you switch to an anatomy. A newly shown label volume replaces
+// them. Colors follow the volume's color table, edits included.
+let endLabelSrc = null;   // { vol, raw: Int32Array, shape, invAb, map }
+const END_BG_RGB = [0.45, 0.45, 0.45];
+const endStyleLabel = () => srcStyle.mode === 'label' || tgtStyle.mode === 'label';
+// The style the renderers see: Label draws the per-dot colors ('bundle' path).
+const effDotStyle = st => st.mode === 'label' ? { mode: 'bundle', rgb: st.rgb } : st;
+function snapshotEndLabels() {
+  if (!labelsShown() || !loadedAnatRaw || !loadedAnatShape) return false;
+  if (endLabelSrc && endLabelSrc.vol === activeVolume && endLabelSrc.raw.length === loadedAnatRaw.length) { endLabelSrc.map = lutMap; return true; }
+  const raw = new Int32Array(loadedAnatRaw.length);
+  for (let i = 0; i < raw.length; i++) raw[i] = Math.round(loadedAnatRaw[i]);
+  endLabelSrc = { vol: activeVolume, raw, shape: loadedAnatShape.slice(), invAb: JSON.parse(JSON.stringify(state.get('anat.invAb'))), map: lutMap };
+  return true;
+}
+function syncEndLabelRadios() {
+  const ok = labelsShown() || !!endLabelSrc;
+  for (const r of document.querySelectorAll('input[name="src-color"][value="label"], input[name="tgt-color"][value="label"]')) {
+    r.disabled = !ok;
+    r.closest('label').style.opacity = ok ? '' : '0.4';
+  }
+}
+// Writes the dots' per-point colors: region colors for a Label style, the
+// bundle colors (kept on first swap) otherwise.
+function applyEndDotColors() {
+  for (const [dots, st] of [[srcDots, srcStyle], [tgtDots, tgtStyle]]) {
+    if (!dots) continue;
+    const geo = dots.geometry, col = geo.attributes.color;
+    if (!geo.userData.bundleCol) geo.userData.bundleCol = col.array.slice();
+    if (st.mode !== 'label' || !endLabelSrc) {
+      if (geo.userData.labelColored) { col.array.set(geo.userData.bundleCol); col.needsUpdate = true; geo.userData.labelColored = false; }
+      continue;
+    }
+    const { raw, shape: [nx, ny, nz], invAb, vol } = endLabelSrc;
+    const map = vol === activeVolume && lutMap ? lutMap : endLabelSrc.map;
+    const P = geo.attributes.position.array, C = col.array, cache = new Map();
+    for (let i = 0; i < P.length; i += 3) {
+      const [x, y, z] = mat3mulVec(invAb, [P[i], P[i + 1], P[i + 2]]).map(Math.round);
+      let rgb = END_BG_RGB;
+      if (x >= 0 && y >= 0 && z >= 0 && x < nx && y < ny && z < nz) {
+        const v = raw[x + nx * (y + ny * z)];
+        if (v !== 0) {
+          rgb = cache.get(v);
+          if (!rgb) { const e = map && map.get(v); rgb = e ? [e.r, e.g, e.b] : END_BG_RGB; cache.set(v, rgb); }
+        }
+      }
+      C[i] = rgb[0]; C[i + 1] = rgb[1]; C[i + 2] = rgb[2];
+    }
+    col.needsUpdate = true; geo.userData.labelColored = true;
+  }
+}
+
 function updateScene3d() {
   if (selMesh)  scene.remove(selMesh);
   if (srcDots)  scene.remove(srcDots);
@@ -3160,13 +3608,14 @@ function updateScene3d() {
     }
   };
 
-  if (srcStyle.mode !== 'hide' && srcDots) {
-    applyDotColor(srcDots, srcStyle);
+  applyEndDotColors();
+  if (srcStyle.mode !== 'hide' && srcDots && endsPx > 0) {
+    applyDotColor(srcDots, effDotStyle(srcStyle));
     srcDots.renderOrder = 1;
     scene.add(srcDots);
   }
-  if (tgtStyle.mode !== 'hide' && tgtDots) {
-    applyDotColor(tgtDots, tgtStyle);
+  if (tgtStyle.mode !== 'hide' && tgtDots && endsPx > 0) {
+    applyDotColor(tgtDots, effDotStyle(tgtStyle));
     tgtDots.renderOrder = 2;
     scene.add(tgtDots);
   }
@@ -3229,6 +3678,7 @@ function collectState() {
     output: {
 	  cursor: state.get('tgt.cursor')
 	},
+    view: (() => { try { return JSON.parse(viewToJSON(currentView())); } catch { return null; } })(),
     files: {
       anatomy:    state.get('anat.file') ?? '',
       tractogram: state.get('trck.file') ?? '',
@@ -3251,18 +3701,145 @@ function saveState() {
 function setProgress(msg){const el=document.getElementById('mprogress');if(el)el.textContent=msg;}
 function tick(){return new Promise(r=>setTimeout(r,20));}
 
-function initCamera(cx, cy, cz, volRadius=0, boxRadius=0) {
-  const radius = Math.max(volRadius,boxRadius);
-  sceneRadius = radius; // single source of truth — see its declaration above
-  rescaleAORadiusBounds();
-	
-  controls.target.set(cx, cy, cz);
-  camera.position.set(cx + radius*2.5, cy, cz);
-  camera.up.set(0, 0, 1);  // Superior = up
-  camera.near = radius * 0.001;
-  camera.far  = radius * 20;
-  camera.updateProjectionMatrix();
-  controls.update();
+// ── The view ────────────────────────────────────────────────
+// A view is { center: [x,y,z] mm, radius: mm, from: unit vector, up: unit
+// vector } — the same fields as a manifest's "view" (index.json) and the
+// TOOLS › VIEW tool. "from" is where the eye is, seen from the centre
+// ([1,0,0]: from the right); the eye sits VIEW_DIST × radius away (so a
+// sphere of that radius fills the window).
+const VIEW_DIST = 2.5;
+const DIRS = { right: [1, 0, 0], left: [-1, 0, 0], anterior: [0, 1, 0], posterior: [0, -1, 0],
+               superior: [0, 0, 1], inferior: [0, 0, -1] };
+const vnorm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const parseDir = d => typeof d === 'string' ? (DIRS[d.toLowerCase()] || null)
+  : Array.isArray(d) && d.length === 3 && d.every(Number.isFinite) && Math.hypot(...d) > 0 ? vnorm(d) : null;
+// The default up for a direction: superior, or anterior when looking from above/below.
+const defaultUp = from => Math.abs(from[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1];
+function currentView() {
+  const t = controls.target, p = camera.position;
+  const d = [p.x - t.x, p.y - t.y, p.z - t.z], dist = Math.hypot(...d);
+  return { center: [t.x, t.y, t.z], radius: dist / VIEW_DIST, from: vnorm(d), up: vnorm([camera.up.x, camera.up.y, camera.up.z]) };
+}
+let _viewAnim = 0;
+// Sets the view (missing fields: kept from the current one); animated
+// over ~0.3 s unless animate is false.
+function applyView(v, { animate = true } = {}) {
+  const cur = currentView();
+  const to = {
+    center: v.center || cur.center,
+    radius: v.radius > 0 ? v.radius : cur.radius,
+    from: v.from || cur.from,
+  };
+  let up = v.up || (v.from ? defaultUp(to.from) : cur.up);
+  // up must not be parallel to from: make it perpendicular
+  const dot = up[0] * to.from[0] + up[1] * to.from[1] + up[2] * to.from[2];
+  up = vnorm([up[0] - dot * to.from[0], up[1] - dot * to.from[1], up[2] - dot * to.from[2]]);
+  if (!(Math.hypot(...up) > 0.5)) up = defaultUp(to.from);
+  to.up = up;
+  const set = (c, r, f, u) => {
+    controls.target.set(c[0], c[1], c[2]);
+    camera.position.set(c[0] + f[0] * r * VIEW_DIST, c[1] + f[1] * r * VIEW_DIST, c[2] + f[2] * r * VIEW_DIST);
+    camera.up.set(u[0], u[1], u[2]);
+    camera.near = Math.max(r, sceneRadius) * 0.001;
+    camera.far  = Math.max(r, sceneRadius) * 20 + r * VIEW_DIST;
+    camera.updateProjectionMatrix();
+    controls.update();
+  };
+  cancelAnimationFrame(_viewAnim);
+  if (!animate) { set(to.center, to.radius, to.from, to.up); return; }
+  const t0 = performance.now(), T = 300, ease = x => x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2;
+  const lerp = (a, b, k) => a.map((x, i) => x + (b[i] - x) * k);
+  const step = () => {
+    const k = ease(Math.min(1, (performance.now() - t0) / T));
+    set(lerp(cur.center, to.center, k), cur.radius + (to.radius - cur.radius) * k,
+        vnorm(lerp(cur.from, to.from, k)), vnorm(lerp(cur.up, to.up, k)));
+    if (k < 1) _viewAnim = requestAnimationFrame(step);
+  };
+  // exactly opposite directions don't interpolate: no animation then
+  if (cur.from[0] * to.from[0] + cur.from[1] * to.from[1] + cur.from[2] * to.from[2] < -0.99) set(to.center, to.radius, to.from, to.up);
+  else step();
+}
+
+// The scene's reference — what the view frames and what sizes the depth
+// the line width taper (sceneRadius) — chosen in this order:
+//   1. the manifest's "view": its "bounds" — a volume file, or an explicit
+//      { center, radius } — and its "from"/"up";
+//   3. the tractogram, when it is substantial (its box at least a fifth
+//      of the largest volume's — a single bundle passes, a failed run's
+//      stub doesn't): the tightest volume holding ≥95% of its
+//      points (the brain, rather than the whole head; an ROI never holds
+//      them), else the tractogram itself;
+//   4. the largest volume; 5. the tractogram; 6. the markers.
+// Volumes are compared by their cropped boxes (see cropToContent). The
+// camera is re-framed only when this outcome changes: switching the shown
+// volume, or adding streamlines to the loaded ones, keeps the view.
+let manifestView = null;   // top-level "view" of the last manifest, parsed
+let _tractBox = null;      // { min, max, sample: Float32Array } (finishTrckLoad)
+let _viewKey = null;       // the auto view last framed
+const boxDiag = b => Math.hypot(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
+const boxView = b => ({ center: [0, 1, 2].map(i => (b.min[i] + b.max[i]) / 2), radius: boxDiag(b) / 2 });
+function fractionInside(sample, b) {
+  let n = 0, m = sample.length / 3;
+  for (let i = 0; i < sample.length; i += 3)
+    if (sample[i] >= b.min[0] && sample[i] <= b.max[0] && sample[i + 1] >= b.min[1] && sample[i + 1] <= b.max[1]
+        && sample[i + 2] >= b.min[2] && sample[i + 2] <= b.max[2]) n++;
+  return m ? n / m : 0;
+}
+function markersBox() {
+  if (!markerSets.length) return null;
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (const m of markerSets) { const p = m.set.markers.pos;
+    for (let i = 0; i < p.length; i += 3) for (let c = 0; c < 3; c++) { min[c] = Math.min(min[c], p[i + c]); max[c] = Math.max(max[c], p[i + c]); } }
+  if (!(min[0] <= max[0])) return null;
+  // a single marker: at least 10 mm around it
+  for (let c = 0; c < 3; c++) if (max[c] - min[c] < 20) { const m = (min[c] + max[c]) / 2; min[c] = m - 10; max[c] = m + 10; }
+  return { min, max };
+}
+function autoView() {
+  const vols = volumes.filter(v => v.box);
+  const bf = manifestView && manifestView.boundsFile;
+  if (bf) { // the manifest's view.bounds: a volume file (matched by name, with or without its path)
+    const base = n => n.split('/').pop();
+    const named = [...vols].reverse().find(v => v.file.name === bf || base(v.file.name) === base(bf));
+    if (named) return { ...boxView(named.box), source: 'view.bounds ' + base(bf) };
+  }
+  const largest = vols.reduce((a, v) => !a || boxDiag(v.box) > boxDiag(a.box) ? v : a, null);
+  const tb = _tractBox;
+  if (tb && (!largest || boxDiag(tb) >= boxDiag(largest.box) / 5)) {
+    const holding = vols.filter(v => fractionInside(tb.sample, v.box) >= 0.95).sort((a, b) => boxDiag(a.box) - boxDiag(b.box));
+    if (holding.length) return { ...boxView(holding[0].box), source: 'volume ' + holding[0].label + ' (holds the streamlines)' };
+    return { ...boxView(tb), source: 'streamlines' };
+  }
+  if (largest) return { ...boxView(largest.box), source: 'volume ' + largest.label };
+  if (tb) return { ...boxView(tb), source: 'streamlines' };
+  const mb = markersBox();
+  return mb ? { ...boxView(mb), source: 'markers' } : null;
+}
+// The resulting view: the manifest's fields over the automatic choice.
+function sceneView() {
+  const a = autoView(), m = manifestView || {};
+  if (!a && !m.center) return null;
+  return {
+    center: m.center || a.center, radius: m.radius || (a ? a.radius : 100),
+    from: m.from || null, up: m.up || null,
+    source: (m.center || m.radius || m.from || m.up) ? 'manifest view' + (a ? ' / ' + a.source : '') : a.source,
+  };
+}
+let viewSource = '';
+function recomputeView({ reframe = true, force = false } = {}) {
+  const v = sceneView();
+  if (!v) return;
+  viewSource = v.source;
+  sceneRadius = v.radius; // the line width taper by depth — see its declaration
+  const key = [...v.center, v.radius].map(x => x.toFixed(1)).join() + '|' + (v.from || '') + (v.up || '');
+  const first = _viewKey === null;
+  if (!force && key === _viewKey) { refreshViewTool(); return; }
+  _viewKey = key;
+  if (!reframe && !first) { refreshViewTool(); return; }
+  const from = v.from || (first ? DIRS.right : null); // first time: from the right, superior up
+  applyView({ center: v.center, radius: v.radius, from, up: v.up || (first && !v.from ? DIRS.superior : null) },
+            { animate: !first });
+  refreshViewTool();
 }
 
 // ── Volumes and lookup tables ─────────────────────────────
@@ -3368,6 +3945,89 @@ function looksLikeParcellation({ data, shape, channels }) {
   return distinct.size >= 2 && nonzero >= 50 && same >= 0.75 * nonzero;
 }
 
+// ── Cropping empty borders ──────────────────────────────────
+// Pre-masked volumes (a brain cut out of a whole-head scan, still at the
+// full grid size) carry large all-zero borders. They are cropped right
+// after parsing — threshold exactly 0, so only data that is truly empty
+// goes, never a dark-but-real background — keeping a 1-voxel zero margin
+// (the glass brain's surface needs it to close). Only the grid size and
+// the offset in the voxel-to-world matrix change: world coordinates stay
+// exact, so everything downstream (texture, shaders, picking, 2D
+// mapping) just sees a smaller volume. Voxel indices shown to the user
+// add cropOffset back, so they always refer to the original file.
+// Fast: each axis is scanned slab by slab from both ends and stops at the
+// first slab holding data (an unmasked head stops at once).
+// Lossy volumes (.webm: video compression) never have an exact-zero
+// background, so for them (noisy: true) the background noise is estimated
+// first: the largest value in a small cube at each of the 8 corners of the
+// grid, and the median of those 8 (robust to a corner holding tissue, like
+// the neck at the bottom of a whole-head scan). A slab then holds data when
+// at least 3 of its voxels exceed twice that level (a lone compression
+// spike doesn't count).
+function cropToContent(anat, { noisy = false } = {}) {
+  const [nx, ny, nz] = anat.shape, ch = (anat.channels || 1) === 3 ? 3 : 1, d = anat.data;
+  if (!d || !nx || !ny || !nz) return { ...anat, cropOffset: [0, 0, 0], origShape: anat.shape.slice(0, 3), cropThreshold: 0 };
+  const full = { ...anat, cropOffset: [0, 0, 0], origShape: [nx, ny, nz], cropThreshold: 0 };
+  const lo = [0, 0, 0], hi = [nx - 1, ny - 1, nz - 1];
+  const val = o => { let m = 0; for (let c = 0; c < ch; c++) { const v = d[o * ch + c]; if (v === v && Math.abs(v) > m) m = Math.abs(v); } return m; };
+  let thr = 0, minCount = 1;
+  if (noisy) {
+    const cs = [nx, ny, nz].map(n => Math.max(2, Math.min(8, n >> 3))), peaks = [];
+    for (const ci of [0, 1]) for (const cj of [0, 1]) for (const ck of [0, 1]) {
+      let m = 0;
+      const i0 = ci ? nx - cs[0] : 0, j0 = cj ? ny - cs[1] : 0, k0 = ck ? nz - cs[2] : 0;
+      for (let k = k0; k < k0 + cs[2]; k++) for (let j = j0; j < j0 + cs[1]; j++) for (let i = i0; i < i0 + cs[0]; i++)
+        m = Math.max(m, val(i + nx * (j + ny * k)));
+      peaks.push(m);
+    }
+    peaks.sort((a, b) => a - b);
+    thr = 2 * (peaks[3] + peaks[4]) / 2;
+    minCount = 3;
+  }
+  // does the slab axis = idx (within the current lo..hi of the other axes) hold data?
+  const slabHas = (axis, idx) => {
+    const [a, b] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
+    const p = [0, 0, 0]; p[axis] = idx;
+    let n = 0;
+    for (let u = lo[b]; u <= hi[b]; u++) { p[b] = u;
+      for (let t = lo[a]; t <= hi[a]; t++) { p[a] = t;
+        if (val(p[0] + nx * (p[1] + ny * p[2])) > thr && ++n >= minCount) return true; } }
+    return false;
+  };
+  for (const axis of [2, 1, 0]) {
+    while (lo[axis] <= hi[axis] && !slabHas(axis, lo[axis])) lo[axis]++;
+    if (lo[axis] > hi[axis]) return full;            // all zero: leave as is
+    while (hi[axis] > lo[axis] && !slabHas(axis, hi[axis])) hi[axis]--;
+  }
+  const dims = [nx, ny, nz];
+  for (let k = 0; k < 3; k++) { lo[k] = Math.max(0, lo[k] - 1); hi[k] = Math.min(dims[k] - 1, hi[k] + 1); }
+  if (lo.every(v => v === 0) && hi.every((v, k) => v === dims[k] - 1)) return full;
+  const [mx_, my_, mz_] = [hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1];
+  const out = new d.constructor(mx_ * my_ * mz_ * ch);
+  const row = mx_ * ch;
+  for (let k = 0; k < mz_; k++) for (let j = 0; j < my_; j++) {
+    const src = (lo[0] + nx * ((lo[1] + j) + ny * (lo[2] + k))) * ch;
+    out.set(d.subarray(src, src + row), (mx_ * (j + my_ * k)) * ch);
+  }
+  const Ab = anat.Ab, inv = anat.invAb;
+  // Ab rows 0..2: A, row 3: b  →  b' = b + A·lo ;  invAb row 3: c  →  c' = c − lo
+  const newAb = [Ab[0].slice(), Ab[1].slice(), Ab[2].slice(),
+                 [0, 1, 2].map(r => Ab[3][r] + Ab[r][0] * lo[0] + Ab[r][1] * lo[1] + Ab[r][2] * lo[2])];
+  const newInv = inv.length === 4 ? [inv[0].slice(), inv[1].slice(), inv[2].slice(), [0, 1, 2].map(r => inv[3][r] - lo[r])] : inv;
+  return { ...anat, shape: [mx_, my_, mz_, ...anat.shape.slice(3)], data: out, Ab: newAb, invAb: newInv,
+           cropOffset: lo.slice(), origShape: [nx, ny, nz], cropThreshold: thr };
+}
+// World-space box of a volume's grid (voxel centres at integer indices,
+// so the grid spans −0.5 … n−0.5 along each index axis).
+function volumeWorldBox(shape, Ab) {
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (const i of [-0.5, shape[0] - 0.5]) for (const j of [-0.5, shape[1] - 0.5]) for (const k of [-0.5, shape[2] - 0.5]) {
+    const p = mat3mulVec(Ab, [i, j, k]);
+    for (let c = 0; c < 3; c++) { min[c] = Math.min(min[c], p[c]); max[c] = Math.max(max[c], p[c]); }
+  }
+  return { min, max };
+}
+
 async function parseVolumeFile(f) {
   let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
   if (ext == '.nii' || ext == '.nii.gz') return parseNifti(f);
@@ -3386,11 +4046,15 @@ async function classifyPendingVolumes() {
   _classifying = true;
   try {
     for (;;) {
-      const vol = volumes.find(v => v.category == null && v !== activeVolume && v !== _loadingVolume && !v.classifyFailed);
+      // (a .webm volume is a video: not decoded just for its box)
+      const vol = volumes.find(v => (v.category == null || (!v.box && !isWebmName(v.file.name)))
+                                 && v !== activeVolume && v !== _loadingVolume && !v.classifyFailed);
       if (!vol) break;
       await new Promise(r => setTimeout(r, 30)); // let the UI breathe between volumes
       try {
-        const a = await parseVolumeFile(vol.file);
+        const a = cropToContent(await parseVolumeFile(vol.file), { noisy: isWebmName(vol.file.name) });
+        vol.box = volumeWorldBox(a.shape, a.Ab); // for the scene's reference (recomputeView)
+        recomputeView();
         if (vol.category == null) { // may have been set meanwhile (LUT attached, "show as")
           vol.isColor = (a.channels || 1) === 3;
           vol.category = !vol.isColor && looksLikeParcellation(a) ? 'parcellation' : 'anatomy';
@@ -3435,10 +4099,12 @@ async function loadAnat(f){
   const vol = volumeForFile(f);
   _loadingVolume = vol;
   let anat;
-  try { anat = await parseVolumeFile(f); }
+  try { anat = cropToContent(await parseVolumeFile(f), { noisy: isWebmName(f.name) }); }
   catch (e) { setProgress('Error.'); await tick(); throw e; }
   finally { if (_loadingVolume === vol) _loadingVolume = null; }
-  const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels } = anat;
+  const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels, cropOffset, origShape, cropThreshold } = anat;
+  vol.cropOffset = cropOffset; vol.origShape = origShape;
+  vol.box = volumeWorldBox(shape, Ab);
   loadedAnatRaw = data;
   loadedAnatShape = shape;
 
@@ -3464,7 +4130,7 @@ async function loadAnat(f){
   vr.setForceGray(modality === 'anat' && isColorData);
   updateLabelHud('src'); updateLabelHud('tgt');
 
-  state.set( 'anat', { shape, vox_mm, Ab, invAb, decomp, mn, mx, channels } );
+  state.set( 'anat', { shape, vox_mm, Ab, invAb, decomp, mn, mx, channels, cropOffset, origShape, cropThreshold } );
   // Start at the middle voxel, chosen so the same PHYSICAL voxel is picked
   // however the file stores its axes (LR vs RL, etc.). Voxel indices
   // 0..N-1 are voxel centres under the affine, so the true middle is
@@ -3491,10 +4157,9 @@ async function loadAnat(f){
   setProgress('uploading 3D texture…'); await tick();
   vr.upload(anat);
   buildGlassBrainLocal(anat);
-  // Set camera from volume: centre = RAS midpoint, radius = half-diagonal
-  const [ex,ey,ez] = vr._ras_extent;
-  const volRadius = Math.sqrt(ex*ex + ey*ey + ez*ez) / 2;
-  initCamera(...probeCenter,volRadius);
+  // The view: only re-framed when the scene's reference changes (a new
+  // volume may become it; switching to an already-listed one doesn't).
+  recomputeView();
   updateProbeRadiusRange(false); // rescale RADIUS slider to this anatomy's size; don't disturb current value/mode
   anatHeaderReady = true;
   checkShowHud();
@@ -3637,6 +4302,10 @@ function setModality(newModality) {
   updateSlicesA(); updateSlicesB();
   updateLabelHud('src'); updateLabelHud('tgt');
   if (currentAnat) buildGlassBrainLocal(currentAnat);
+  registerVolumeItems(); // the label list shows in LABEL mode only
+  // ends colored by region: a newly shown label volume takes over
+  if (endStyleLabel() && labelsShown()) { snapshotEndLabels(); redrawAll(); }
+  syncEndLabelRadios();
 }
 
 // Shows the region name under the src cursor when a LUT colormap is
@@ -3870,6 +4539,7 @@ function clearStreamlines() {
   if (tgtDots) { scene.remove(tgtDots); tgtDots.geometry.dispose(); tgtDots = null; }
   if (slabRenderer) slabRenderer.invalidate(null);
   trckParents = []; groups = []; allStreamlines = null; streamlineLookup = null; allPts = null; gridIdx = null;
+  _tractBox = null; recomputeView({ reframe: false }); // (removing data never moves the view)
   setStreamlines = []; renderStreamlines = []; // their 'nothing loaded' values (see their declarations)
   isBundle = false; streamlineBundleId = null; bundlePaletteRGB = null; bundleNames = null; _lastBundleInfo = null;
   hiddenBundleIndices.clear();
@@ -3899,10 +4569,15 @@ async function finishTrckLoad(dTrckP, { add = false, bundleModeChanged = true } 
   let md=0;for(let i=0;i<allPts.length;i+=3){const dx=allPts[i]-cx,dy=allPts[i+1]-cy,dz=allPts[i+2]-cz;md=Math.max(md,dx*dx+dy*dy+dz*dz);}
   const boxRadius=Math.sqrt(md);
   lastTrckBoxRadius = boxRadius;
-  const [ex,ey,ez] = vr._ras_extent || [0,0,0];
-  const volRadius = Math.sqrt(ex*ex+ey*ey+ez*ez) / 2;
-  // Adding to the loaded streamlines keeps the camera and probe as they are.
-  if (!add) initCamera(cx,cy,cz,volRadius,boxRadius);
+  // The streamlines' box and a sample of their points (≤ 20k), for the
+  // scene's reference (recomputeView).
+  { const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity], n = allPts.length / 3;
+    for (let i = 0; i < allPts.length; i += 3) for (let c = 0; c < 3; c++) { const v = allPts[i + c]; if (v < min[c]) min[c] = v; if (v > max[c]) max[c] = v; }
+    const stride = Math.max(1, Math.floor(n / 20000)), sample = new Float32Array(Math.ceil(n / stride) * 3);
+    let o = 0; for (let i = 0; i < n; i += stride) { sample[o++] = allPts[3 * i]; sample[o++] = allPts[3 * i + 1]; sample[o++] = allPts[3 * i + 2]; }
+    _tractBox = n ? { min, max, sample: sample.subarray(0, o) } : null; }
+  // Adding to the loaded streamlines keeps the view as it is.
+  recomputeView({ reframe: !add });
   updateProbeRadiusRange(!add); // rescale + (new load) apply the default: Show All for bundles, 1/5 diameter otherwise
   // If no anatomy has been loaded, loadAnat's own probe-centering
   // (state.update({'src.cursor':probeCenter,...}) never ran, so the
@@ -4018,10 +4693,6 @@ wireSlider('pitch-slider','pitch-val', v=>v, v=>v+'°', v=>{pitch=v; updateRotat
 wireSlider('yaw-slider','yaw-val', v=>v, v=>v+'°', v=>{yaw=v; updateRotation();});
 wireSlider('roll-slider','roll-val', v=>v, v=>v+'°', v=>{roll=v; updateRotation();});
 document.getElementById('quality-' + qualityTier).checked = true; // reflect the auto-detected default
-// AO's own quality-mode mapping needs no init-time call here — it only
-// ever applies once aoPass actually exists (see applyAOQualityMode), and
-// ensureAOComposer already reads the current qualityTier when it first loads.
-rescaleAORadiusBounds(); // sensible bounds even before any data is loaded (sceneRadius falls back to 100)
 document.querySelectorAll('input[name="quality-tier"]').forEach(r=>{
   r.addEventListener('change', ()=> setQualityTier(r.value));
 });
@@ -4044,6 +4715,9 @@ document.querySelectorAll('input[name="render-mode"]').forEach(r=>{
     renderMode = r.value;
     applyRenderModeUI();
     updateGlassBrainUniforms();
+    // the solid/glass icon in an open volume card (and the context label) follows
+    if (volumeCard) renderVolumeCard();
+    if (bundleHover && bundleHover.ctx) showContextLabel(bundleHover.hits);
   });
 });
 applyRenderModeUI(); // reflect the default MODE (glass) on load
@@ -4069,6 +4743,11 @@ document.getElementById('clip-cover').addEventListener('change', e=>{
 document.getElementById('clip-frames').addEventListener('change', e=>{
   framesVisible = e.target.checked;
   updatePlaneMeshes();
+});
+document.getElementById('shadow-slider').addEventListener('input', e => {
+  document.getElementById('shadow-val').textContent = e.target.value + '%';
+  setShadowAmount(+e.target.value / 100);
+  render3D();
 });
 document.getElementById('light-slider').addEventListener('input', e=>{
   const v = +e.target.value;
@@ -4118,9 +4797,113 @@ const toolsPanel = new FloatingPanel({
   anchorEl: document.getElementById('fullscreen-btn'),
   triggerBtn: document.getElementById('tools-btn'),
   group: panelGroup,
-  onOpen: () => fillShotViews(),
+  onOpen: () => { fillShotViews(); refreshViewTool(); viewStatus(viewSource ? 'auto: ' + viewSource : ''); },
 });
 document.getElementById('tools-about').addEventListener('click', e => { e.stopPropagation(); aboutPanel.open(); });
+
+// ── TOOLS › VIEW ────────────────────────────────────────────
+// Shows and edits the current view (see currentView/applyView): the same
+// fields as a manifest's "view", so a copied view can be pasted back, sent
+// to a colleague, or put in a zip's index.json.
+const DIR_NAMES = Object.keys(DIRS);
+const r1 = x => Math.round(x * 10) / 10, r3 = x => Math.round(x * 1000) / 1000;
+// a direction as a name when it is one (within half a degree), else a vector
+function dirOut(d) {
+  for (const n of DIR_NAMES) { const v = DIRS[n]; if (v[0] * d[0] + v[1] * d[1] + v[2] * d[2] > 0.99996) return n; }
+  return d.map(r3);
+}
+function viewToJSON(v) {
+  return JSON.stringify({ bounds: { center: v.center.map(r1), radius: r1(v.radius) }, from: dirOut(v.from), up: dirOut(v.up) });
+}
+function describeFrom(d) {
+  let best = null, bestDot = -2;
+  for (const n of DIR_NAMES) { const v = DIRS[n], k = v[0] * d[0] + v[1] * d[1] + v[2] * d[2]; if (k > bestDot) { bestDot = k; best = n; } }
+  const off = Math.acos(Math.min(1, bestDot)) * 180 / Math.PI;
+  return off < 0.5 ? best : best + ' · ' + Math.round(off) + '° off';
+}
+let _viewToolRaf = 0;
+function refreshViewTool() {
+  if (_viewToolRaf) return;
+  _viewToolRaf = requestAnimationFrame(() => {
+    _viewToolRaf = 0;
+    const panel = document.getElementById('panel-tools');
+    if (!panel || getComputedStyle(panel).display === 'none') return;
+    const v = currentView(), ae = document.activeElement;
+    const put = (id, val) => { const el = document.getElementById(id); if (el !== ae) el.value = val; };
+    put('view-cx', r1(v.center[0])); put('view-cy', r1(v.center[1])); put('view-cz', r1(v.center[2]));
+    put('view-r', r1(v.radius));
+    put('view-json', viewToJSON(v));
+    document.getElementById('view-from-text').textContent = describeFrom(v.from);
+  });
+}
+// The tool follows the view as it is turned, zoomed or panned.
+{ const render = controls._renderFn; controls._renderFn = () => { render(); refreshViewTool(); }; }
+const viewStatus = t => { const el = document.getElementById('view-status'); el.textContent = t; el.setAttribute('data-tip', t); };
+document.querySelectorAll('.view-dir').forEach(b => b.addEventListener('click', e => {
+  e.stopPropagation();
+  applyView({ from: DIRS[b.dataset.dir] });
+}));
+const numIn = id => { const v = parseFloat(document.getElementById(id).value); return Number.isFinite(v) ? v : null; };
+const applyCenterInputs = () => {
+  const c = [numIn('view-cx'), numIn('view-cy'), numIn('view-cz')];
+  if (c.every(v => v !== null)) applyView({ center: c }); else refreshViewTool();
+};
+const applyRadiusInput = () => { const r = numIn('view-r'); if (r > 0) applyView({ radius: r }); else refreshViewTool(); };
+for (const id of ['view-cx', 'view-cy', 'view-cz', 'view-r']) {
+  const el = document.getElementById(id);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  el.addEventListener('change', () => id === 'view-r' ? applyRadiusInput() : applyCenterInputs());
+}
+document.getElementById('view-center-cursor').addEventListener('click', e => {
+  e.stopPropagation();
+  const c = state.get('tgt.cursor') || state.get('src.cursor');
+  if (c) applyView({ center: c.slice(0, 3) });
+});
+document.getElementById('view-center-auto').addEventListener('click', e => {
+  e.stopPropagation();
+  const v = sceneView(); if (v) applyView({ center: v.center });
+});
+document.getElementById('view-reset').addEventListener('click', e => {
+  e.stopPropagation();
+  const v = sceneView(); if (!v) return;
+  applyView({ center: v.center, radius: v.radius, from: v.from || DIRS.right, up: v.up || (v.from ? null : DIRS.superior) });
+  viewStatus('auto: ' + v.source);
+});
+// A view from text: the view object itself, or anything holding one as "view"
+// (e.g. a whole index.json).
+function parseViewText(text) {
+  let o = JSON.parse(text);
+  if (o && typeof o === 'object' && o.view && typeof o.view === 'object') o = o.view;
+  if (!o || typeof o !== 'object' || Array.isArray(o)) throw 'not a view object';
+  const out = {};
+  const vec3 = x => Array.isArray(x) && x.length === 3 && x.every(Number.isFinite);
+  let b = o.bounds;
+  if (typeof b === 'string') { // a volume file: its box, if it is loaded
+    const base = n => n.split('/').pop();
+    const vol = volumes.find(v => v.box && base(v.file.name) === base(b));
+    if (!vol) throw `bounds: "${b}" is not a loaded volume`;
+    b = boxView(vol.box);
+  }
+  if (b == null) b = o; // (center/radius given directly are accepted too)
+  if (b.center != null) { if (!vec3(b.center)) throw 'center must be [x, y, z]'; out.center = b.center.slice(); }
+  if (b.radius != null) { if (!(b.radius > 0)) throw 'radius must be a positive number'; out.radius = +b.radius; }
+  if (o.from != null) { out.from = parseDir(o.from); if (!out.from) throw 'from must be a side (left, right, …) or [x, y, z]'; }
+  if (o.up != null) { out.up = parseDir(o.up); if (!out.up) throw 'up must be a side (left, right, …) or [x, y, z]'; }
+  return out;
+}
+const applyJsonInput = () => {
+  try { applyView(parseViewText(document.getElementById('view-json').value)); viewStatus('applied'); }
+  catch (err) { viewStatus('not a view: ' + (err.message || err)); }
+};
+document.getElementById('view-apply').addEventListener('click', e => { e.stopPropagation(); applyJsonInput(); });
+document.getElementById('view-json').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyJsonInput(); } });
+document.getElementById('view-copy').addEventListener('click', async e => {
+  e.stopPropagation();
+  const text = viewToJSON(currentView()), field = document.getElementById('view-json');
+  field.value = text;
+  try { await navigator.clipboard.writeText(text); viewStatus('copied'); }
+  catch { field.focus(); field.select(); try { document.execCommand('copy'); viewStatus('copied'); } catch { viewStatus('select and copy the text'); } }
+});
 
 // ── TOOLS › screenshot and rotation movie ───────────────────
 // Only the picture itself (the WebGL canvas, or a section's canvas) —
@@ -4180,14 +4963,12 @@ function begin3DScale(k) {
   _shotScale = k;
   writeFileStyles();
   renderer3.setPixelRatio(pr * k);
-  if (aoComposer) { aoComposer.setPixelRatio(pr * k); aoComposer.setSize(W, H); }
   return () => {
     for (const [un, v] of saved) un.value = v;
     if (lit) lit.visible = true;
     _shotScale = 1;
     writeFileStyles();
     renderer3.setPixelRatio(pr);
-    if (aoComposer) { aoComposer.setPixelRatio(pr); aoComposer.setSize(W, H); }
     render3D();
   };
 }
@@ -4256,14 +5037,17 @@ document.getElementById('shot-save').addEventListener('click', e => {
   }
 });
 
-// The rotation movie: one turn around the screen's vertical axis through
-// the rotation centre, frame by frame (each frame rendered, copied and
+// The rotation movie: one turn around the brain's inferior-superior axis
+// (world +S, RAS z) through the rotation centre — the camera turns rigidly
+// about it, so a tilted view spins the brain about its own vertical axis
+// instead of tumbling it (the old screen-vertical axis wobbled whenever S
+// wasn't vertical on screen) — frame by frame (each frame rendered, copied and
 // encoded before the next — never real-time capture), with mediabunny.
 let _movieBusy = false, _movieCancel = false;
 async function recordRotation({ seconds, fps, k, format, quality }, onProgress) {
   const M = await import('mediabunny');
   const end = begin3DScale(max3DScale(k));
-  const target = controls.target.clone(), pos0 = camera.position.clone(), up0 = camera.up.clone();
+  const target = controls.target.clone(), pos0 = camera.position.clone(), up0 = camera.up.clone(), q0Saved = camera.quaternion.clone();
   threeCanvas.style.pointerEvents = 'none'; // no orbiting while recording
   try {
     // H.264 and friends need even sizes
@@ -4280,14 +5064,16 @@ async function recordRotation({ seconds, fps, k, format, quality }, onProgress) 
     const source = new M.CanvasSource(frame, { codec, bitrate: Math.round(Math.min(60e6, Math.max(1e6, outW * outH * fps * bpp))) });
     output.addVideoTrack(source, { frameRate: fps });
     await output.start();
-    const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize(); // screen vertical
-    const offset = pos0.clone().sub(target);
+    const axis = new THREE.Vector3(0, 0, 1); // superior (world = RAS)
+    const offset = pos0.clone().sub(target), q0 = camera.quaternion.clone(), qi = new THREE.Quaternion();
     const n = Math.max(2, Math.round(seconds * fps));
     for (let i = 0; i < n; i++) {
       if (_movieCancel) { await output.cancel(); return null; }
-      camera.position.copy(target).add(offset.clone().applyAxisAngle(axis, 2 * Math.PI * i / n));
-      camera.up.copy(axis);
-      camera.lookAt(target);
+      // the whole camera (position and orientation) turned about the axis
+      qi.setFromAxisAngle(axis, 2 * Math.PI * i / n);
+      camera.position.copy(target).add(offset.clone().applyQuaternion(qi));
+      camera.quaternion.copy(qi).multiply(q0);
+      camera.up.copy(up0).applyQuaternion(qi);
       camera.updateMatrixWorld();
       sortTranslucentForView(true);
       render3D();
@@ -4300,7 +5086,7 @@ async function recordRotation({ seconds, fps, k, format, quality }, onProgress) 
     blob.codec = codec;
     return blob;
   } finally {
-    camera.position.copy(pos0); camera.up.copy(up0); camera.lookAt(target); camera.updateMatrixWorld();
+    camera.position.copy(pos0); camera.up.copy(up0); camera.quaternion.copy(q0Saved); camera.updateMatrixWorld();
     threeCanvas.style.pointerEvents = '';
     end();
   }
@@ -4390,6 +5176,15 @@ const headerPanel = new FloatingPanel({
 document.getElementById('dz-save').addEventListener('click', () => saveTck());
 document.getElementById('dz-state').addEventListener('click', () => saveState());
 
+// The HEADER text can be selected and copied (it is .selectable: no panel
+// drag starts on it); Ctrl/Cmd+A there selects just the text, not the page.
+document.getElementById('hdr-panel-pre').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+    e.preventDefault();
+    const r = document.createRange(); r.selectNodeContents(e.currentTarget);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+});
 function showHeaderPanel(title, text) {
   document.getElementById('hdr-panel-title').textContent = title;
   document.getElementById('hdr-panel-pre').textContent = text;
@@ -4409,9 +5204,16 @@ function showAnatHeaderPanel() {
   const vox_mm = state.get('anat.vox_mm')
   const mn = state.get('anat.mn');
   const mx = state.get('anat.mx');
-  const Ab = state.get('anat.Ab');
+  const Ab0 = state.get('anat.Ab'), off = state.get('anat.cropOffset') || [0, 0, 0];
+  const orig = state.get('anat.origShape') || shape;
+  const cropped = off.some(v => v) || orig.some((v, i) => v !== shape[i]);
+  // the file's own affine (the crop only moved b)
+  const Ab = [Ab0[0], Ab0[1], Ab0[2], [0, 1, 2].map(r => Ab0[3][r] - Ab0[r][0] * off[0] - Ab0[r][1] * off[1] - Ab0[r][2] * off[2])];
   showHeaderPanel('NIFTI HEADER', JSON.stringify({
-    dimensions: [ shape[0], shape[1], shape[2] ],
+    dimensions: [ orig[0], orig[1], orig[2] ],
+    ...(cropped ? { cropped_to: { from: off.slice(), dimensions: [shape[0], shape[1], shape[2]],
+                                  ...(state.get('anat.cropThreshold') > 0 ? { background_below: +state.get('anat.cropThreshold').toPrecision(3) } : {}),
+                                  note: 'empty borders are not loaded; voxel indices shown refer to the original file' } } : {}),
     voxel_size: vox_mm.slice(0,3).map(v => +v.toFixed(6)),
     data_range: { min: +mn?.toFixed(4), max: +mx?.toFixed(4) },
     affine: { 
@@ -4596,7 +5398,7 @@ document.getElementById('slab-slider').addEventListener('input',e=>{
   updatePlaneMeshes(); // also pushes u_sliceThickness to the 3D SLICE clip, not just the 2D streamline slab
 });
 document.getElementById('ends-size').addEventListener('input',e=>{
-  endsPx=+e.target.value;document.getElementById('ends-size-val').textContent=endsPx.toFixed(1)+' px';
+  endsPx=+e.target.value;document.getElementById('ends-size-val').textContent=endsPx > 0 ? endsPx.toFixed(1)+' px' : 'off';
   rebuildDots(); updateSlicesA(); updateSlicesB();
 });
 document.getElementById('line-width-slider').addEventListener('input',e=>{
@@ -4623,8 +5425,9 @@ function initColorRadio(radioName, pickerId, setVar, redraw) {
 
 const redrawAll = () => { updateScene3d(); updateSlicesA(); updateSlicesB(); };
 initColorRadio('lines-color', 'line-color-picker', v => lineStyle = v, redrawAll);
-initColorRadio('src-color',   'src-color-picker',  v => srcStyle  = v, redrawAll);
-initColorRadio('tgt-color',   'tgt-color-picker',  v => tgtStyle  = v, redrawAll);
+initColorRadio('src-color',   'src-color-picker',  v => { srcStyle = v; if (v.mode === 'label') snapshotEndLabels(); }, redrawAll);
+initColorRadio('tgt-color',   'tgt-color-picker',  v => { tgtStyle = v; if (v.mode === 'label') snapshotEndLabels(); }, redrawAll);
+setTimeout(syncEndLabelRadios, 0); // (after the module has run: labelsShown is defined further down)
 
 // Programmatically selects a radio option and runs it through the exact
 // same path a user click would (dispatching 'change' rather than poking
@@ -4864,6 +5667,14 @@ async function dispatchOpenedFiles(rawFiles){
       const raw = JSON.parse(await manifestEntry.file.text());
       const manifest = parseManifest(raw);
       manifestVolumes = resolveManifestVolumes(manifest, entries.map(e => e.file));
+      const bf = manifest.view && manifest.view.boundsFile;
+      if (bf && !entries.some(e => e.file.name === bf || e.file.name.split('/').pop() === bf.split('/').pop()))
+        throw `index.json view.bounds names "${bf}", which is not in the drop`;
+      // its opening view (see recomputeView); a new manifest replaces the old one's
+      manifestView = manifest.view ? { ...manifest.view,
+        from: manifest.view.from != null ? parseDir(manifest.view.from) : null,
+        up: manifest.view.up != null ? parseDir(manifest.view.up) : null } : null;
+      recomputeView({ force: true });
     } catch (e) {
       if (!confirmManifestError(e, true)) return false; // cancelled — load nothing
       // proceed without manifest guidance — manifestVolumes stays null,
@@ -5037,7 +5848,263 @@ function makeChoiceRow(labelText, options, value, onChange, title = null) {
 // categories — the renderer shows one volume at a time. (Once anatomy and
 // a parcellation can be overlaid, these become two independent choices.)
 // A single volume gets an on/off checkbox instead.
+// ── Label visibility (LABEL mode) ───────────────────────────
+// Each parcellation keeps the set of label values switched off
+// (vol.hiddenLabels); the 3D brain draws those as background (scene3d.js:
+// u_labelVis). Switched from the region label in 3D (checkbox, and the
+// lamp: only this region / all again) and from the DATA panel's label
+// list. The 2D sections are not affected.
+const LABEL_LIST_MAX = 255;      // rows listed in DATA (the rest: one "… N more" line)
+const LABEL_DISTINCT_MAX = 5000; // more distinct values: not a label volume
+// The label values present in the shown volume (computed once per volume
+// from its data): { values: sorted ints > 0 } or { notLabels: true, distinct }.
+function labelInfoOf(vol) {
+  if (vol.labelInfo) return vol.labelInfo;
+  if (vol !== activeVolume || !loadedAnatRaw || vol.isColor) return null;
+  const d = loadedAnatRaw, seen = new Set();
+  for (let i = 0; i < d.length; i++) {
+    const v = d[i];
+    if (v === 0 || v !== v) continue;
+    if (v !== Math.round(v) || v < 0) { vol.labelInfo = { notLabels: true, reason: 'not whole numbers' }; return vol.labelInfo; }
+    if (!seen.has(v)) { seen.add(v); if (seen.size > LABEL_DISTINCT_MAX) { vol.labelInfo = { notLabels: true, reason: 'more than ' + LABEL_DISTINCT_MAX.toLocaleString() + ' different values' }; return vol.labelInfo; } }
+  }
+  vol.labelInfo = { values: [...seen].sort((a, b) => a - b) };
+  return vol.labelInfo;
+}
+const labelsShown = () => modality === 'seg' && activeVolume && !activeVolume.isColor;
+const hiddenLabelsOf = vol => vol.hiddenLabels || (vol.hiddenLabels = new Set());
+function labelEntry(v) { // [name, '#rrggbb'] from the lookup table
+  const e = lutMap && lutMap.get(v);
+  const hex = e ? '#' + [e.r, e.g, e.b].map(c => Math.round(255 * Math.min(1, Math.max(0, c))).toString(16).padStart(2, '0')).join('') : '#888888';
+  return [e ? e.name : 'label ' + v, hex];
+}
+// ── Label colors ──
+// A region's swatch is a color input, as for bundles. The first edit gives
+// the volume its own copy of its current color table — a lookup table
+// "<name> (custom)", listed and attachable like a loaded one, so the
+// original stays a choice in the volume's settings — edited in place from
+// then on. While the picker is dragged only the colors and the swatches
+// change; the lists are rebuilt when it is let go.
+function labelSwatch(v, hex) {
+  const sw = document.createElement('input');
+  sw.type = 'color'; sw.className = 'dt-swatch';
+  sw.value = hex; sw.dataset.labelSw = String(v);
+  sw.title = 'change region color';
+  sw.addEventListener('click', e => e.stopPropagation());
+  sw.addEventListener('input', () => setLabelColor(v, sw.value, false));
+  sw.addEventListener('change', () => setLabelColor(v, sw.value, true));
+  return sw;
+}
+function customLutOf(vol) {
+  if (vol.lut && vol.lut.custom) return vol.lut;
+  const map = new Map();
+  if (lutMap) for (const [k, e] of lutMap) map.set(k, { ...e });
+  const base = vol.lut ? lutBaseName(vol.lut.name) : volumeBaseName(vol.label);
+  let name = base + ' (custom)';
+  for (let i = 2; luts.some(l => l.name === name); i++) name = base + ' (custom ' + i + ')';
+  const lut = { file: null, name, map, maxIndex: lutMaxIndex, volume: null, uiSettingsOpen: false, custom: true };
+  luts.push(lut);
+  attachLut(lut, vol);
+  lutMap = map; lutIsAutoGenerated = false;
+  return lut;
+}
+let _lut3DTex = null;
+function setLabelColor(v, hex, done) {
+  const vol = activeVolume;
+  if (!vol) return;
+  const lut = customLutOf(vol);
+  const e = lut.map.get(v) || { a: 1, name: 'label ' + v };
+  [e.r, e.g, e.b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  lut.map.set(v, e);
+  if (v > lut.maxIndex) lut.maxIndex = v;
+  lutMap = lut.map; lutMaxIndex = lut.maxIndex;
+  // 2D slices
+  vr.uploadLUT(lutMap, lutMaxIndex);
+  updateSlicesA(); updateSlicesB();
+  // 3D: a new color texture in the shared uniforms
+  if (glassBrainMesh && glassBrainMesh.material.uniforms && glassBrainMesh.material.uniforms.u_lut) {
+    const u = glassBrainMesh.material.uniforms;
+    const { data, size } = buildLutRGBA(lutMap, lutMaxIndex);
+    const t = new THREE.DataTexture(data, size, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
+    const old = u.u_lut.value;
+    u.u_lut.value = t; u.u_lutSize.value = size;
+    if (old && old === _lut3DTex) old.dispose();
+    _lut3DTex = t;
+    render3D();
+  }
+  // every swatch of this region follows
+  for (const el of document.querySelectorAll('[data-label-sw="' + v + '"]')) if (el.value !== hex) el.value = hex;
+  if (done) labelsChanged();
+}
+let _labelVisTex = null;
+// The shown regions as a smooth occupancy field for the 3D surface (see
+// u_occ in scene3d.js): 1 inside a shown label, 0 elsewhere, Gaussian-
+// blurred with σ = 0.8 voxel. Light enough to keep thin regions (a blur
+// of ~1.2 already erases a 1-voxel-thin structure), strong enough to take
+// the voxel facets out of the lighting. Rebuilt when regions are switched
+// on/off; one pass + three blur passes over the (cropped) volume.
+let OCC_SIGMA = 0.8;
+let _occTex = null, _occKey = null;
+// Console: setLabelBlur(1.2) — try another blur (in voxels; 0 = off, the
+// raw 0/1 field as before). Rebuilds at once; returns the build time.
+window.setLabelBlur = sigma => {
+  OCC_SIGMA = Math.max(0, +sigma || 0);
+  _occKey = null;
+  applyLabelVisibility();
+  return 'label blur σ = ' + OCC_SIGMA + (OCC_SIGMA ? '' : ' (off)');
+};
+function updateLabelOccupancy(u) {
+  if (!labelsShown() || !loadedAnatRaw || !loadedAnatShape || !(OCC_SIGMA > 0)) { u.u_useOcc.value = 0; return; }
+  const vol = activeVolume, hidden = hiddenLabelsOf(vol);
+  const key = [loadedAnatShape.join('x'), vol.file.name, OCC_SIGMA, [...hidden].sort((a, b) => a - b).join(',')].join('|');
+  if (key === _occKey && _occTex && _occTex._raw === loadedAnatRaw) { u.u_occ.value = _occTex; u.u_useOcc.value = 1; return; }
+  const t0 = performance.now();
+  const [nx, ny, nz] = loadedAnatShape, n = nx * ny * nz, d = loadedAnatRaw;
+  let a = new Float32Array(n), b = new Float32Array(n);
+  let vis = null;
+  if (hidden.size) { vis = new Uint8Array(Math.max(...hidden) + 2).fill(1); for (const h of hidden) if (h >= 0) vis[h] = 0; }
+  for (let i = 0; i < n; i++) {
+    const v = d[i];
+    if (v > 0) { const r = Math.round(v); a[i] = vis && r < vis.length && !vis[r] ? 0 : 1; }
+  }
+  // separable Gaussian, taps −R…R (R = ⌈3σ⌉), zero outside the volume
+  const R = Math.max(1, Math.ceil(3 * OCC_SIGMA));
+  const w = Array.from({ length: R + 1 }, (_, x) => Math.exp(-x * x / (2 * OCC_SIGMA * OCC_SIGMA)));
+  const wsum = w[0] + 2 * w.slice(1).reduce((x, y) => x + y, 0);
+  for (let t = 0; t <= R; t++) w[t] /= wsum;
+  const line = (src, dst, base, stride, len) => { // one line along an axis: len samples, stride apart
+    for (let k = 0, o = base; k < len; k++, o += stride) {
+      let s2 = w[0] * src[o];
+      for (let t = 1; t <= R; t++) {
+        if (k - t >= 0) s2 += w[t] * src[o - t * stride];
+        if (k + t < len) s2 += w[t] * src[o + t * stride];
+      }
+      dst[o] = s2;
+    }
+  };
+  for (let l = 0; l < ny * nz; l++) line(a, b, l * nx, 1, nx);                                   // x
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) line(b, a, k * nx * ny + i, nx, ny); // y
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) line(a, b, j * nx + i, nx * ny, nz); // z
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) out[i] = Math.round(255 * b[i]);
+  if (_occTex) _occTex.dispose();
+  _occTex = new THREE.Data3DTexture(out, nx, ny, nz);
+  _occTex.format = THREE.RedFormat; _occTex.type = THREE.UnsignedByteType;
+  _occTex.minFilter = _occTex.magFilter = THREE.LinearFilter;
+  _occTex.unpackAlignment = 1; _occTex.needsUpdate = true;
+  _occTex._raw = loadedAnatRaw;
+  _occKey = key;
+  u.u_occ.value = _occTex; u.u_useOcc.value = 1;
+  console.log('label occupancy ' + nx + '×' + ny + '×' + nz + ', σ ' + OCC_SIGMA + ': ' + (performance.now() - t0).toFixed(0) + ' ms');
+}
+function applyLabelVisibility(redraw = true) {
+  if (!glassBrainMesh) return;
+  const u = glassBrainMesh.material.uniforms;
+  if (!u.u_labelHide) return;
+  if (u.u_occ) updateLabelOccupancy(u);
+  const hidden = labelsShown() ? hiddenLabelsOf(activeVolume) : null;
+  if (!hidden || !hidden.size) { u.u_labelHide.value = 0; }
+  else {
+    const maxV = Math.max(...hidden);
+    const rows = Math.max(1, Math.ceil((maxV + 1) / 4096));
+    const data = new Uint8Array(rows * 4096).fill(255);
+    for (const v of hidden) if (v >= 0 && v < data.length) data[v] = 0;
+    if (_labelVisTex) _labelVisTex.dispose();
+    _labelVisTex = new THREE.DataTexture(data, 4096, rows, THREE.RedFormat, THREE.UnsignedByteType);
+    _labelVisTex.minFilter = _labelVisTex.magFilter = THREE.NearestFilter;
+    _labelVisTex.needsUpdate = true;
+    u.u_labelVis.value = _labelVisTex; u.u_labelVisRows.value = rows; u.u_labelHide.value = 1;
+  }
+  if (redraw) render3D();
+}
+function labelsChanged() {
+  applyLabelVisibility();
+  if (endStyleLabel() && endLabelSrc && endLabelSrc.vol === activeVolume) { endLabelSrc.map = lutMap; redrawAll(); } // region colors edited
+  registerVolumeItems();
+  // the region label in 3D shows the new state
+  if (bundleHover && bundleHover.ctx) showContextLabel(bundleHover.hits);
+  if (volumeCard) renderVolumeCard();
+}
+function setLabelShown(v, on) {
+  const h = hiddenLabelsOf(activeVolume);
+  if (on) h.delete(v); else h.add(v);
+  labelsChanged();
+}
+// The lamp: only this region shown — or, when it already is, all again.
+function soloLabel(v) {
+  const info = labelInfoOf(activeVolume), h = hiddenLabelsOf(activeVolume);
+  if (!info || !info.values) return;
+  const shown = info.values.filter(x => !h.has(x));
+  if (shown.length === 1 && shown[0] === v) h.clear();
+  else { h.clear(); for (const x of info.values) if (x !== v) h.add(x); }
+  labelsChanged();
+}
+const labelsShownCount = () => { const info = labelInfoOf(activeVolume), h = hiddenLabelsOf(activeVolume);
+  return info && info.values ? info.values.filter(x => !h.has(x)).length : 0; };
+// DATA: the shown parcellation's label list, in its settings area (»):
+// an "all N labels" row (all/some/none checkbox, the header as an info
+// icon), then one row per label in a scrolling box — at most
+// LABEL_LIST_MAX, the rest as one "… N more" line.
+function buildLabelList(vol, el) {
+  const info = labelInfoOf(vol);
+  if (!info) return false;
+  const box = document.createElement('div');
+  box.className = 'dt-labels';
+  if (info.notLabels) {
+    const note = document.createElement('div');
+    note.className = 'dt-note';
+    note.textContent = 'no label list: ' + info.reason + ' — this looks like an anatomy, not a label volume';
+    box.appendChild(note);
+    el.appendChild(box);
+    return false;
+  }
+  const h = hiddenLabelsOf(vol), vals = info.values;
+  const head = document.createElement('div');
+  head.className = 'dt-row dt-toolbar';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.className = 'dt-check';
+  const on = vals.filter(x => !h.has(x)).length;
+  cb.checked = on === vals.length; cb.indeterminate = on > 0 && on < vals.length;
+  cb.title = 'switch all labels on (all on: all off)';
+  cb.addEventListener('click', e => e.stopPropagation());
+  cb.addEventListener('change', () => { if (on < vals.length) h.clear(); else for (const x of vals) h.add(x); labelsChanged(); });
+  const t = document.createElement('span'); t.className = 'dt-toolbar-lbl'; t.textContent = 'all ' + vals.length.toLocaleString() + ' labels';
+  const sp = document.createElement('span'); sp.style.flex = '1';
+  head.append(cb, t, sp, makeInfoButton(() => showAnatHeaderPanel(), 'header of ' + vol.file.name));
+  box.appendChild(head);
+  const list = document.createElement('div');
+  list.className = 'dt-scroll';
+  for (const v of vals.slice(0, LABEL_LIST_MAX)) {
+    const [name, hex] = labelEntry(v);
+    const row = document.createElement('div');
+    row.className = 'dt-row dt-sub';
+    const c = document.createElement('input');
+    c.type = 'checkbox'; c.className = 'dt-check'; c.checked = !h.has(v);
+    c.addEventListener('click', e => e.stopPropagation());
+    c.addEventListener('change', () => setLabelShown(v, c.checked));
+    const sw = labelSwatch(v, hex);
+    const nm = document.createElement('span'); nm.className = 'dt-label'; nm.textContent = name; nm.dataset.tip = name + ' (' + v + ')';
+    const tg = document.createElement('span'); tg.className = 'dt-tag'; tg.textContent = String(v);
+    row.append(c, sw, nm, tg);
+    list.appendChild(row);
+  }
+  if (vals.length > LABEL_LIST_MAX) {
+    const more = document.createElement('div');
+    more.className = 'dt-note';
+    more.textContent = '… ' + (vals.length - LABEL_LIST_MAX).toLocaleString() + ' more labels not listed';
+    list.appendChild(more);
+  }
+  // keep the scroll position across re-renders
+  list.addEventListener('scroll', () => { vol._labelScroll = list.scrollTop; });
+  requestAnimationFrame(() => { list.scrollTop = vol._labelScroll || 0; });
+  box.appendChild(list);
+  el.appendChild(box);
+  return true;
+}
+
 function registerVolumeItems() {
+  if (typeof syncEndLabelRadios === 'function') setTimeout(syncEndLabelRadios, 0); // Label end colors: available with a label volume
   const multi = volumes.length > 1;
   const volumeItem = vol => {
     const item = new AnatomyItem(vol.label);
@@ -5111,10 +6178,13 @@ function buildVolumeSettings(vol, el) {
         registerVolumeItems();
       }, 'which category this volume is listed and shown as'));
   }
-  if (vol === activeVolume) el.appendChild(makeSettingsButton('show header', () => showAnatHeaderPanel()));
+  // the shown parcellation: its label list (with the header as an info icon)
+  const listed = vol === activeVolume && vol.category === 'parcellation' && labelsShown() && buildLabelList(vol, el);
+  if (vol === activeVolume) { if (!listed) el.appendChild(makeSettingsButton('show header', () => showAnatHeaderPanel())); }
   else el.appendChild(makeSettingsButton('remove', () => {
     if (vol.lut) detachLut(vol.lut);
     volumes = volumes.filter(v => v !== vol);
+    recomputeView({ reframe: false });
     registerVolumeItems();
   }, 'remove this volume from the list'));
 }
@@ -5167,11 +6237,11 @@ function makeStreamlineToolbar() {
     if (!allFoc && nFoc > 0) fb.classList.add('mixed');
     const lbl = document.createElement('span');
     lbl.className = 'dt-toolbar-lbl';
-    lbl.textContent = 'apply to all';
+    lbl.textContent = 'all ' + groups.length.toLocaleString() + ' bundles';
     const spacer = document.createElement('span');
     spacer.style.flex = '1';
     bar.append(cb, fb, lbl, spacer,
-      makeSettingsButton('header', () => showTrckHeaderPanel(), trckParents.length > 1 ? 'headers of all streamline files' : 'tractogram header'));
+      makeInfoButton(() => showTrckHeaderPanel(), trckParents.length > 1 ? 'headers of all streamline files' : 'tractogram header'));
   });
 }
 
@@ -5458,6 +6528,7 @@ function writeFileStyles() {
 function restyleFiles() {
   writeFileStyles();
   syncContextUniform();
+  shadowsChanged(); // dimmed lines cast weaker shadows
   setRibbonFaintMode(selMesh, anyFaint());
   updateRibbonDensity();
   // A file crossing 100% opacity gains or loses its end dots.
@@ -5503,6 +6574,26 @@ function densityVoxelMm() {
   const d = lastTrckBoxRadius > 0 ? 2 * lastTrckBoxRadius : 0;
   return d > 0 ? d / 100 : 0;
 }
+// Dimmed bundles look the same however many of their streamlines are drawn
+// or exist: each bundle's density is normalized to its own reference
+// (scene3d.js computeRibbonDensity), worth dimDensity.reference lines.
+// Console, for tuning:
+//   dimCalibrate()        make what is shown now the norm (reference = the
+//                         median of the shown bundles' own reference densities)
+//   setDimReference(n)    set it (default 10): higher = dimmed bundles more visible
+function redoRibbonDensity() {
+  for (const m of [selMesh, _ctx2D]) if (m && m !== 'same' && m.geometry) { m.geometry.userData.densityFiles = new Set(); }
+  updateRibbonDensity();
+  redrawAll();
+}
+window.setDimReference = n => { dimDensity.reference = Math.max(0.1, +n); redoRibbonDensity(); return dimDensity.reference; };
+window.dimCalibrate = () => {
+  const refs = selMesh && selMesh.geometry.userData.densityRef ? [...selMesh.geometry.userData.densityRef.values()].sort((a, b) => a - b) : [];
+  if (!refs.length) return 'no dimmed bundles shown';
+  dimDensity.reference = +refs[Math.floor((refs.length - 1) / 2)].toFixed(2);
+  redoRibbonDensity();
+  return { reference: dimDensity.reference, perBundle: refs.map(r => +r.toFixed(1)) };
+};
 function updateRibbonDensity() {
   if (!selMesh) return;
   const files = [];
@@ -5953,15 +7044,8 @@ function addMarkerFiles(list) {
     buildMarkerGroup(rec);
   }
   if (errors.length) alert('Could not read ' + (errors.length === 1 ? 'this markers file' : 'these markers files') + ':\n\n' + errors.join('\n\n'));
-  // Nothing else loaded to frame the view: frame the markers.
-  if (!currentAnat && !allStreamlines && markerSets.length) {
-    const box = new THREE.Box3(), v = new THREE.Vector3();
-    for (const m of markerSets) { const p = m.set.markers.pos; for (let i = 0; i < p.length; i += 3) box.expandByPoint(v.set(p[i], p[i + 1], p[i + 2])); }
-    if (!box.isEmpty()) {
-      const sph = box.getBoundingSphere(new THREE.Sphere());
-      initCamera(sph.center.x, sph.center.y, sph.center.z, Math.max(sph.radius, 10));
-    }
-  }
+  // Markers frame the view only when nothing else is loaded (recomputeView).
+  recomputeView();
   checkShowHud();
   registerMarkerItems();
   render3D();
@@ -5996,7 +7080,7 @@ function removeMarkerSet(rec, refresh = true) {
   if (markerHover && markerHover.rec === rec) markerHover = null;
   if (rec.group) { scene.remove(rec.group); disposeMarkerGroup(rec.group); rec.group = null; }
   markerSets = markerSets.filter(m => m !== rec);
-  if (refresh) { registerMarkerItems(); render3D(); }
+  if (refresh) { recomputeView({ reframe: false }); registerMarkerItems(); render3D(); }
 }
 
 function clearMarkers() {
@@ -6254,26 +7338,12 @@ function placeTip(el, sx, sy) {
   }
   if (left + w > mid.width - 6) left = Math.max(6, cv.left - mid.left + sx - 14 - w);
   if (top + h > mid.height - 6) top = Math.max(6, mid.height - 6 - h);
+  if (el.parentNode !== document.getElementById('middle')) { left += mid.left; top += mid.top; } // on <body>, fixed
   el.style.left = left + 'px'; el.style.top = top + 'px';
 }
 
 // The small hover label.
 let _tipHideTimer = null;
-function showMarkerLabel(hit) {
-  if (markerCard) return; // the card is open: no labels meanwhile
-  clearTimeout(_tipHideTimer);
-  const { rec, index } = hit, set = rec.set;
-  const cb = rec.overlay && rec.overlay.color_by || rec.style.color_by;
-  const p = cb && set.props.get(cb);
-  const val = p ? markerValueText(p, set.markers.values[p.name][index]) : null;
-  markerTipEl.className = 'hover-tip mt-small';
-  markerTipEl.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>'
-    + (val != null ? '<span class="mt-val">' + esc(p.name) + ': ' + esc(val) + '</span>' : '')
-    + '<button class="mt-open" title="details (pins the card)">»</button>';
-  markerTipEl.querySelector('.mt-open').addEventListener('click', ev => { ev.stopPropagation(); openMarkerCard(rec, index, hit.sx, hit.sy); });
-  markerTipEl.style.display = 'flex';
-  placeTip(markerTipEl, hit.sx, hit.sy);
-}
 function hideMarkerLabelSoon() {
   if (markerCard) return;
   clearTimeout(_tipHideTimer);
@@ -6284,6 +7354,9 @@ markerTipEl.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch
 ['pointerdown', 'wheel'].forEach(t => markerTipEl.addEventListener(t, ev => ev.stopPropagation()));
 
 function openMarkerCard(rec, index, sx, sy) {
+  _markerCardAt = cardAnchor(sx, sy);
+  closeBundleCard(); closeVolumeCard();
+  _overBundleTip = false; bundleHover = null; bundleTipEl.style.display = 'none'; showHoverEnds(null);
   // Another file: the old file's temporary choices end. Same file: they
   // carry over, following the new marker (its category is highlighted).
   if (markerCard && markerCard.rec !== rec) closeMarkerCard(false);
@@ -6295,27 +7368,26 @@ function openMarkerCard(rec, index, sx, sy) {
   render3D();
 }
 
+let _markerCardAt = null; // where the marker card opens (cardAnchor)
+const markerCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 260, onClose: () => closeMarkerCard() });
 function closeMarkerCard(rebuild = true) {
   if (!markerCard) return;
   const rec = markerCard.rec;
   markerCard = null;
   markerTipEl.style.display = 'none';
+  if (markerCardPanel.isOpen) markerCardPanel.close();
   if (rec.overlay) { rec.overlay = null; if (rebuild && rec.group) { buildMarkerGroup(rec); render3D(); registerMarkerItems(); } }
 }
 
 function renderMarkerCard() {
   const { rec, index } = markerCard, set = rec.set, ov = rec.overlay;
-  const el = markerTipEl;
-  el.className = 'hover-tip mt-card';
-  el.innerHTML = '';
-  const head = document.createElement('div');
-  head.className = 'mt-head';
-  head.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>';
-  const close = document.createElement('button');
-  close.className = 'mt-close'; close.textContent = '»'; close.title = 'close (Esc) — ends the temporary coloring and filters';
-  close.addEventListener('click', ev => { ev.stopPropagation(); closeMarkerCard(); });
-  head.appendChild(close);
-  el.appendChild(head);
+  // in a movable card (CardPanel) like the bundles'; its content keeps the
+  // marker card's own styles (.hover-tip .mt-…) through a wrapper
+  markerCardPanel.titleEl.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>';
+  markerCardPanel.body.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'hover-tip mt-card mt-in-panel';
+  markerCardPanel.body.appendChild(el);
   const sub = document.createElement('div');
   sub.className = 'mt-file'; sub.textContent = set.name;
   el.appendChild(sub);
@@ -6398,8 +7470,11 @@ function renderMarkerCard() {
     foot.append(note, keep);
     el.appendChild(foot);
   }
-  el.style.display = 'block';
-  placeTip(el, markerCard.sx, markerCard.sy);
+  if (!markerCardPanel.isOpen) {
+    const rect = threeCanvas.getBoundingClientRect();
+    const at = _markerCardAt || [rect.left + markerCard.sx, rect.top + markerCard.sy];
+    markerCardPanel.openAt(...at);
+  }
 }
 
 // Pointer handling on the 3D view: hover (once per frame), and a click
@@ -6413,12 +7488,10 @@ threeCanvas.addEventListener('pointermove', e => {
     _hoverRaf = 0;
     if (!_hoverEvt || (_downAt && _hoverEvt.buttons)) return; // not while orbiting
     if (_hoverEvt.pointerType === 'touch') return;             // a finger doesn't hover (handleTap)
-    const hit = pickMarker(_hoverEvt.clientX, _hoverEvt.clientY);
-    setMarkerHoverState(hit);
-    if (hit) { hideBundleTooltip(); showMarkerLabel(hit); } else hideMarkerLabelSoon();
+    setMarkerHoverState(pickMarker(_hoverEvt.clientX, _hoverEvt.clientY)); // its highlight (the label: the context label)
   });
 });
-threeCanvas.addEventListener('pointerleave', e => { if (e.pointerType === 'touch') return; _hoverEvt = null; setMarkerHoverState(null); hideMarkerLabelSoon(); });
+threeCanvas.addEventListener('pointerleave', e => { if (e.pointerType === 'touch') return; _hoverEvt = null; setMarkerHoverState(null); });
 threeCanvas.addEventListener('pointerdown', e => {
   _downAt = { x: e.clientX, y: e.clientY };
   if (e.pointerType === 'touch') {
@@ -6439,16 +7512,7 @@ threeCanvas.addEventListener('pointerup', e => {
     return;
   }
   if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4 || e.button !== 0) return;
-  const hit = pickMarker(e.clientX, e.clientY);
-  if (hit) { closeBundleCard(); openMarkerCard(hit.rec, hit.index, hit.sx, hit.sy); return; }
-  if (markerCard) closeMarkerCard();
-  const bh = pickBundleEnd(e.clientX, e.clientY);
-  if (bh) { if (hasBundleSettings(groups[bh.gi])) openBundleCard(bh); else showBundleLabel(bh); return; }
-  closeBundleCard();
-  const rect = threeCanvas.getBoundingClientRect();
-  const brain = pickBrain(e.clientX, e.clientY);
-  if (brain) showAnatomyLabel(e.clientX - rect.left, e.clientY - rect.top, brain);
-  else if (pickFrameEdge(e.clientX, e.clientY)) showFramesLabel(e.clientX - rect.left, e.clientY - rect.top);
+  clickAt(e.clientX, e.clientY);
 });
 
 // ── Touch ────────────────────────────────────────────────
@@ -6459,37 +7523,27 @@ threeCanvas.addEventListener('pointerup', e => {
 // (never a tap). The label stays until the next tap, and opens above the
 // finger. Pick radii are larger for a finger (pickPx). Mouse and pen work
 // as before.
+// A click (or, on touch, a tap): nothing there closes labels and cards;
+// one thing with a card (a marker, or a bundle with settings) opens its
+// card right away; otherwise the context label shows (at once, no rest).
+// On touch the first tap shows the label and a second tap on the same
+// spot does the click.
+function clickAt(clientX, clientY, { touch = false } = {}) {
+  const h = collectHits(clientX, clientY);
+  if (hitsEmpty(h)) { closeBundleCard(); closeMarkerCard(); closeVolumeCard(); hideBundleTooltip(true); setMarkerHoverState(null); return; }
+  if (touch && !(bundleHover && bundleHover.ctx && bundleHover.key === hitsKey(h))) {
+    if (h.marker) setMarkerHoverState(h.marker);
+    showContextLabel(h);
+    return;
+  }
+  if (ctxCount(h) === 1 && h.marker) { closeBundleCard(); closeVolumeCard(); openMarkerCard(h.marker.rec, h.marker.index, h.marker.sx, h.marker.sy); return; }
+  if (ctxCount(h) === 1 && h.bundle && (hasBundleSettings(groups[h.bundle.gi]) || h.bundle.near.length > 1)) { openBundleCard(h.bundle); return; }
+  showContextLabel(h);
+}
 function handleTap(clientX, clientY) {
   _touchPick = true;
-  try {
-    const rect = threeCanvas.getBoundingClientRect(), sx = clientX - rect.left, sy = clientY - rect.top;
-    const mh = pickMarker(clientX, clientY);
-    if (mh) {
-      hideBundleTooltip(true); closeBundleCard();
-      if (markerCard && markerCard.rec === mh.rec && markerCard.index === mh.index) return;
-      const shown = markerHover && markerHover.rec === mh.rec && markerHover.index === mh.index
-        && markerTipEl.style.display !== 'none';
-      if (shown || markerCard) openMarkerCard(mh.rec, mh.index, mh.sx, mh.sy);
-      else { setMarkerHoverState(mh); showMarkerLabel(mh); }
-      return;
-    }
-    if (markerCard) closeMarkerCard();
-    setMarkerHoverState(null);
-    markerTipEl.style.display = 'none';
-    const bh = pickBundleEnd(clientX, clientY);
-    if (bh) {
-      if (bundleCard && bundleCard.gi === bh.gi) { showHoverEnds(bh.gi, bh.sx, bh.sy); return; }
-      const shown = bundleHover && bundleHover.gi === bh.gi;
-      if ((shown || bundleCard) && hasBundleSettings(groups[bh.gi])) openBundleCard(bh);
-      else showBundleLabel(bh);
-      return;
-    }
-    closeBundleCard();
-    const brain = pickBrain(clientX, clientY);
-    if (brain) { showAnatomyLabel(sx, sy, brain); return; }
-    if (pickFrameEdge(clientX, clientY)) { showFramesLabel(sx, sy); return; }
-    hideBundleTooltip(true);
-  } finally { _touchPick = false; }
+  try { clickAt(clientX, clientY, { touch: true }); }
+  finally { _touchPick = false; }
 }
 
 // ── Slice frames card ────────────────────────────────────
@@ -6539,7 +7593,7 @@ function pickFrameEdge(clientX, clientY) {
 // solid and rim-lit: the nearer of the two; glass: the clip point first.
 // Returns { kind: 'brain' | 'clip', ras: [x, y, z] } or null. Costs a few
 // hundred volume samples, only at a mouse pause or a click.
-function pickBrain(clientX, clientY) {
+function pickBrain(clientX, clientY, { labels: wantLabels = false } = {}) {
   const m = glassBrainMesh, anat = currentAnat;
   if (!m || !m.visible || !anat || !vr.texData || !state.get('anat.file')) return null;
   const u = m.material.uniforms;
@@ -6592,8 +7646,16 @@ function pickBrain(clientX, clientY) {
     const r = (data[4*o] / 255) ** 2, g = (data[4*o+1] / 255) ** 2, b = (data[4*o+2] / 255) ** 2; // sqrt-encoded
     return Math.sqrt(r*r + g*g + b*b);
   };
+  // labels switched off (label visibility) count as background
+  const hiddenL = labelMode && activeVolume && activeVolume.hiddenLabels && activeVolume.hiddenLabels.size ? activeVolume.hiddenLabels : null;
+  const rawL = loadedAnatRaw && loadedAnatShape && loadedAnatShape[0] === nx && loadedAnatShape[1] === ny && loadedAnatShape[2] === nz ? loadedAnatRaw : null;
   const sample = (x, y, z) => {
-    if (labelMode) return voxel(Math.floor(x), Math.floor(y), Math.floor(z)) > 0 ? 1 : 0;
+    if (labelMode) {
+      const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z);
+      if (voxel(i, j, k) <= 0) return 0;
+      if (hiddenL && rawL && i >= 0 && j >= 0 && k >= 0 && i < nx && j < ny && k < nz && hiddenL.has(Math.round(rawL[i + nx * (j + ny * k)]))) return 0;
+      return 1;
+    }
     x -= 0.5; y -= 0.5; z -= 0.5;
     const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z), fx = x - i, fy = y - j, fz = z - k;
     const c00 = voxel(i, j, k) * (1 - fx) + voxel(i + 1, j, k) * fx;
@@ -6627,7 +7689,24 @@ function pickBrain(clientX, clientY) {
   if (renderMode === 'glass' && clipHit !== null) { t = clipHit; kind = 'clip'; }
   else if (clipHit !== null && (rimHit === null || clipHit <= rimHit)) { t = clipHit; kind = 'clip'; }
   else if (rimHit !== null) { t = rimHit; kind = 'brain'; }
-  if (t === null) return null;
+  // LABEL mode, for the context label: every region the ray passes, in
+  // order, switched on or off (so an off region can be switched back on)
+  let along = null, tFirstLabel = null;
+  if (labelMode && wantLabels) {
+    const raw = rawL || data;
+    along = [];
+    for (let s = t0 + 0.25; s <= t1 && along.length < 16; s += 0.5) {
+      const x = Math.floor(ro.x + s * rd.x), y = Math.floor(ro.y + s * rd.y), z = Math.floor(ro.z + s * rd.z);
+      if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) continue;
+      const v = Math.round(raw[x + nx * (y + ny * z)]);
+      if (v > 0 && !along.includes(v)) { along.push(v); if (tFirstLabel === null) tFirstLabel = s; }
+    }
+  }
+  let visibleHit = true;
+  if (t === null) {
+    if (!along || !along.length) return null;
+    t = tFirstLabel; kind = 'hidden'; visibleHit = false; // only switched-off regions here
+  }
   const ras = toRAS(t);
   // camera depth (clip-space w), comparable with pickMarker/pickBundleEnd's
   const e = _pickBr.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
@@ -6642,14 +7721,14 @@ function pickBrain(clientX, clientY) {
       const x = Math.floor(ro.x + (t + s) * rd.x), y = Math.floor(ro.y + (t + s) * rd.y), z = Math.floor(ro.z + (t + s) * rd.z);
       if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) continue;
       const v = Math.round(raw[x + nx * (y + ny * z)]);
-      if (v > 0) label = v;
+      if (v > 0 && !(hiddenL && hiddenL.has(v))) label = v;
     }
   }
   // half a voxel along this ray, in mm (rd is a unit step in voxel space):
   // the SOLID visibility margin — 0.5 mm across 1 mm sections, 0.025 mm
   // along 50 µm pixels, half the voxel size for isotropic data
   const r1 = toRAS(t + 1), margin = 0.5 * Math.hypot(r1[0] - ras[0], r1[1] - ras[1], r1[2] - ras[2]);
-  return { kind, ras, w, label, margin };
+  return { kind, ras, w, label, margin, labels: along, visible: visibleHit };
 }
 const _pickBr = new THREE.Matrix4();
 // SOLID mode: what is nearest to the camera wins — usually the brain's
@@ -6668,77 +7747,16 @@ const _pickBr = new THREE.Matrix4();
 function hiddenBySolid(clientX, clientY, w) {
   if (renderMode !== 'solid') return false;
   const b = pickBrain(clientX, clientY);
-  return !!b && w > b.w - b.margin;
+  return !!b && b.visible !== false && w > b.w - b.margin;
 }
 
-// The anatomy label: the bundle hover label's element, with one pulldown
-// to choose the anatomy volume shown; for a label volume (LABEL mode) a
-// second line with the region/tissue of the voxel touched (hit.label).
-function showAnatomyLabel(sx, sy, hit) {
-  clearTimeout(_bundleTipTimer);
-  showHoverEnds(null);
-  bundleHover = { gi: null, anatomy: true, sx, sy, hit };
-  bundleTipEl.className = 'hover-tip mt-small';
-  bundleTipEl.innerHTML = '';
-  const row = document.createElement('label');
-  row.className = 'mt-title frame-row';
-  const t = document.createElement('span'); t.className = 'mt-id'; t.textContent = 'anatomy';
-  const sel = document.createElement('select');
-  sel.className = 'inline-select';
-  volumes.forEach((v, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = v.label; if (v === activeVolume) o.selected = true; sel.appendChild(o); });
-  sel.addEventListener('change', () => { const v = volumes[+sel.value]; if (v) selectVolume(v); });
-  row.append(t, sel);
-  bundleTipEl.appendChild(row);
-  if (hit && hit.label != null) {
-    const entry = lutMap && lutMap.get(hit.label);
-    const reg = document.createElement('div');
-    reg.className = 'mt-region';
-    const sw = document.createElement('span');
-    sw.className = 'mt-region-sw';
-    if (entry) sw.style.background = `rgb(${[entry.r, entry.g, entry.b].map(c => Math.round(255 * Math.min(1, c))).join(',')})`;
-    const nm = document.createElement('span');
-    nm.className = 'mt-id';
-    nm.textContent = entry ? entry.name : 'label ' + hit.label + ' (unmapped)';
-    const id = document.createElement('span');
-    id.className = 'mt-val';
-    id.textContent = String(hit.label);
-    reg.append(sw, nm, id);
-    bundleTipEl.classList.add('mt-stack');
-    bundleTipEl.appendChild(reg);
-  }
-  bundleTipEl.style.display = 'flex';
-  placeTip(bundleTipEl, sx, sy);
-}
-
-// The frames label: the bundle hover label's element, with one checkbox.
-// Unchecking hides the frames (SETTINGS › frames switches them on again);
-// it disappears like the bundle label when the mouse moves elsewhere.
-function showFramesLabel(sx, sy) {
-  clearTimeout(_bundleTipTimer);
-  showHoverEnds(null);
-  bundleHover = { gi: null, frames: true, sx, sy };
-  bundleTipEl.className = 'hover-tip mt-small';
-  bundleTipEl.innerHTML = '';
-  const row = document.createElement('label');
-  row.className = 'mt-title frame-row';
-  const cb = document.createElement('input');
-  cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = framesVisible;
-  cb.addEventListener('change', () => {
-    const s = document.getElementById('clip-frames');
-    s.checked = cb.checked; s.dispatchEvent(new Event('change'));
-  });
-  const t = document.createElement('span'); t.className = 'mt-id'; t.textContent = 'frames';
-  row.append(cb, t);
-  bundleTipEl.appendChild(row);
-  bundleTipEl.style.display = 'flex';
-  placeTip(bundleTipEl, sx, sy);
-}
 document.addEventListener('keydown', e => {
   const ae = document.activeElement;
   const typing = ae && (/^(TEXTAREA|SELECT)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !/^(checkbox|radio|color|range|button)$/.test(ae.type)));
   if (e.key !== 'Escape' || typing) return;
   if (markerCard) closeMarkerCard();
   else if (bundleCard) closeBundleCard();
+  else if (volumeCard) closeVolumeCard();
 });
 
 // SHOW ONLY: filters on the marker properties, combined with AND. A
@@ -6874,18 +7892,10 @@ document.body.addEventListener('drop',async e=>{
     document.getElementById(id).value = val;
     if (label) document.getElementById(label[0]).textContent = label[1];
   };
-  set('ends-size',           endsPx,           ['ends-size-val',   endsPx.toFixed(1) + ' px']);
+  set('ends-size',           endsPx,           ['ends-size-val',   endsPx > 0 ? endsPx.toFixed(1) + ' px' : 'off']);
   set('line-width-slider',   lineWidthPx,      ['line-width-val',  lineWidthPx.toFixed(1) + ' px']);
   set('reflectance-slider',  reflectance,      ['reflectance-val', reflectance.toFixed(2)]);
-  // No dedicated JS variable for AO strength (read live from the slider's
-  // own DOM value each time — see applyAOParamsToPass), but it still
-  // needs registering here like every other slider, or the browser's own
-  // form-autofill can silently restore the THUMB to wherever it was last
-  // left while the static "0%" label text (a plain span, not part of
-  // form autofill) stays exactly as written in the HTML — exactly the
-  // slider-says-one-thing/label-says-another mismatch this whole
-  // mechanism exists to prevent, just missed for this one control.
-  set('ao-strength-slider',  0,                ['ao-strength-val', '0%']);
+  set('shadow-slider',       Math.round(shadowAmount * 100), ['shadow-val', Math.round(shadowAmount * 100) + '%']);
   set('pitch-slider',        0,                ['pitch-val',       '0°']);
   set('yaw-slider',          0,                ['yaw-val',         '0°']);
   set('roll-slider',         0,                ['roll-val',        '0°']);

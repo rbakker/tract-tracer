@@ -37,6 +37,7 @@ const INTERACTIVE_SELECTOR = [
   'input', 'textarea', 'select', 'option', 'button', 'a[href]', 'label', 'summary',
   'video[controls]', 'audio[controls]',
   '[contenteditable]:not([contenteditable="false"])',
+  '.selectable', // text meant to be selected and copied (e.g. the HEADER viewer)
   '[role="slider"]', '[role="button"]', '[role="checkbox"]', '[role="radio"]',
   '[role="switch"]', '[role="tab"]', '[role="menuitem"]', '[role="option"]',
   '[role="textbox"]', '[role="spinbutton"]', '[role="scrollbar"]', '[role="combobox"]',
@@ -323,13 +324,15 @@ class CardPanel extends FloatingPanel {
 
   // Opens beside the screen point (clientX, clientY), kept on screen —
   // unless the user has moved the card before: then where they left it.
-  openAt(clientX, clientY) {
-    this.defaultPos = { left: clientX + 14, top: clientY + 14 };
+  // opts.left: open left of the point (right edge 14 px left of it), the
+  // way the hover label went; opts.top: an explicit top (client px).
+  openAt(clientX, clientY, opts = {}) {
+    this.defaultPos = { left: clientX + 14, top: opts.top ?? clientY + 14 };
     this.open();
     if (this.pinned) return;
     const r = this.el.getBoundingClientRect();
     let left = r.left, top = r.top;
-    if (r.right > window.innerWidth - 6) left = Math.max(6, clientX - 14 - r.width);
+    if (opts.left || r.right > window.innerWidth - 6) left = Math.max(6, clientX - 14 - r.width);
     if (r.bottom > window.innerHeight - 6) top = Math.max(6, window.innerHeight - 6 - r.height);
     this.el.style.left = left + 'px';
     this.el.style.top = top + 'px';

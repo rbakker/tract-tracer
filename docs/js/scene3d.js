@@ -131,10 +131,36 @@ void main() {
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }`;
 
+// LIGHT FALLOFF: the direct light (not the ambient part) drops linearly with
+// depth — 1 at the front of the data, 1 - u_falloff at its back. Depth along
+// the view axis from the view target, over ± the scene radius: fixed while
+// the camera is outside the data (zoom does not change the look — a
+// zoom-invariant stand-in for a point light's 1/d²), moving along with the
+// camera once it is inside. Shared by the line shader and the brain's.
+const LIGHT_FALLOFF_GLSL = `
+uniform float u_falloff;
+float lightFalloff(vec3 worldPos, vec3 camPos, vec3 target, vec3 fwd, float radius) {
+  if (u_falloff <= 0.0) return 1.0;
+  float camDepth  = dot(camPos - target, fwd);
+  float nearDepth = max(-radius, camDepth);
+  float t = clamp((dot(worldPos - target, fwd) - nearDepth) / max(2.0 * radius, 1e-4), 0.0, 1.0);
+  return 1.0 - u_falloff * t;
+}
+`;
+export const DEFAULT_LIGHT_FALLOFF = 0.5;
+export const DEFAULT_AMBIENT = 0.25;  // the light in full shadow (lines and brain)
+
 const GLASS_HELPERS_GLSL = `
 precision highp float;
 precision highp sampler3D;
 uniform sampler3D u_vol;
+// LABEL mode: the shown regions as a smooth occupancy field — inside = 1,
+// background and switched-off labels = 0, blurred a little (σ ≈ 0.8
+// voxel, see index.html's buildLabelOccupancy). The surface and its
+// normals come from this field instead of the raw 0/1 per voxel, which
+// shows every voxel's facet in the lighting. u_useOcc = 0: not available.
+uniform sampler3D u_occ;
+uniform float u_useOcc;
 uniform vec3  u_size;
 uniform vec3  u_voxMm;
 uniform float u_alpha;
@@ -194,6 +220,13 @@ uniform float u_contrast;
 uniform float u_applyLUT;
 uniform sampler2D u_lut;
 uniform float u_lutSize;
+// LABEL mode: which labels are shown (index.html's label visibility, the
+// region label's checkbox/lamp and the DATA panel's label list). One byte
+// per label value, laid out 4096 per row; 0 = hidden (drawn as background).
+// u_labelHide = 0 when every label is shown (the lookup is skipped).
+uniform sampler2D u_labelVis;
+uniform float u_labelVisRows;
+uniform float u_labelHide;
 uniform float u_dataMin;
 uniform float u_dataRange;
 uniform mat4  u_model;
@@ -207,6 +240,27 @@ uniform mat4  u_projView;
 // (the classic "hollow-face" illusion) — this breaks that degeneracy for a
 // static, unrotated view, without needing any continuous animation.
 uniform vec3  u_lightDir;
+// POINT LIGHT (as for the streamlines, see lightPosition): its position in
+// this same local voxel-index space; u_pointLight = 0: parallel u_lightDir.
+uniform vec3  u_lightPosLocal;
+uniform float u_pointLight;
+// AMBIENT: the light every outer surface gets, lit or not (the streamlines'
+// u_ambient alike; console setAmbient)
+uniform float u_ambient;
+// SHADOWING received from the streamlines (SOLID: outer surface and cut
+// face; GLASS: the cut face; index.html switches it on for the high/ultra
+// GPU tiers): the same
+// light volume the streamlines read (line-shadows.js), world mm.
+uniform sampler3D u_shadowTex;
+uniform vec3  u_shadowMin;
+uniform vec3  u_shadowSize;
+uniform float u_shadowVoxMm;     // its voxel size
+uniform float u_brainShadowOn;
+// LIGHT FALLOFF (see LIGHT_FALLOFF_GLSL), world space
+uniform vec3  u_depthTarget;
+uniform vec3  u_camFwd;
+uniform float u_depthRadius;
+` + LIGHT_FALLOFF_GLSL + `
 // Section-plane clipping — anatomy only (tractogram lines are a separate
 // mesh, untouched by this). Each of the 3 planes (sag/cor/axi) is a half-
 // space test in LOCAL voxel-index space (same space as ro/rd/t below), so
@@ -261,9 +315,17 @@ float sampleVol(vec3 p) {
 // Reconstructs the original integer label index from the normalized
 // scalar texture value (texture stores (raw-min)/range — see
 // VolRenderer.upload), rounded to the nearest integer.
+bool labelHidden(float idx) {
+  if (u_labelHide < 0.5 || idx < 0.0 || idx >= 4096.0 * u_labelVisRows) return false;
+  vec2 uv = vec2((mod(idx, 4096.0) + 0.5) / 4096.0, (floor(idx / 4096.0) + 0.5) / u_labelVisRows);
+  return texture(u_labelVis, uv).r < 0.5;
+}
+// (a hidden label reads as background, 0 — the surfaces, borders, colours
+// and occupancy below all go through this)
 float sampleLabelIndex(vec3 p) {
   float norm = texture(u_vol, p / u_size).r;
-  return floor(norm * u_dataRange + u_dataMin + 0.5);
+  float idx = floor(norm * u_dataRange + u_dataMin + 0.5);
+  return labelHidden(idx) ? 0.0 : idx;
 }
 // Label indices are arbitrary categorical numbers — going from region 47
 // to 48 isn't "half as different" as 47 to 49, so a continuous gradient
@@ -345,6 +407,21 @@ vec3 interpolatedLutColor(vec3 p) {
   vec3 p0 = floor(ps);
   vec3 f  = ps - p0;
   vec3 e  = vec3(1e-3); // same tie-avoidance nudge as occupancyAt
+  if (u_useOcc > 0.5) {
+    // The smoothed surface can sit a little outside the labelled voxels:
+    // blend only the corners that hold a (shown) label, so background
+    // doesn't darken the surface colour.
+    vec3 acc = vec3(0.0); float wsum = 0.0;
+    for (int k = 0; k < 8; k++) {
+      vec3 o = vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
+      float idx = sampleLabelIndex(p0 + o + e);
+      vec3 w3 = mix(vec3(1.0) - f, f, o);
+      float w = w3.x * w3.y * w3.z;
+      if (idx > 0.5) { acc += w * lutColor(idx); wsum += w; }
+    }
+    if (wsum > 1e-4) return acc / wsum;
+    // (no labelled corner at all: the plain blend below)
+  }
   vec3 c000 = lutColor(sampleLabelIndex(p0 + vec3(0.0,0.0,0.0) + e));
   vec3 c100 = lutColor(sampleLabelIndex(p0 + vec3(1.0,0.0,0.0) + e));
   vec3 c010 = lutColor(sampleLabelIndex(p0 + vec3(0.0,1.0,0.0) + e));
@@ -415,8 +492,10 @@ float occupancyAt(vec3 voxCoord) {
   // the tie unambiguously (texel zones are a full voxel wide, so this is
   // nowhere near the next boundary) while staying negligible for LINEAR
   // filtering's own blend, so both modes can share this one code path.
-  float v = sampleVol(voxCoord + vec3(1e-3));
   bool nearestFiltered = (u_applyLUT > 0.5) && (u_isColor < 0.5);
+  if (nearestFiltered && u_useOcc > 0.5) return texture(u_occ, (voxCoord + vec3(0.5)) / u_size).r; // voxel centre: the blurred value
+  float v = sampleVol(voxCoord + vec3(1e-3));
+  if (nearestFiltered && v > 0.0 && u_labelHide > 0.5 && sampleLabelIndex(voxCoord + vec3(1e-3)) == 0.0) return 0.0; // a hidden label
   return nearestFiltered ? (v > 0.0 ? 1.0 : 0.0) : v;
 }
 // Trilinear-ish reconstruction of the field, plus (for label data only) an
@@ -1067,9 +1146,12 @@ ${CLIP_SETUP_GLSL}
     // where light doesn't reach directly, so both the ambient floor and
     // the diffuse term's own weight are pulled down versus the
     // exterior's fuller-range, brighter shading.
-    float diffuse = startInside ? abs(dot(N, u_lightDir)) : max(dot(N, u_lightDir), 0.0);
+    // the direction the light travels here (from a point light: from its position)
+    vec3 Ltr = u_pointLight > 0.5 ? normalize(hitP - u_lightPosLocal) : u_lightDir;
+    float diffuse = startInside ? abs(dot(N, Ltr)) : max(dot(N, Ltr), 0.0);
+    diffuse *= lightFalloff((u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz, u_camPos, u_depthTarget, u_camFwd, u_depthRadius);
     shade = startInside ? (0.3 + 0.5 * diffuse)
-                        : (0.2 + 0.8 * diffuse);
+                        : (u_ambient + (1.0 - u_ambient) * diffuse);
 
     if (labelMode) {
       // Sample at inwardP, not hitP: hitP sits wherever the blended
@@ -1092,6 +1174,17 @@ ${CLIP_SETUP_GLSL}
     }
   }
   vec3 solidColor = baseColor * shade;
+  // Shadows of the streamlines: they dim only the direct light (what is
+  // above the ambient level). Read 1.5 shadow voxels towards the light, so
+  // the surface does not shade itself (with the brain as an occluder too).
+  if (u_brainShadowOn > 0.5 && (u_shellMode < 0.5 || isCap)) { // GLASS: only the (opaque) cut face
+    vec3 Lt = u_pointLight > 0.5 ? normalize(hitP - u_lightPosLocal) : u_lightDir;
+    float off = 1.5 * u_shadowVoxMm / max((u_voxMm.x + u_voxMm.y + u_voxMm.z) / 3.0, 1e-6);
+    vec3 wp = (u_model * vec4(hitP - Lt * off - u_size * 0.5, 1.0)).xyz;
+    float T = texture(u_shadowTex, (wp - u_shadowMin) / u_shadowSize).r;
+    float ambL = (startInside && !isCap) ? 0.3 : u_ambient;
+    solidColor = baseColor * (ambL + max(shade - ambL, 0.0) * T);
+  }
   // TEMPORARY DEBUG (remove once the thin-structure issue is
   // understood): paints every hit a flat, unmistakable color by which
   // code path produced it, ignoring real shading entirely. Toggle from
@@ -1234,6 +1327,16 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   // colliding with u_vol's sampler3D there — see the earlier 2D-slice fix
   // for the same issue).
   let lutTex, lutSize = 1;
+  function _emptyOccTex() {
+    const t = new THREE.Data3DTexture(new Uint8Array(1), 1, 1, 1);
+    t.format = THREE.RedFormat; t.type = THREE.UnsignedByteType; t.needsUpdate = true;
+    return t;
+  }
+  function _allLabelsVisibleTex() {
+    const t = new THREE.DataTexture(new Uint8Array(4096).fill(255), 4096, 1, THREE.RedFormat, THREE.UnsignedByteType);
+    t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
+    return t;
+  }
   if (isLabelMode) {
     const { data, size } = buildLutRGBA(dispInfo.map, dispInfo.maxIndex);
     lutTex = new THREE.DataTexture(data, size, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -1286,6 +1389,11 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       u_applyLUT:  { value: isLabelMode ? 1 : 0 },
       u_lut:       { value: lutTex },
       u_lutSize:   { value: lutSize },
+      u_labelVis:  { value: _allLabelsVisibleTex() },
+      u_occ:       { value: _emptyOccTex() },
+      u_useOcc:    { value: 0 },
+      u_labelVisRows: { value: 1 },
+      u_labelHide: { value: 0 },
       u_dataMin:   { value: anat.mn || 0 },
       u_dataRange: { value: (anat.mx - anat.mn) || 1 },
       u_model:     { value: modelMatrix },
@@ -1299,6 +1407,18 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       u_clipPoint:  { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
       u_fillIn:     { value: 1.0 },
       u_lightDir:   { value: new THREE.Vector3(0, 0, 1) },
+      u_lightPosLocal: { value: new THREE.Vector3() },
+      u_pointLight: { value: 1 },
+      u_ambient:    { value: DEFAULT_AMBIENT },
+      u_shadowTex:  { value: null },
+      u_shadowMin:  { value: new THREE.Vector3() },
+      u_shadowSize: { value: new THREE.Vector3(1, 1, 1) },
+      u_shadowVoxMm: { value: 1 },
+      u_brainShadowOn: { value: 0 },
+      u_depthTarget: { value: new THREE.Vector3() },
+      u_camFwd:     { value: new THREE.Vector3(0, 0, 1) },
+      u_depthRadius: { value: 1 },
+      u_falloff:    { value: DEFAULT_LIGHT_FALLOFF },
   };
 
   // Three fully separate materials/shaders, swapped on the mesh according
@@ -1364,6 +1484,10 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   const _camUp      = new THREE.Vector3();
   const _camFwd     = new THREE.Vector3();
   const _lightWorld = new THREE.Vector3();
+  const _lightPosW  = new THREE.Vector3();
+  const _halfSize   = new THREE.Vector3(...anat.shape).multiplyScalar(0.5);
+  mesh.userData.depthTarget = new THREE.Vector3();
+  mesh.userData.sceneRadius = 1;
   mesh.onBeforeRender = (renderer, scene, cam) => {
     _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     sharedUniforms.u_projView.value.copy(_pv);
@@ -1380,6 +1504,14 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       .addScaledVector(_camFwd,   lightCam.z)
       .normalize();
     sharedUniforms.u_lightDir.value.copy(_lightWorld).transformDirection(invModel).normalize();
+    // point light and falloff: view target and scene radius set by index.html
+    // (mesh.userData.depthTarget / sceneRadius, as for the streamlines)
+    const target = mesh.userData.depthTarget;
+    lightPosition(cam, target, _lightWorld, _lightPosW);
+    sharedUniforms.u_lightPosLocal.value.copy(_lightPosW).applyMatrix4(invModel).add(_halfSize);
+    sharedUniforms.u_depthTarget.value.copy(target);
+    sharedUniforms.u_camFwd.value.copy(_camFwd);
+    sharedUniforms.u_depthRadius.value = mesh.userData.sceneRadius;
   };
 
   scene.add(mesh);
@@ -1481,7 +1613,7 @@ uniform float u_dimming;
 // keeps o exactly; 0% and 100% are left alone.
 float plainAlpha(float o) {
   if (o <= 0.001 || o >= 0.999) return o;
-  return 1.0 - pow(1.0 - o, inversesqrt(max(vDensity, 1.0)));
+  return 1.0 - pow(1.0 - o, inversesqrt(max(vDensity, 0.05))); // normalized per bundle: see computeRibbonDensity
 }
 vec4 fieldShade(vec3 base) {
   // vStyle.y: this streamline's opacity — 1, or the dimming for a dimmed
@@ -1569,6 +1701,13 @@ uniform sampler2D u_colormap;
 varying vec3  vTangent;
 varying vec3  vWorldPos;
 uniform vec3  u_lightDir;
+// POINT LIGHT (u_pointLight = 1): the light sits at u_lightPos (world) —
+// at the camera with LIGHT centered, else on the sphere around the view
+// target through the camera (see lightPosition()), so its rays spread
+// from the eye like the perspective view's own rays and a centered light
+// casts (almost) no visible shadows of its own.
+uniform vec3  u_lightPos;
+uniform float u_pointLight;
 // 0 = uniform u_lineColor (custom picker), 1 = per-vertex RAS direction
 // (vColor), 2 = per-instance fixed bundle color (vBundleColor).
 uniform int   u_autoColor;
@@ -1580,17 +1719,24 @@ uniform float u_specPower;
 uniform vec3  u_camFwd;
 uniform vec3  u_depthTarget;
 uniform float u_depthRadius;
-// Both default enabled (see sharedLineUniforms) — AO switches
-// u_depthAttenEnabled off automatically (the view-axis depth darkening
-// was always a placeholder for real occlusion; stacking both multiplies
-// their darkening together and fights AO's more precise signal rather
-// than complementing it). u_reflectance is a plain user strength control
-// (REFLECTANCE, always visible, not tied to AO/ULTRA at all) — unlike
-// the depth cue, the sheen isn't redundant with AO (AO only ever reads
-// the depth buffer, no lighting-direction awareness at all), so it's
-// left as an independent dial rather than coupled to anything.
-uniform int   u_depthAttenEnabled;
-uniform float u_reflectance; // 0 = flat base color, 1 = normal strength, >1 exaggerated
+// REFLECTANCE: 0 = flat base color, 1 = full shading and sheen.
+uniform float u_reflectance;
+` + LIGHT_FALLOFF_GLSL + `
+// SHADOWING (line-shadows.js): the light left at this spot after passing
+// the other streamlines on its way from the light — 1 = fully lit. A
+// box-aligned 3D texture over the drawn streamlines, in world mm.
+// u_shadowOn = 0: off (texture not read).
+precision highp sampler3D;
+uniform sampler3D u_shadowTex;
+uniform float u_shadowOn;
+uniform vec3  u_shadowMin;
+uniform vec3  u_shadowSize;
+// The light that gets through (0..1): it dims the direct light only — the
+// ambient part (u_ambient) reaches every line, so nothing goes fully dark.
+float lineShadow() {
+  if (u_shadowOn < 0.5) return 1.0;
+  return texture(u_shadowTex, (vWorldPos - u_shadowMin) / u_shadowSize).r;
+}
 void main() {
   vec3 base = (u_autoColor == 1) ? vColor : ((u_autoColor == 2) ? vBundleColor : u_lineColor);
   vec4 shade = fieldShade(base);
@@ -1603,7 +1749,12 @@ void main() {
 #endif
 #endif
   vec3 T = normalize(vTangent);
-  vec3 L = normalize(u_lightDir);
+  // u_lightDir is the direction the light TRAVELS (index.html's
+  // lightCamFromBias: +z = along the view, a headlamp); the shading needs
+  // the direction TO the light. (The diffuse term can't tell — sin(T, L) is
+  // the same both ways — but the specular half vector can: built from the
+  // travel direction, a headlamp gave L ≈ -V, H degenerate, no sheen.)
+  vec3 L = u_pointLight > 0.5 ? normalize(u_lightPos - vWorldPos) : -normalize(u_lightDir);
   vec3 V = normalize(cameraPosition - vWorldPos);
   // Kajiya-Kay: both terms are trig functions of the angle to the
   // TANGENT (sin, via the Pythagorean identity from the cosine dot
@@ -1636,45 +1787,37 @@ void main() {
   vec3  H             = (Hlen > 1e-4) ? (Hraw / Hlen) : T;
   float TdotH         = dot(T, H);
   float spec          = pow(sqrt(clamp(1.0 - TdotH * TdotH, 0.0, 1.0)), u_specPower) * stability;
-  vec3 litFull = base * (u_ambient + u_diffuseStrength * diffuse) + vec3(u_specStrength * spec);
+  // the direct light (diffuse and sheen) falls off with depth; ambient doesn't
+  float fall = lightFalloff(vWorldPos, cameraPosition, u_depthTarget, u_camFwd, u_depthRadius);
+  vec3 litFull = base * (u_ambient + fall * u_diffuseStrength * diffuse) + vec3(fall * u_specStrength * spec);
   // mix() rather than a plain multiply so reflectance=0 lands EXACTLY on
   // flat base color (not on base*ambient, which would still be dimmed) —
   // "0 = off" means genuinely off, not "off but still shaded a bit".
-  // >1 extrapolates past litFull for an exaggerated look; WebGL clamps
-  // the final gl_FragColor to [0,1] on write, so this saturates toward
-  // white in bright spots rather than doing anything undefined.
   vec3 lit = mix(base, litFull, u_reflectance);
-  // Depth cue, take 3 — near/far planes stay fixed (zoom-invariant) while
-  // the camera is OUTSIDE the sphere-approximated volume, same as before.
-  // But once the camera crosses the near plane (camDepth > -fogRadius,
-  // i.e. it has physically entered the brain), the near plane now tracks
-  // the camera exactly, and the far plane shifts by the same amount —
-  // keeping the window WIDTH constant at 2*fogRadius rather than
-  // collapsing fragments right next to the lens toward the "far" end of a
-  // window that never moved. max(...) means this reduces to exactly the
-  // original fixed-window formula whenever the camera hasn't entered yet.
-  // fogRadius is HALF of u_depthRadius — a local scale-down used only
-  // here, not touching the shared uniform (RIBBON_VS's width-by-depth
-  // taper below still uses the full u_depthRadius, unchanged) — pulls the
-  // whole fog window twice as close to the brain's centre, so the
-  // "endpoint dots stay bright while the connecting line body darkens"
-  // look (dots have no depth-based darkening at all — see DOTS_FS) shows
-  // up across more of a typical view instead of only in the deep
-  // background.
-  float fogRadius = u_depthRadius * 0.5;
-  float camDepth  = dot(cameraPosition - u_depthTarget, u_camFwd);
-  float nearDepth = max(-fogRadius, camDepth);
-  float farDepth  = nearDepth + 2.0 * fogRadius;
-  float depth = dot(vWorldPos - u_depthTarget, u_camFwd);
-  float atten = (u_depthAttenEnabled > 0)
-    ? clamp(1.0 - (depth - nearDepth) / max(farDepth - nearDepth, 1e-4), 0.0, 1.0)
-    : 1.0;
+  // shadows: everything above the ambient level is direct light (the flat
+  // color included — it is the line lit without directional shading), so
+  // a fully shadowed line keeps exactly its ambient light
+  vec3 amb = base * u_ambient;
+#ifndef FAINT_PASS
+  lit = amb + (lit - amb) * lineShadow(); // translucent (dimmed) parts: no shadows
+#endif
 #ifdef FAINT_PASS
-  gl_FragColor = vec4(lit * atten, shade.a);
+  gl_FragColor = vec4(lit, shade.a);
 #else
-  gl_FragColor = vec4(lit * atten, 1.0);
+  gl_FragColor = vec4(lit, 1.0);
 #endif
 }`;
+
+
+// The point light's position (world): on the sphere around the view target
+// through the camera, on the far side of the target from where the light
+// travels to — so with LIGHT centered (travel = view direction) exactly at
+// the camera, and moving with the LIGHT slider along the same arc of
+// directions the parallel light used. travelDir: unit, world.
+export function lightPosition(cam, target, travelDir, out) {
+  const d = cam.position.distanceTo(target);
+  return out.copy(target).addScaledVector(travelDir, -d);
+}
 
 // Per-frame shading state for the ribbon mesh (makeRibbonLines, below) —
 // kept as its own function (rather than inlined into makeRibbonLines)
@@ -1707,6 +1850,7 @@ function attachStreamlineShading(mesh) {
       .addScaledVector(_camUp,    lc.y)
       .addScaledVector(_camFwd,   lc.z)
       .normalize();
+    lightPosition(cam, mesh.userData.depthTarget, u.u_lightDir.value, u.u_lightPos.value);
     // Depth-intensity: purely DIRECTION-based (view axis + target),
     // cam.position never appears anywhere in this block — see LINE_FS.
     // _camFwd already comes from cam.matrixWorld's rotation only, so
@@ -1730,9 +1874,12 @@ function attachStreamlineShading(mesh) {
 function sharedLineUniforms() {
   return {
     u_lightDir:        { value: new THREE.Vector3(0, 0, 1) },
+    u_lightPos:        { value: new THREE.Vector3() },
+    u_pointLight:      { value: 1 },
+    u_falloff:         { value: DEFAULT_LIGHT_FALLOFF },
     u_autoColor:       { value: 1 },
     u_lineColor:       { value: new THREE.Vector3(1, 1, 1) },
-    u_ambient:         { value: 0.35 },
+    u_ambient:         { value: DEFAULT_AMBIENT },
     u_diffuseStrength: { value: 0.75 },
     u_specStrength:    { value: 0.5 },
     u_specPower:       { value: 12.0 },
@@ -1741,10 +1888,12 @@ function sharedLineUniforms() {
     u_camFwd:          { value: new THREE.Vector3(0, 0, 1) },
     u_depthTarget:     { value: new THREE.Vector3(0, 0, 0) },
     u_depthRadius:     { value: 1.0 },
-    // Both toggleable from index.html — see LINE_FS's comment for why
-    // they're independent controls rather than one "extras" switch.
-    u_depthAttenEnabled: { value: 1 },
-    u_reflectance:       { value: 1.0 },
+    u_reflectance:       { value: 0.5 },
+    // SHADOWING — index.html swaps in LineShadows.uniforms (shared objects)
+    u_shadowTex:  { value: null },
+    u_shadowOn:   { value: 0 },
+    u_shadowMin:  { value: new THREE.Vector3() },
+    u_shadowSize: { value: new THREE.Vector3(1, 1, 1) },
   };
 }
 
@@ -2440,6 +2589,26 @@ export function makeEndpointDots(tracts, probe, endsPx = 6, pixelRatio = window.
 // smoothly along a line, without visible voxel steps.
 // Works on the mesh's own geometry (shared with the 2D slab panels): no
 // streamline rebuild. Files already done for this geometry are skipped.
+// Normalized: each file's counts are divided by its own reference density
+// (the 95th percentile of the voxels it occupies) and scaled to
+// DIM_REFERENCE lines — so how faint a dimmed bundle looks no longer depends
+// on how many of its streamlines are drawn (GPU tier, thinning) or exist
+// (a bundle of 1,000 or of 10,000): plainAlpha() treats a spot at the
+// bundle's reference density as DIM_REFERENCE overlapping lines (√ law).
+// The stored instanceDensity is n · ref / DIM_REFERENCE, which makes
+// plainAlpha's exponent 1/√(stored) equal √(n_eff)/n, n_eff = n · DIM_REFERENCE / ref.
+//
+// Precision: the faint pass blends into an 8-bit framebuffer, so a line
+// whose own alpha is below a few 1/255 adds nothing at all — many lines
+// that should add up to a visible haze stay invisible (dense bundles
+// drawn with many streamlines vanished, keeping only their sparse edges).
+// So where a bundle's lines would get fainter than MIN_LINE_ALPHA (at the
+// typical dimming of 15%, at its reference density), only a stable subset
+// of its streamlines is drawn (fraction q, by a hash of the streamline),
+// each 1/q times as strong — the same overall look, every line visible.
+export const dimDensity = { reference: 10 };
+const MIN_LINE_ALPHA = 3 / 255, DIM_TYPICAL = 0.15;
+const E_MIN = Math.log(1 - MIN_LINE_ALPHA) / Math.log(1 - DIM_TYPICAL); // the smallest per-line exponent wanted
 export function computeRibbonDensity(mesh, files, voxelMm) {
   if (!mesh || !(voxelMm > 0)) return;
   const geo = mesh.geometry;
@@ -2502,6 +2671,18 @@ export function computeRibbonDensity(mesh, files, voxelMm) {
     blur(count, tmp, 1, nx, c => c % nx);
     blur(tmp, count, nx, ny, c => Math.floor(c / nx) % ny);
     blur(count, tmp, nx * ny, nz, c => Math.floor(c / (nx * ny)));
+    // this file's reference density: the 95th percentile of its occupied voxels
+    const occ = [];
+    const stride = Math.max(1, Math.floor(cells / 100000));
+    for (let c = 0; c < cells; c += stride) if (tmp[c] > 0.25) occ.push(tmp[c]);
+    occ.sort((a, b) => a - b);
+    const ref = occ.length ? Math.max(1, occ[Math.floor(0.95 * (occ.length - 1))]) : 1;
+    (geo.userData.densityRef || (geo.userData.densityRef = new Map())).set(file, ref);
+    const k = ref / dimDensity.reference;
+    // per-line exponent at the reference density: 1/sqrt(ref·k); below E_MIN draw a subset
+    const q = Math.min(1, (1 / Math.sqrt(ref * k)) / E_MIN);
+    geo.userData.densityKeep = geo.userData.densityKeep || new Map();
+    geo.userData.densityKeep.set(file, q);
     // trilinear lookup at each segment's midpoint (voxel centres at +0.5)
     for (const i of segs) {
       const fx = ((S[3*i] + E[3*i]) * 0.5 - ox) * inv - 0.5;
@@ -2513,7 +2694,8 @@ export function computeRibbonDensity(mesh, files, voxelMm) {
       const val =
         (1-w) * ((1-v) * ((1-u) * at(0,0,0) + u * at(1,0,0)) + v * ((1-u) * at(0,1,0) + u * at(1,1,0))) +
            w  * ((1-v) * ((1-u) * at(0,0,1) + u * at(1,0,1)) + v * ((1-u) * at(0,1,1) + u * at(1,1,1)));
-      D[i] = Math.max(1, val);
+      const kept = q >= 1 || ((tractOf[i] * 0.6180339887498949) % 1) < q;
+      D[i] = kept ? Math.max(0.05, Math.max(1, val) * k * q * q) : 1e9; // 1e9: alpha ~0, not drawn (FAINT_PASS discards)
     }
   }
   dens.needsUpdate = true;

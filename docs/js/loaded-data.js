@@ -67,6 +67,10 @@ class LoadedItem {
     // without buildSettings get no toggle.
     this.buildSettings = null;
     this.settingsOpen = false;
+    // A long list of children (bundles, labels) scrolls in its own box
+    // instead of stretching the panel; leading toolbar rows stay above it.
+    this.scrollChildren = false;
+    this.swatchHex = null; // a static (not editable) color swatch, e.g. a label's
   }
 
   addChild(child) {
@@ -124,6 +128,17 @@ class BundleItem extends LoadedItem {
     super('bundle', label);
     this.bundleIndex = bundleIndex; // index into bundlePaletteRGB/streamlineBundleId
     this.colorHex = colorHex || null;
+  }
+}
+
+// One label (region) of the shown parcellation: a checkbox (shown or not,
+// in 3D), its lookup-table color as a static swatch, name and number.
+class LabelItem extends LoadedItem {
+  get category() { return 'labels'; }
+  constructor(label, value, colorHex) {
+    super('label', label);
+    this.value = value;
+    this.swatchHex = colorHex || null;
   }
 }
 
@@ -196,6 +211,7 @@ class LoadedDataStore {
       streamlines:   new DataGroupItem('Streamline bundles', true),
       markers:       new DataGroupItem('Markers', true),
     };
+    this.categories.streamlines.scrollChildren = true; // long bundle lists scroll (the toolbar stays on top)
     this.anatomyItems = [];       // volume rows (see registerVolumeItems in index.html)
     this.parcellationItems = [];  // label-volume rows + unattached lookup-table rows
     this.streamlineItems = [];    // one row per streamline file (bundle, or the single tractogram)
@@ -427,6 +443,12 @@ class DataTreeView {
       });
     }
 
+    if (!swatch && item.swatchHex) {
+      swatch = document.createElement('span');
+      swatch.className = 'dt-swatch dt-swatch-static';
+      swatch.style.background = item.swatchHex;
+    }
+
     const label = document.createElement('span');
     label.className = 'dt-label';
     label.textContent = item.label;
@@ -473,10 +495,23 @@ class DataTreeView {
     }
 
     if (hasChildren && !item.collapsed) {
-      for (const child of item.children) wrap.appendChild(this._renderNode(child, depth + 1, topDepth));
+      let box = wrap, i = 0;
+      if (item.scrollChildren) {
+        for (; i < item.children.length && item.children[i].kind === 'toolbar'; i++)
+          wrap.appendChild(this._renderNode(item.children[i], depth + 1, topDepth));
+        box = document.createElement('div');
+        box.className = 'dt-scroll';
+        wrap.appendChild(box);
+        // keep the scroll position across re-renders
+        const key = item.label + '|' + item.kind;
+        this._scrollTops = this._scrollTops || new Map();
+        box.addEventListener('scroll', () => this._scrollTops.set(key, box.scrollTop));
+        requestAnimationFrame(() => { box.scrollTop = this._scrollTops.get(key) || 0; });
+      }
+      for (; i < item.children.length; i++) box.appendChild(this._renderNode(item.children[i], depth + 1, topDepth));
     }
     return wrap;
   }
 }
 
-export { LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton };
+export { LabelItem, LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton };

@@ -85,6 +85,45 @@ function normalizeManifestColor(c) {
 // manifest can describe just tractogram bundles, just anatomy/label/mask
 // volumes, or both) but at least one of the two must be present and
 // non-empty — an index.json with neither is pointless.
+// The optional top-level "view": the opening 3D view, every field optional
+// (missing ones come from the automatic choice):
+//   bounds: what the view is framed on (and turns around) — either
+//           "brain.nii.gz"            a volume file in the drop (its
+//                                     non-empty part), or
+//           { center: [x, y, z],      world coordinates, mm
+//             radius: mm }            the sphere that fills the window
+//                                     (either field may be left out)
+//   from:   "left" | "right" | "anterior" | "posterior" | "superior" |
+//           "inferior" | [x, y, z]  — where the eye is, seen from the centre
+//   up:     same choices (default superior; anterior when looking from
+//           above or below)
+const VIEW_DIRS = ['left', 'right', 'anterior', 'posterior', 'superior', 'inferior'];
+function parseManifestView(v) {
+  if (v == null) return null;
+  if (typeof v !== 'object' || Array.isArray(v)) throw 'index.json "view" must be an object';
+  const vec3 = (x, name) => {
+    if (!Array.isArray(x) || x.length !== 3 || !x.every(n => typeof n === 'number' && Number.isFinite(n))) throw `index.json view.${name} must be [x, y, z]`;
+    return x.slice();
+  };
+  const dir = (x, name) => {
+    if (typeof x === 'string') { if (!VIEW_DIRS.includes(x.toLowerCase())) throw `index.json view.${name} must be one of ${VIEW_DIRS.join(', ')} or [x, y, z]`; return x.toLowerCase(); }
+    const d = vec3(x, name);
+    if (!(Math.hypot(...d) > 0)) throw `index.json view.${name} must not be [0, 0, 0]`;
+    return d;
+  };
+  const out = {};
+  const b = v.bounds;
+  if (typeof b === 'string') { if (!b) throw 'index.json view.bounds must name a volume file'; out.boundsFile = b; }
+  else if (b != null) {
+    if (typeof b !== 'object' || Array.isArray(b)) throw 'index.json view.bounds must be a volume file name or { "center": [x, y, z], "radius": mm }';
+    if (b.center != null) out.center = vec3(b.center, 'bounds.center');
+    if (b.radius != null) { if (!(typeof b.radius === 'number' && b.radius > 0)) throw 'index.json view.bounds.radius must be a positive number (mm)'; out.radius = b.radius; }
+  }
+  if (v.from != null) out.from = dir(v.from, 'from');
+  if (v.up != null) out.up = dir(v.up, 'up');
+  return out;
+}
+
 export function parseManifest(obj) {
   if (!obj || typeof obj !== 'object') throw 'index.json is not a JSON object';
   if (typeof obj.type !== 'string' || !obj.type.startsWith(MANIFEST_TYPE)) throw `index.json "type" must start with "${MANIFEST_TYPE}"`;
@@ -117,7 +156,7 @@ export function parseManifest(obj) {
 
   if (bundles.length === 0 && volumes.length === 0) throw 'index.json must specify at least one of "bundles" or "volumes"';
 
-  return { type: obj.type, version: obj.version, bundles, volumes };
+  return { type: obj.type, version: obj.version, bundles, volumes, view: parseManifestView(obj.view) };
 }
 
 // Given a raw drop's file list (plain array, already stripped of
