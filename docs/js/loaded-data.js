@@ -217,6 +217,7 @@ class LoadedDataStore {
     this.streamlineItems = [];    // one row per streamline file (bundle, or the single tractogram)
     this.dataFileItems = [];      // .dqz data files with no parent to attach to, or unreadable
     this.streamlineToolbar = null; // ToolbarItem shown first under Streamline bundles while it has rows
+    this.parcellationToolbar = null; // ToolbarItem shown first under Parcellations while it has rows
     this.markerItems = [];        // one row per markers file
     this.onChange = null; // () => void
   }
@@ -241,7 +242,7 @@ class LoadedDataStore {
       return group;
     };
     fill(anatomy, this.anatomyItems);
-    fill(parcellations, this.parcellationItems);
+    fill(parcellations, [this.parcellationItems.length ? this.parcellationToolbar : null, ...this.parcellationItems]);
     fill(streamlines, [this.streamlineItems.length ? this.streamlineToolbar : null, ...this.streamlineItems, ...this.dataFileItems]);
     fill(markers, this.markerItems);
     return [anatomy, parcellations, streamlines, markers].filter(g => g.children.length);

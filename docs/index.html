@@ -42,7 +42,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .slice-titlebar{position:absolute;top:0;left:0;right:0;z-index:2;
   display:flex;align-items:center;justify-content:space-between;
   padding:4px 8px;min-height:24px;
-  background:none;}
+  background:none;pointer-events:none;}  /* layout only: hover / clicks reach the section; .slice-title-right opts back in */
 .slice-title-left{display:flex;align-items:center;gap:0;}
 .slice-title-right{display:flex;align-items:center;gap:8px;pointer-events:all;}
 .slice-coord-inline{font-size:10px;color:var(--dim);cursor:copy;
@@ -701,7 +701,6 @@ input[type=file]{display:none;}
     </div>
 <div class="ctl-row probe-setting" data-tip="Color of the streamline ends inside the probe sphere (also the color of the probe sphere and ring). None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
   <label>inner·ends</label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="hide"> None</label>
   <label class="radio-opt" data-tip="the color of the brain region each end lies in (the label volume shown, or the last one shown)"><input type="radio" autocomplete="off" name="src-color" value="label"> Label</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat" checked><input type="color" autocomplete="off" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
@@ -728,12 +727,7 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="lines-color" value="flat"><input type="color" autocomplete="off" id="line-color-picker" value="#ff3700" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
-<div class="ctl-row" data-tip="Directional sheen strength (Kajiya-Kay tangent shading). A streamline lights up brightest where it runs ORTHOGONAL to the light direction, and goes dark where it points straight at (or away from) it — same as a real cylindrical strand: light traveling along a strand's own axis never faces any point on its surface head-on, since a cylinder's surface normals all point outward, perpendicular to that axis; light hitting the strand from the side illuminates the half facing it normally. 0 = flat color, no directional shading at all; 1 = full shading and sheen.">
-  <label>reflectance</label>
-  <input type="range" id="reflectance-slider" min="0" max="1" step="0.05" value="0.5">
-  <span class="slider-val" id="reflectance-val">1.00</span>
-</div>
-<div class="ctl-row" data-tip="Color of the streamline ends; with the probe on: of those outside the probe sphere. None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
+<div class="ctl-row" data-tip="Color of the streamline ends; with the probe on: of those outside the probe sphere. Label=the color of the brain region each end lies in, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
   <label>ends·color</label>
   <label class="radio-opt" data-tip="the color of the brain region each end lies in (the label volume shown, or the last one shown)"><input type="radio" autocomplete="off" name="tgt-color" value="label"> Label</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="bundle"> Bundle</label>
@@ -745,6 +739,11 @@ input[type=file]{display:none;}
   <span class="slider-val" id="ends-size-val">6</span>
 </div>
 
+<div class="ctl-row" data-tip="Directional sheen strength (Kajiya-Kay tangent shading). A streamline lights up brightest where it runs ORTHOGONAL to the light direction, and goes dark where it points straight at (or away from) it — same as a real cylindrical strand: light traveling along a strand's own axis never faces any point on its surface head-on, since a cylinder's surface normals all point outward, perpendicular to that axis; light hitting the strand from the side illuminates the half facing it normally. 0 = flat color, no directional shading at all; 1 = full shading and sheen.">
+  <label>reflectance</label>
+  <input type="range" id="reflectance-slider" min="0" max="1" step="0.05" value="0.5">
+  <span class="slider-val" id="reflectance-val">1.00</span>
+</div>
 <div class="ctl-row" data-tip="Streamlines shading each other, like light through hair: the more streamlines between a spot and the light, the darker it gets — shows where streamlines run and end behind others. 0 = off. Strongest with the light from the side (LIGHT: left or right).">
   <label>shadowing</label>
   <input type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
@@ -762,12 +761,12 @@ input[type=file]{display:none;}
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="seg" id="modality-seg" disabled><span>label</span></label>
       </div>
     </div>
-    <div class="ctl-row" data-tip="Rendering style for the glass brain — three genuinely separate shaders, not a smooth blend between them. GLASS: a real isosurface with a Fresnel rim (using RIM) instead of full opacity — a true thin, transparent shell; streamlines and other geometry show through it. SOLID: the same real isosurface, fully opaque, with proper depth and lighting — FOREGROUND (below) replaces OPACITY here, since opacity has no effect on an opaque surface. RIM-LIT: a soft, glowing boundary built up from many semi-transparent samples along each ray, using OPACITY — no real depth, more a haze than a shell. Clip planes and COVER work the same way in SOLID and GLASS.">
+    <div class="ctl-row" data-tip="How the anatomical volume is drawn in 3D. NONE: not drawn (OPACITY and RIM still set the glass of dimmed brain regions). GLASS: a real isosurface with a Fresnel rim (using RIM and OPACITY) — a thin, transparent shell; streamlines and other geometry show through it. SOLID: the same isosurface, fully opaque, with depth and lighting — FOREGROUND (below) replaces OPACITY here. Clip planes and COVER work the same way in SOLID and GLASS. (The original RIM-LIT shader, a glowing haze, is still in the code: setRenderMode('translucent') in the console.)">
       <label>shader</label>
       <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="none" id="render-mode-none"><span>none</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="glass" id="render-mode-glass" checked><span>glass</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="solid" id="render-mode-solid"><span>solid</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="translucent" id="render-mode-translucent"><span>rim-lit</span></label>
       </div>
     </div>
     <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from FOREGROUND below, so narrowing FOREGROUND to hide a tissue type can never also erode this outer surface.">
@@ -1100,6 +1099,8 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
          makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo, dimDensity, lightPosition, DEFAULT_LIGHT_FALLOFF, DEFAULT_AMBIENT } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
 import { LineShadows } from './js/line-shadows.js';
+import { SectionOutlines } from './js/section-outlines.js';
+import { RegionMeshes } from './js/region-meshes.js';
 import { parseMarkers, resolveMarkerStyle, markerFilterMask, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
 import { makeMarkerGroup, setMarkerDisplay, setMarkerHover, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
 
@@ -1504,6 +1505,7 @@ const PLANES = {
   axi: { key:'axi', chColorH:[0.97,0.63,0.23], chColorV:[0.23,0.97,0.80], scrollAxis:2 }, // H=COR orange, V=SAG cyan
 };
 const canvasA={}, canvasB={};
+let sectionOutlines = null; // region outlines in the sections (set up with the canvases)
 
 // Unified slice draw for both panel sets.
 // tag='src': left panels (probe, full streamlines, probe ring)
@@ -1578,6 +1580,7 @@ function drawSlice(planeKey, tag) {
   }
   updateCoordLabel(planeKey, cursor, tag);
   updateOrientArrows(planeKey, tag, cvs);
+  if (sectionOutlines) sectionOutlines.update(planeKey, tag);
 }
 
 // ── Orientation arrows ──────────────────────────────────────
@@ -2494,16 +2497,53 @@ function collectHits(clientX, clientY) {
     sx: clientX - rect.left, sy: clientY - rect.top,
     marker: pickMarker(clientX, clientY),
     bundle: pickBundleEnd(clientX, clientY),
-    brain: pickBrain(clientX, clientY, { labels: true }),
+    brain: pickBrain(clientX, clientY),
+    region: pickRegions(clientX, clientY),
     frames: !!pickFrameEdge(clientX, clientY),
   };
 }
-const hitsEmpty = h => !h.marker && !h.bundle && !h.brain && !h.frames;
+const hitsEmpty = h => !h.marker && !h.bundle && !h.brain && !h.region && !h.frames;
 const hitsKey = h => [h.marker ? 'm' + h.marker.rec.file.name + ':' + h.marker.index : '',
   h.bundle ? 'b' + h.bundle.gi : '',
-  h.brain ? 'v' + (activeVolume ? activeVolume.file.name : '') + ':' + (h.brain.labels && h.brain.labels.length ? h.brain.labels[0] : '') : '',
+  h.brain ? 'v' + (activeVolume ? activeVolume.file.name : '') : '',
+  h.region ? 'r' + h.region.labels[0] : '',
   h.frames ? 'f' : ''].join('|');
-const ctxCount = h => (h.marker ? 1 : 0) + (h.bundle ? 1 : 0) + (h.brain ? 1 : 0) + (h.frames ? 1 : 0);
+const ctxCount = h => (h.marker ? 1 : 0) + (h.bundle ? 1 : 0) + (h.brain ? 1 : 0) + (h.region ? 1 : 0) + (h.frames ? 1 : 0);
+// The regions of the label volume in memory along the mouse ray, front to
+// back (at most 16), clip planes ignored — the meshes aren't clipped, and
+// deep regions stay reachable. { labels, ras: the first one's entry point }
+// or null. Steps of half a voxel through the whole volume box.
+const _rgNear = new THREE.Vector3(), _rgFar = new THREE.Vector3();
+function pickRegions(clientX, clientY) {
+  const ref = endLabelSrc;
+  if (!ref) return null;
+  const rect = threeCanvas.getBoundingClientRect();
+  const nx0 = ((clientX - rect.left) / rect.width) * 2 - 1, ny0 = -((clientY - rect.top) / rect.height) * 2 + 1;
+  _rgNear.set(nx0, ny0, -1).unproject(camera); _rgFar.set(nx0, ny0, 1).unproject(camera);
+  const A = ref.invAb, [nx, ny, nz] = ref.shape;
+  const lin = p => [0, 1, 2].map(r => A[r][0] * p[0] + A[r][1] * p[1] + A[r][2] * p[2]);
+  const o = mat3mulVec(A, _rgNear.toArray()), e = mat3mulVec(A, _rgFar.toArray());
+  const d = [e[0] - o[0], e[1] - o[1], e[2] - o[2]];
+  // the box [-0.5, n-0.5] in voxel coordinates; t over [0, 1] = near → far
+  let t0 = 0, t1 = 1;
+  for (const [a, n] of [[0, nx], [1, ny], [2, nz]]) {
+    if (Math.abs(d[a]) < 1e-12) { if (o[a] < -0.5 || o[a] > n - 0.5) return null; continue; }
+    const ta = (-0.5 - o[a]) / d[a], tb = (n - 0.5 - o[a]) / d[a];
+    t0 = Math.max(t0, Math.min(ta, tb)); t1 = Math.min(t1, Math.max(ta, tb));
+  }
+  if (t1 <= t0) return null;
+  const step = 0.5 / Math.hypot(...d), raw = ref.raw, labels = [];
+  let tFirst = null;
+  for (let t = t0 + step / 2; t <= t1 && labels.length < 16; t += step) {
+    const x = Math.round(o[0] + t * d[0]), y = Math.round(o[1] + t * d[1]), z = Math.round(o[2] + t * d[2]);
+    if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) continue;
+    const v = raw[x + nx * (y + ny * z)];
+    if (v > 0 && !labels.includes(v)) { labels.push(v); if (tFirst === null) tFirst = t; }
+  }
+  if (!labels.length) return null;
+  const p = _rgNear.clone().lerp(_rgFar, tFirst);
+  return { labels, ras: p.toArray() };
+}
 // A control in a line: its own action first, then the card (deferred, so
 // the action's click handler — which stops the event — runs first).
 // Where a card opens: on the side of the point where the context label
@@ -2527,14 +2567,14 @@ function showContextLabel(h) {
   const el = bundleTipEl;
   el.className = 'hover-tip mt-small mt-stack ctx-label';
   el.innerHTML = '';
-  const order = renderMode === 'solid' ? ['volume', 'marker', 'bundle', 'frame'] : ['marker', 'bundle', 'volume', 'frame'];
+  const order = renderMode === 'solid' ? ['volume', 'region', 'marker', 'bundle', 'frame'] : ['marker', 'bundle', 'volume', 'region', 'frame'];
   for (const kind of order) {
     const line = ctxLine(kind, h);
     if (!line) continue;
     const head = document.createElement('div');
     head.className = 'ctx-head';
     head.textContent = kind === 'bundle' ? 'streamline bundle'
-      : kind === 'volume' ? (labelsShown() ? 'label volume' : 'anatomical volume') : kind;
+      : kind === 'volume' ? 'anatomical volume' : kind === 'region' ? 'label volume' : kind;
     el.append(head, line);
   }
   el.style.display = 'flex';
@@ -2583,17 +2623,26 @@ function ctxLine(kind, h) {
   if (kind === 'volume') {
     if (!h.brain || !activeVolume) return null;
     const open = () => openVolumeCard(h);
-    const labels = h.brain.labels;
-    if (labels && labels.length) {
-      line.append(...regionControls(labels[0])); // the FIRST region the ray meets, on or off (solid/glass: in the card)
-      pinOnUse(line, open, e => !!e.target.closest('.mt-open'));
-    } else {
-      line.appendChild(renderModeToggle()); // anatomy: the solid/glass switch in the line too (label volumes: in the card only)
-      const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = activeVolume.label;
-      line.appendChild(nm);
-      pinOnUse(line, open, e => !!e.target.closest('.mt-open'));
-    }
+    line.appendChild(renderModeToggle());
+    const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = activeVolume.label;
+    line.appendChild(nm);
+    pinOnUse(line, open, e => !!e.target.closest('.mt-open'));
     line.appendChild(openBtn(open, 'details (pins the card)'));
+    return line;
+  }
+  if (kind === 'region') {
+    if (!h.region || !regionMeshes) return null;
+    const v = h.region.labels[0];  // the first region the ray meets
+    const open = () => openLabelCard(h);
+    line.append(...regionLineControls(v));
+    const more = h.region.labels.length - 1;
+    if (more > 0) {
+      const m = document.createElement('span'); m.className = 'mt-val'; m.textContent = '+' + more;
+      m.title = more + ' more region' + (more > 1 ? 's' : '') + ' along this line: see the card (»)';
+      line.appendChild(m);
+    }
+    pinOnUse(line, open, e => !!e.target.closest('input[type=color], .mt-open'));
+    line.appendChild(openBtn(open, 'all regions along this line (pins the card)'));
     return line;
   }
   if (kind === 'frame') {
@@ -2613,34 +2662,42 @@ function ctxLine(kind, h) {
   }
   return null;
 }
-// One region's controls: lamp (only this region / all again), checkbox
-// (shown or not — all regions may be switched off: the context label still
-// finds them), swatch, name, number.
-function regionControls(v) {
-  const out = [];
-  const info = labelInfoOf(activeVolume), hidden = hiddenLabelsOf(activeVolume);
-  if (info && info.values) {
-    const solo = labelsShownCount() === 1 && !hidden.has(v);
-    const lb = document.createElement('button');
-    lb.className = 'solo-btn' + (solo ? ' on' : '');
-    lb.innerHTML = lampIconSVG(solo);
-    lb.title = solo ? 'show all regions again' : 'show only this region';
-    lb.addEventListener('click', e => { e.stopPropagation(); soloLabel(v); });
-    out.push(lb);
-    const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.className = 'dt-check';
-    cb.checked = !hidden.has(v);
-    cb.title = cb.checked ? 'shown in 3D — click: switch off' : 'switched off — click: show in 3D';
-    cb.addEventListener('click', e => e.stopPropagation());
-    cb.addEventListener('change', () => setLabelShown(v, cb.checked));
-    out.push(cb);
-  }
+// A region's line in the 3D label (as a bundle's): spotlight (only this
+// one solid / all solid again), sun (in 3D: solid ⇄ glass; the first click
+// builds its mesh), swatch, name.
+function regionSoloButton(v) {
+  const solo = regionMeshes.isSolo(v);
+  const lb = document.createElement('button');
+  lb.className = 'solo-btn' + (solo ? ' on' : '');
+  lb.innerHTML = lampIconSVG(solo);
+  lb.title = solo ? 'all regions solid again' : 'only this region solid (all others glass)';
+  lb.addEventListener('click', e => { e.stopPropagation(); regionMeshes.solo(v); });
+  return lb;
+}
+function regionNameEls(v) {
   const [name, hex] = labelEntry(v);
   const sw = labelSwatch(v, hex);
-  const nm = document.createElement('span'); nm.className = 'mt-id' + (hidden.has(v) ? ' ctx-off' : ''); nm.textContent = name;
+  const nm = document.createElement('span');
+  nm.className = 'mt-id' + (regionMeshes.has(v) ? '' : ' ctx-off');
+  nm.textContent = name + (regionMeshes.building(v) ? ' …' : '');
   const id = document.createElement('span'); id.className = 'mt-val'; id.textContent = String(v);
-  out.push(sw, nm, id);
-  return out;
+  return [sw, nm, id];
+}
+function regionLineControls(v) {
+  const on = regionMeshes.has(v), foc = regionMeshes.focused(v);
+  const fb = makeFocusButton(foc, e => { if (e) e.stopPropagation(); regionMeshes.toggleFocus(v); },
+    !on ? 'show this region in 3D' : foc ? 'solid — click: glass' : 'glass — click: solid');
+  return [regionSoloButton(v), fb, ...regionNameEls(v)];
+}
+// A region's row in the label card (as a bundle's): spotlight, checkmark
+// (in 3D or not), swatch, name.
+function regionRowControls(v) {
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = regionMeshes.has(v);
+  cb.title = cb.checked ? 'in 3D — click: remove' : 'click: show in 3D';
+  cb.addEventListener('click', e => e.stopPropagation());
+  cb.addEventListener('change', () => regionMeshes.setMember(v, cb.checked));
+  return [regionSoloButton(v), cb, ...regionNameEls(v)];
 }
 // SOLID ⇄ GLASS for the anatomy: a square, half solid, half checkerboard.
 let _modeIconId = 0;
@@ -2671,14 +2728,16 @@ function renderModeToggle() {
 }
 function setRenderMode(mode) {
   const r = document.querySelector('input[name="render-mode"][value="' + mode + '"]');
-  if (!r) return;
-  r.checked = true; r.dispatchEvent(new Event('change'));
+  if (r) { r.checked = true; r.dispatchEvent(new Event('change')); }
+  else if (mode === 'translucent') { // RIM-LIT: no longer in SETTINGS, kept in the code
+    for (const x of document.querySelectorAll('input[name="render-mode"]')) x.checked = false;
+    renderMode = mode; applyRenderModeUI(); updateGlassBrainUniforms();
+  } else return;
   if (bundleHover && bundleHover.ctx) showContextLabel(bundleHover.hits);
   if (volumeCard) renderVolumeCard();
 }
 
-// The volume card: the anatomy switch, the solid/glass toggle, and (LABEL
-// mode) every region under the cursor, on or off.
+// The volume card: the anatomy switch and the solid/glass toggle.
 let volumeCard = null; // { hits }
 const volumeCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => { volumeCard = null; } });
 function openVolumeCard(h) {
@@ -2702,23 +2761,58 @@ function renderVolumeCard() {
   st.className = 'dt-settings';
   st.appendChild(makeChoiceRow('anatomy', volumes.map((v, i) => [String(i), v.label]), String(volumes.indexOf(activeVolume)),
     value => { const v = volumes[+value]; if (v) selectVolume(v).then(() => renderVolumeCard()); }, 'the volume shown'));
-  const labels = volumeCard.hits.brain && volumeCard.hits.brain.labels;
-  if (labels && labels.length && labelsShown()) {
-    const head = document.createElement('div');
-    head.className = 'dt-toolbar-lbl ctx-sub';
-    head.textContent = labels.length === 1 ? 'region under the cursor' : labels.length + ' regions under the cursor, front to back';
-    st.appendChild(head);
-    const list = document.createElement('div');
-    list.className = 'dt-labels';
-    for (const v of labels) {
-      const row = document.createElement('div');
-      row.className = 'dt-row ctx-region';
-      row.append(...regionControls(v));
-      list.appendChild(row);
-    }
-    st.appendChild(list);
-  }
   body.appendChild(st);
+}
+// The label card: the label volume in memory (switch), and every region
+// along the picked line, front to back: spotlight, checkmark, swatch, name.
+// The list is the one found when the card opened.
+let labelCard = null; // { labels }
+const labelCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => { labelCard = null; } });
+labelCardPanel.el.addEventListener('pointerdown', () => { _cardBusy = true; }, true);
+function openLabelCard(h) {
+  const at = cardAnchor(h.sx, h.sy);
+  closeBundleCard(); closeVolumeCard(); if (typeof closeMarkerCard === 'function') closeMarkerCard();
+  _overBundleTip = false; bundleHover = null; bundleTipEl.style.display = 'none'; showHoverEnds(null);
+  labelCard = { labels: h.region.labels.slice() };
+  renderLabelCard();
+  if (!labelCardPanel.isOpen) labelCardPanel.openAt(...at);
+}
+function closeLabelCard() { if (labelCard) labelCardPanel.close(); }
+function renderLabelCard() {
+  if (!labelCard) return;
+  if (!endLabelSrc || !regionMeshes) { closeLabelCard(); return; }
+  if (colorPickerIn(labelCardPanel.el)) return; // a swatch's picker is open
+  const title = labelCardPanel.titleEl;
+  title.innerHTML = '';
+  const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = endLabelSrc.vol.label;
+  title.append(nm);
+  const body = labelCardPanel.body;
+  body.innerHTML = '';
+  const st = document.createElement('div');
+  st.className = 'dt-settings';
+  st.appendChild(labelVolumeChoiceRow());
+  const head = document.createElement('div');
+  head.className = 'dt-toolbar-lbl ctx-sub';
+  const n = labelCard.labels.length;
+  head.textContent = n === 1 ? 'region along this line' : n + ' regions along this line, front to back';
+  st.appendChild(head);
+  const list = document.createElement('div');
+  list.className = 'dt-labels';
+  for (const v of labelCard.labels) {
+    const row = document.createElement('div');
+    row.className = 'dt-row ctx-region';
+    row.append(...regionRowControls(v));
+    list.appendChild(row);
+  }
+  st.appendChild(list);
+  body.appendChild(st);
+}
+// The label volume in memory: '---' or one of the parcellations.
+function labelVolumeChoiceRow() {
+  const cands = labelVolCandidates(), cur = labelVol();
+  return makeChoiceRow('label volume', [['', '---'], ...cands.map((v, i) => [String(i), v.label])],
+    cur ? String(cands.indexOf(cur)) : '', value => chooseLabelVolume(value === '' ? null : cands[+value]),
+    'the label volume for the regions in 3D, the outlines and names in the sections, and Label end colors');
 }
 threeCanvas.addEventListener('mousemove', e => {
   if (recentTouch()) return; // the mouse events a browser fakes after a tap
@@ -3002,7 +3096,7 @@ function updateGlassBrainUniforms() {
       solid:       glassBrainMesh.userData.solidMaterial,
       glass:       glassBrainMesh.userData.shellMaterial,
     };
-    glassBrainMesh.material = materialByMode[renderMode];
+    if (materialByMode[renderMode]) glassBrainMesh.material = materialByMode[renderMode]; // 'none': not drawn (below)
     glassBrainMesh.userData.renderMode = renderMode;
   }
   const u = glassBrainMesh.material.uniforms;
@@ -3026,7 +3120,7 @@ function updateGlassBrainUniforms() {
   // visual contribution. SOLID mode ignores OPACITY entirely (its slider
   // is disabled in that mode, see the render-mode radio's own listener),
   // so this only applies outside it.
-  glassBrainMesh.visible = !(renderMode !== 'solid' && glassBrainAlpha <= 0);
+  glassBrainMesh.visible = renderMode !== 'none' && !(renderMode !== 'solid' && glassBrainAlpha <= 0);
   updateClipUniforms();
   updateLightBias(lightBias);
   render3D();
@@ -3505,27 +3599,88 @@ function rebuildDots() {
   updateScene3d();
 }
 
-// ── End dots colored by brain region (ends·color / inner·ends: Label) ──
-// Each end takes the color of the label at its position (plain lookup,
-// background 0: gray) in the label volume shown — or, when none is shown,
-// the last one that was: its labels are kept (a compact copy) so the colors
-// stay when you switch to an anatomy. A newly shown label volume replaces
-// them. Colors follow the volume's color table, edits included.
+// ── The label volume in memory (the current label volume) ──
+// One label volume is kept (a compact copy of its labels), independent of
+// the volume the raymarcher shows: the one chosen in DATA (Parcellations'
+// first row, or the label volume card) — by default the first loaded
+// parcellation with its own color table; '---' = none. It names the region
+// at the 2D cursor (the label badges) and under the mouse in 3D, outlines
+// regions in the sections, colors the end dots (ends·color: Label) and
+// gives the region meshes in 3D (js/region-meshes.js). Colors follow its
+// color table, edits included.
 let endLabelSrc = null;   // { vol, raw: Int32Array, shape, invAb, map }
+let _labelRefLoading = null;
+let labelVolChoice;       // undefined: the default; null: none ('---'); else the chosen volume
+let regionMeshes = null;  // set up with the 3D scene (below)
+const labelVolCandidates = () => volumes.filter(v => v.category === 'parcellation' && !v.isColor);
+function wantedLabelVol() {
+  if (labelVolChoice === null) return null;
+  if (labelVolChoice && volumes.includes(labelVolChoice)) return labelVolChoice;
+  return volumes.find(v => v.category === 'parcellation' && v.lut && !v.isColor) || null;
+}
+// The color table of the label volume in memory (the shown volume's own
+// table when it is the same volume — auto colors included).
+const labelMapOf = vol => vol === activeVolume && lutMap ? lutMap : vol && vol.lut ? vol.lut.map : null;
+function chooseLabelVolume(vol) { // null: '---'
+  labelVolChoice = vol;
+  ensureLabelRef();
+}
+// Makes the label volume in memory the wanted one (reading it if needed).
+async function ensureLabelRef() {
+  const vol = wantedLabelVol();
+  if (endLabelSrc && endLabelSrc.vol === vol) {   // the same: its color table may have changed
+    const map = labelMapOf(vol);
+    if (map !== endLabelSrc.map) { endLabelSrc.map = map; if (regionMeshes) regionMeshes.refreshColors(); if (sectionOutlines) sectionOutlines.refresh(); }
+    return;
+  }
+  if (!vol) { if (endLabelSrc) setLabelRef(null); return; }
+  if (_labelRefLoading === vol) return;
+  if (vol === activeVolume && loadedAnatRaw && loadedAnatShape) {   // shown: copy it
+    const raw = new Int32Array(loadedAnatRaw.length);
+    for (let i = 0; i < raw.length; i++) raw[i] = Math.round(loadedAnatRaw[i]);
+    setLabelRef({ vol, raw, shape: loadedAnatShape.slice(), invAb: JSON.parse(JSON.stringify(state.get('anat.invAb'))), map: labelMapOf(vol) });
+    return;
+  }
+  _labelRefLoading = vol;
+  try {
+    const a = cropToContent(await parseVolumeFile(vol.file), { noisy: false });
+    if (wantedLabelVol() !== vol || (a.channels || 1) !== 1) return;
+    const raw = new Int32Array(a.data.length);
+    for (let i = 0; i < raw.length; i++) raw[i] = Math.round(a.data[i]);
+    setLabelRef({ vol, raw, shape: a.shape.slice(), invAb: a.invAb, map: labelMapOf(vol) });
+  } catch (e) { console.warn('could not read ' + vol.file.name + ' for its labels', e); }
+  finally { if (_labelRefLoading === vol) _labelRefLoading = null; }
+  if (wantedLabelVol() !== (endLabelSrc && endLabelSrc.vol)) ensureLabelRef(); // chosen otherwise meanwhile
+}
+function setLabelRef(ref) {
+  endLabelSrc = ref;
+  console.info('label volume in memory:', ref ? ref.vol.label : '---');
+  if (regionMeshes) regionMeshes.setRef(ref);
+  updateSlicesA(); updateSlicesB();  // the sections' outlines
+  syncEndLabelRadios();
+  updateLabelHud('src'); updateLabelHud('tgt');
+  if (endStyleLabel()) redrawAll();
+  dataStore.refresh();
+  labelUiChanged();
+}
+// The region at a world point in the label volume in memory: [value, name] or null.
+function labelRefAt(p) {
+  const ref = endLabelSrc;
+  if (!ref) return null;
+  const [nx, ny, nz] = ref.shape;
+  const [x, y, z] = mat3mulVec(ref.invAb, p).map(Math.round);
+  if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) return null;
+  const v = ref.raw[x + nx * (y + ny * z)];
+  const map = ref.vol === activeVolume && lutMap ? lutMap : ref.map;
+  const e = map && map.get(v);
+  return [v, e ? e.name : (v === 0 ? '' : 'label ' + v + ' (unmapped)')];
+}
 const END_BG_RGB = [0.45, 0.45, 0.45];
 const endStyleLabel = () => srcStyle.mode === 'label' || tgtStyle.mode === 'label';
 // The style the renderers see: Label draws the per-dot colors ('bundle' path).
 const effDotStyle = st => st.mode === 'label' ? { mode: 'bundle', rgb: st.rgb } : st;
-function snapshotEndLabels() {
-  if (!labelsShown() || !loadedAnatRaw || !loadedAnatShape) return false;
-  if (endLabelSrc && endLabelSrc.vol === activeVolume && endLabelSrc.raw.length === loadedAnatRaw.length) { endLabelSrc.map = lutMap; return true; }
-  const raw = new Int32Array(loadedAnatRaw.length);
-  for (let i = 0; i < raw.length; i++) raw[i] = Math.round(loadedAnatRaw[i]);
-  endLabelSrc = { vol: activeVolume, raw, shape: loadedAnatShape.slice(), invAb: JSON.parse(JSON.stringify(state.get('anat.invAb'))), map: lutMap };
-  return true;
-}
 function syncEndLabelRadios() {
-  const ok = labelsShown() || !!endLabelSrc;
+  const ok = !!endLabelSrc;
   for (const r of document.querySelectorAll('input[name="src-color"][value="label"], input[name="tgt-color"][value="label"]')) {
     r.disabled = !ok;
     r.closest('label').style.opacity = ok ? '' : '0.4';
@@ -4303,8 +4458,8 @@ function setModality(newModality) {
   updateLabelHud('src'); updateLabelHud('tgt');
   if (currentAnat) buildGlassBrainLocal(currentAnat);
   registerVolumeItems(); // the label list shows in LABEL mode only
-  // ends colored by region: a newly shown label volume takes over
-  if (endStyleLabel() && labelsShown()) { snapshotEndLabels(); redrawAll(); }
+  ensureLabelRef(); // the label volume in memory: its color table may be the shown one's
+  if (endLabelSrc && endStyleLabel()) redrawAll();
   syncEndLabelRadios();
 }
 
@@ -4352,6 +4507,9 @@ function updateLabelHud(tag) {
         name = entry ? entry.name : (idx===0 ? '' : 'label '+idx+' (unmapped)');
       }
     }
+  } else {
+    const r = labelRefAt(cur);  // an anatomy shown: the label volume in memory names the spot
+    if (r) name = r[1];
   }
   nameEl.textContent = name;
   el.style.display = 'block';
@@ -4721,6 +4879,7 @@ document.querySelectorAll('input[name="render-mode"]').forEach(r=>{
   });
 });
 applyRenderModeUI(); // reflect the default MODE (glass) on load
+window.setRenderMode = mode => { setRenderMode(mode); return renderMode; }; // console: 'none' | 'glass' | 'solid' | 'translucent' (rim-lit)
 document.querySelectorAll('input[name="clip-plane"]').forEach(r=>{
   r.addEventListener('change', ()=>{
     clipPlane = r.value;
@@ -5425,8 +5584,8 @@ function initColorRadio(radioName, pickerId, setVar, redraw) {
 
 const redrawAll = () => { updateScene3d(); updateSlicesA(); updateSlicesB(); };
 initColorRadio('lines-color', 'line-color-picker', v => lineStyle = v, redrawAll);
-initColorRadio('src-color',   'src-color-picker',  v => { srcStyle = v; if (v.mode === 'label') snapshotEndLabels(); }, redrawAll);
-initColorRadio('tgt-color',   'tgt-color-picker',  v => { tgtStyle = v; if (v.mode === 'label') snapshotEndLabels(); }, redrawAll);
+initColorRadio('src-color',   'src-color-picker',  v => { srcStyle = v; }, redrawAll);
+initColorRadio('tgt-color',   'tgt-color-picker',  v => { tgtStyle = v; }, redrawAll);
 setTimeout(syncEndLabelRadios, 0); // (after the module has run: labelsShown is defined further down)
 
 // Programmatically selects a radio option and runs it through the exact
@@ -5848,20 +6007,21 @@ function makeChoiceRow(labelText, options, value, onChange, title = null) {
 // categories — the renderer shows one volume at a time. (Once anatomy and
 // a parcellation can be overlaid, these become two independent choices.)
 // A single volume gets an on/off checkbox instead.
-// ── Label visibility (LABEL mode) ───────────────────────────
-// Each parcellation keeps the set of label values switched off
-// (vol.hiddenLabels); the 3D brain draws those as background (scene3d.js:
-// u_labelVis). Switched from the region label in 3D (checkbox, and the
-// lamp: only this region / all again) and from the DATA panel's label
-// list. The 2D sections are not affected.
+// ── Label lists and colors ──────────────────────────────────
+// LABEL mode only colors the shown volume by its color table — the
+// raymarcher draws every region. Regions are switched on and off in 3D as
+// meshes of the label volume in memory (js/region-meshes.js): from the
+// 3D label, its card, and the DATA label list of that volume.
 const LABEL_LIST_MAX = 255;      // rows listed in DATA (the rest: one "… N more" line)
 const LABEL_DISTINCT_MAX = 5000; // more distinct values: not a label volume
 // The label values present in the shown volume (computed once per volume
 // from its data): { values: sorted ints > 0 } or { notLabels: true, distinct }.
 function labelInfoOf(vol) {
+  if (!vol) return null;
   if (vol.labelInfo) return vol.labelInfo;
-  if (vol !== activeVolume || !loadedAnatRaw || vol.isColor) return null;
-  const d = loadedAnatRaw, seen = new Set();
+  const d = vol === activeVolume && loadedAnatRaw ? loadedAnatRaw : endLabelSrc && endLabelSrc.vol === vol ? endLabelSrc.raw : null;
+  if (!d || vol.isColor) return null;
+  const seen = new Set();
   for (let i = 0; i < d.length; i++) {
     const v = d[i];
     if (v === 0 || v !== v) continue;
@@ -5872,9 +6032,12 @@ function labelInfoOf(vol) {
   return vol.labelInfo;
 }
 const labelsShown = () => modality === 'seg' && activeVolume && !activeVolume.isColor;
-const hiddenLabelsOf = vol => vol.hiddenLabels || (vol.hiddenLabels = new Set());
-function labelEntry(v) { // [name, '#rrggbb'] from the lookup table
-  const e = lutMap && lutMap.get(v);
+const NO_HIDDEN = new Set(); // (the raymarcher draws every region)
+const hiddenLabelsOf = () => NO_HIDDEN;
+// The volume whose regions the 3D label, card and meshes are about.
+const labelVol = () => endLabelSrc ? endLabelSrc.vol : null;
+function labelEntry(v, vol = labelVol() || activeVolume) { // [name, '#rrggbb'] from the lookup table
+  const map = labelMapOf(vol), e = map && map.get(v);
   const hex = e ? '#' + [e.r, e.g, e.b].map(c => Math.round(255 * Math.min(1, Math.max(0, c))).toString(16).padStart(2, '0')).join('') : '#888888';
   return [e ? e.name : 'label ' + v, hex];
 }
@@ -5885,38 +6048,46 @@ function labelEntry(v) { // [name, '#rrggbb'] from the lookup table
 // original stays a choice in the volume's settings — edited in place from
 // then on. While the picker is dragged only the colors and the swatches
 // change; the lists are rebuilt when it is let go.
-function labelSwatch(v, hex) {
+function labelSwatch(v, hex, vol = labelVol() || activeVolume) {
   const sw = document.createElement('input');
   sw.type = 'color'; sw.className = 'dt-swatch';
   sw.value = hex; sw.dataset.labelSw = String(v);
   sw.title = 'change region color';
   sw.addEventListener('click', e => e.stopPropagation());
-  sw.addEventListener('input', () => setLabelColor(v, sw.value, false));
-  sw.addEventListener('change', () => setLabelColor(v, sw.value, true));
+  sw.addEventListener('input', () => setLabelColor(v, sw.value, false, vol));
+  sw.addEventListener('change', () => setLabelColor(v, sw.value, true, vol));
   return sw;
 }
 function customLutOf(vol) {
   if (vol.lut && vol.lut.custom) return vol.lut;
-  const map = new Map();
-  if (lutMap) for (const [k, e] of lutMap) map.set(k, { ...e });
+  const map = new Map(), src = labelMapOf(vol);
+  if (src) for (const [k, e] of src) map.set(k, { ...e });
   const base = vol.lut ? lutBaseName(vol.lut.name) : volumeBaseName(vol.label);
   let name = base + ' (custom)';
   for (let i = 2; luts.some(l => l.name === name); i++) name = base + ' (custom ' + i + ')';
-  const lut = { file: null, name, map, maxIndex: lutMaxIndex, volume: null, uiSettingsOpen: false, custom: true };
+  const maxIndex = vol === activeVolume ? lutMaxIndex : Math.max(0, ...map.keys());
+  const lut = { file: null, name, map, maxIndex, volume: null, uiSettingsOpen: false, custom: true };
   luts.push(lut);
   attachLut(lut, vol);
-  lutMap = map; lutIsAutoGenerated = false;
+  if (vol === activeVolume) { lutMap = map; lutIsAutoGenerated = false; }
   return lut;
 }
 let _lut3DTex = null;
-function setLabelColor(v, hex, done) {
-  const vol = activeVolume;
+function setLabelColor(v, hex, done, vol = labelVol() || activeVolume) {
   if (!vol) return;
   const lut = customLutOf(vol);
   const e = lut.map.get(v) || { a: 1, name: 'label ' + v };
   [e.r, e.g, e.b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
   lut.map.set(v, e);
   if (v > lut.maxIndex) lut.maxIndex = v;
+  // the label volume in memory: meshes, outlines, end dots
+  if (endLabelSrc && endLabelSrc.vol === vol) {
+    endLabelSrc.map = lut.map;
+    if (regionMeshes) regionMeshes.refreshColors();
+    if (sectionOutlines) sectionOutlines.refresh();
+  }
+  for (const el of document.querySelectorAll('[data-label-sw="' + v + '"]')) if (el.value !== hex) el.value = hex;
+  if (vol !== activeVolume) { if (done) labelsChanged(); return; }
   lutMap = lut.map; lutMaxIndex = lut.maxIndex;
   // 2D slices
   vr.uploadLUT(lutMap, lutMaxIndex);
@@ -6018,30 +6189,23 @@ function applyLabelVisibility(redraw = true) {
   }
   if (redraw) render3D();
 }
+// Region colors were edited.
 function labelsChanged() {
   applyLabelVisibility();
-  if (endStyleLabel() && endLabelSrc && endLabelSrc.vol === activeVolume) { endLabelSrc.map = lutMap; redrawAll(); } // region colors edited
+  if (endLabelSrc) endLabelSrc.map = labelMapOf(endLabelSrc.vol);
+  if (endStyleLabel() && endLabelSrc) redrawAll();
+  if (sectionOutlines) sectionOutlines.refresh();
   registerVolumeItems();
-  // the region label in 3D shows the new state
-  if (bundleHover && bundleHover.ctx) showContextLabel(bundleHover.hits);
+  labelUiChanged();
+}
+// The region set or the label volume changed: the 3D label, the label
+// card and DATA show the new state.
+function labelUiChanged() {
+  if (bundleHover && bundleHover.ctx && !colorPickerIn(bundleTipEl)) showContextLabel(bundleHover.hits);
+  if (labelCard) renderLabelCard();
   if (volumeCard) renderVolumeCard();
+  dataStore.refresh();
 }
-function setLabelShown(v, on) {
-  const h = hiddenLabelsOf(activeVolume);
-  if (on) h.delete(v); else h.add(v);
-  labelsChanged();
-}
-// The lamp: only this region shown — or, when it already is, all again.
-function soloLabel(v) {
-  const info = labelInfoOf(activeVolume), h = hiddenLabelsOf(activeVolume);
-  if (!info || !info.values) return;
-  const shown = info.values.filter(x => !h.has(x));
-  if (shown.length === 1 && shown[0] === v) h.clear();
-  else { h.clear(); for (const x of info.values) if (x !== v) h.add(x); }
-  labelsChanged();
-}
-const labelsShownCount = () => { const info = labelInfoOf(activeVolume), h = hiddenLabelsOf(activeVolume);
-  return info && info.values ? info.values.filter(x => !h.has(x)).length : 0; };
 // DATA: the shown parcellation's label list, in its settings area (»):
 // an "all N labels" row (all/some/none checkbox, the header as an info
 // icon), then one row per label in a scrolling box — at most
@@ -6059,34 +6223,43 @@ function buildLabelList(vol, el) {
     el.appendChild(box);
     return false;
   }
-  const h = hiddenLabelsOf(vol), vals = info.values;
+  // the label volume in memory: a checkmark per region — its mesh in 3D
+  const vals = info.values, meshes = regionMeshes && endLabelSrc && endLabelSrc.vol === vol;
   const head = document.createElement('div');
   head.className = 'dt-row dt-toolbar';
-  const cb = document.createElement('input');
-  cb.type = 'checkbox'; cb.className = 'dt-check';
-  const on = vals.filter(x => !h.has(x)).length;
-  cb.checked = on === vals.length; cb.indeterminate = on > 0 && on < vals.length;
-  cb.title = 'switch all labels on (all on: all off)';
-  cb.addEventListener('click', e => e.stopPropagation());
-  cb.addEventListener('change', () => { if (on < vals.length) h.clear(); else for (const x of vals) h.add(x); labelsChanged(); });
+  if (meshes) {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'dt-check';
+    const on = vals.filter(x => regionMeshes.has(x)).length;
+    cb.checked = on === vals.length; cb.indeterminate = on > 0 && on < vals.length;
+    cb.title = 'all regions in 3D (all in: none)';
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => { for (const x of vals) regionMeshes.setMember(x, on < vals.length); });
+    head.appendChild(cb);
+  }
   const t = document.createElement('span'); t.className = 'dt-toolbar-lbl'; t.textContent = 'all ' + vals.length.toLocaleString() + ' labels';
   const sp = document.createElement('span'); sp.style.flex = '1';
-  head.append(cb, t, sp, makeInfoButton(() => showAnatHeaderPanel(), 'header of ' + vol.file.name));
+  head.append(t, sp);
+  if (vol === activeVolume) head.appendChild(makeInfoButton(() => showAnatHeaderPanel(), 'header of ' + vol.file.name));
   box.appendChild(head);
   const list = document.createElement('div');
   list.className = 'dt-scroll';
   for (const v of vals.slice(0, LABEL_LIST_MAX)) {
-    const [name, hex] = labelEntry(v);
+    const [name, hex] = labelEntry(v, vol);
     const row = document.createElement('div');
     row.className = 'dt-row dt-sub';
-    const c = document.createElement('input');
-    c.type = 'checkbox'; c.className = 'dt-check'; c.checked = !h.has(v);
-    c.addEventListener('click', e => e.stopPropagation());
-    c.addEventListener('change', () => setLabelShown(v, c.checked));
-    const sw = labelSwatch(v, hex);
+    if (meshes) {
+      const c = document.createElement('input');
+      c.type = 'checkbox'; c.className = 'dt-check'; c.checked = regionMeshes.has(v);
+      c.title = c.checked ? 'in 3D — click: remove' : 'click: show in 3D';
+      c.addEventListener('click', e => e.stopPropagation());
+      c.addEventListener('change', () => regionMeshes.setMember(v, c.checked));
+      row.appendChild(c);
+    }
+    const sw = labelSwatch(v, hex, vol);
     const nm = document.createElement('span'); nm.className = 'dt-label'; nm.textContent = name; nm.dataset.tip = name + ' (' + v + ')';
     const tg = document.createElement('span'); tg.className = 'dt-tag'; tg.textContent = String(v);
-    row.append(c, sw, nm, tg);
+    row.append(sw, nm, tg);
     list.appendChild(row);
   }
   if (vals.length > LABEL_LIST_MAX) {
@@ -6104,7 +6277,7 @@ function buildLabelList(vol, el) {
 }
 
 function registerVolumeItems() {
-  if (typeof syncEndLabelRadios === 'function') setTimeout(syncEndLabelRadios, 0); // Label end colors: available with a label volume
+  setTimeout(() => { syncEndLabelRadios(); ensureLabelRef(); }, 0); // a label volume in memory (2D badges, Label end colors)
   const multi = volumes.length > 1;
   const volumeItem = vol => {
     const item = new AnatomyItem(vol.label);
@@ -6138,7 +6311,36 @@ function registerVolumeItems() {
   const anatomy = volumes.filter(v => v.category !== 'parcellation').map(volumeItem);
   const parcellations = volumes.filter(v => v.category === 'parcellation').map(volumeItem);
   for (const l of luts) if (!l.volume) parcellations.push(lutItem(l));
+  dataStore.parcellationToolbar = makeLabelToolbar();
   dataStore.setVolumes(anatomy, parcellations);
+}
+
+// First row under Parcellations: the label volume in memory (its regions
+// in 3D, the outlines and names in the sections, Label end colors) — a
+// choice, '---' for none (which also empties the regions in 3D) — and,
+// as for bundles, a checkbox showing or hiding all its regions in 3D and
+// the sun: all regions solid (or, when all are, all glass).
+function makeLabelToolbar() {
+  return new ToolbarItem((_, bar) => {
+    const n = regionMeshes ? regionMeshes.size : 0;
+    if (n) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.className = 'dt-check';
+      cb.checked = regionMeshes.visible;
+      cb.title = regionMeshes.visible ? 'regions shown in 3D — click: hide all' : 'regions hidden in 3D — click: show';
+      cb.addEventListener('click', e => e.stopPropagation());
+      cb.addEventListener('change', () => regionMeshes.setVisible(cb.checked));
+      const all = regionMeshes.allFocused;
+      const fb = makeFocusButton(all, () => regionMeshes.setAllFocus(!all),
+        all ? 'all regions solid — click: all glass' : 'all regions solid');
+      if (!all && regionMeshes.anyFocused) fb.classList.add('mixed');
+      bar.append(cb, fb);
+    }
+    const row = labelVolumeChoiceRow();
+    row.style.flex = '1'; row.style.margin = '0';
+    row.title = n ? n + ' region' + (n > 1 ? 's' : '') + ' in 3D' : 'no regions in 3D yet: switch them on from the 3D view (sun) or the label list';
+    bar.appendChild(row);
+  });
 }
 
 // A row for a lookup table that isn't attached to any volume (an attached
@@ -6179,7 +6381,8 @@ function buildVolumeSettings(vol, el) {
       }, 'which category this volume is listed and shown as'));
   }
   // the shown parcellation: its label list (with the header as an info icon)
-  const listed = vol === activeVolume && vol.category === 'parcellation' && labelsShown() && buildLabelList(vol, el);
+  // its label list: the shown parcellation in LABEL mode (colors), the label volume in memory (colors, 3D regions)
+  const listed = vol.category === 'parcellation' && ((vol === activeVolume && labelsShown()) || vol === labelVol()) && buildLabelList(vol, el);
   if (vol === activeVolume) { if (!listed) el.appendChild(makeSettingsButton('show header', () => showAnatHeaderPanel())); }
   else el.appendChild(makeSettingsButton('remove', () => {
     if (vol.lut) detachLut(vol.lut);
@@ -7922,6 +8125,35 @@ for(const k of ['sag','cor','axi']){
     'tgt',
     updateSlicesB);
 }
+// Region outlines in the sections — hovered region, else the data cursor's (js/section-outlines.js),
+// from the label volume in memory.
+sectionOutlines = new SectionOutlines({
+  vr, canvases: { src: canvasA, tgt: canvasB },
+  getRef: () => endLabelSrc,
+  getCursor: tag => state.get(tag + '.cursor'),
+  nameOf: v => {
+    const ref = endLabelSrc, map = ref && (ref.vol === activeVolume && lutMap ? lutMap : ref.map), e = map && map.get(v);
+    return e ? e.name : 'label ' + v + ' (unmapped)';
+  },
+  colorOf: v => {
+    const ref = endLabelSrc, map = ref && (ref.vol === activeVolume && lutMap ? lutMap : ref.map), e = map && map.get(v);
+    return e ? '#' + [e.r, e.g, e.b].map(c => Math.round(255 * Math.min(1, Math.max(0, c))).toString(16).padStart(2, '0')).join('') : '#ffffff';
+  },
+});
+// Regions of the label volume in memory as meshes in 3D (js/region-meshes.js).
+regionMeshes = new RegionMeshes({
+  THREE, scene, render: () => render3D(),
+  colorOf: v => labelEntry(v)[1],
+  onChange: () => labelUiChanged(),
+  getLight: () => ({
+    lightCam: _rmLightCam.set(...lightCamFromBias(lightBias)).normalize(),
+    point: pointLightOn, falloff: lightFalloff, ambient: ambientLight,
+    target: controls.target, radius: sceneRadius || 1,
+    rimPow: glassBrainRimPow, alphaMult: glassOpacityMult,
+  }),
+});
+const _rmLightCam = new THREE.Vector3();
+if (endLabelSrc) regionMeshes.setRef(endLabelSrc);
 resizeAll();
 
 // ═══════════════════════════════════════════════════════════

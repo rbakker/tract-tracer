@@ -137,7 +137,7 @@ void main() {
 // the camera is outside the data (zoom does not change the look — a
 // zoom-invariant stand-in for a point light's 1/d²), moving along with the
 // camera once it is inside. Shared by the line shader and the brain's.
-const LIGHT_FALLOFF_GLSL = `
+export const LIGHT_FALLOFF_GLSL = `
 uniform float u_falloff;
 float lightFalloff(vec3 worldPos, vec3 camPos, vec3 target, vec3 fwd, float radius) {
   if (u_falloff <= 0.0) return 1.0;
