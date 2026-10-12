@@ -117,7 +117,7 @@ export class RegionMeshes {
       if (!this.cache.has(ref.vol)) this.cache.set(ref.vol, new Map());
       this.worker.postMessage({ type: 'volume', gen: this.gen, raw: ref.raw.slice(), shape: ref.shape.slice() });
     }
-    this.onChange();
+    this._changed();   // (redraw now: the old volume's meshes are gone)
   }
 
   get size() { return this.set.size; }
@@ -157,6 +157,14 @@ export class RegionMeshes {
   setAllFocus(on) {
     for (const [w, x] of this.set) { x.focus = on; this._style(w); }
     this._changed();
+  }
+  // The nearest solid region surface on a ray (THREE.Raycaster): { label, point: [x,y,z], distance } or null.
+  pickSolid(raycaster) {
+    if (!this.group.visible) return null;
+    const solid = [...this.set.values()].filter(e => e.mesh && e.focus).map(e => e.mesh);
+    if (!solid.length) return null;
+    const hit = raycaster.intersectObjects(solid, false)[0];
+    return hit ? { label: hit.object.userData.region, point: hit.point.toArray(), distance: hit.distance } : null;
   }
   get visible() { return this.group.visible; }
   setVisible(on) { this.group.visible = !!on; this._changed(); }

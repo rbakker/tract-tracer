@@ -54,8 +54,11 @@ export class SectionOutlines {
   // nameOf(v): the name of region v
   // getCursor(tag): the data cursor (world mm) of set 'src' / 'tgt'
   // canvases: { src: { sag, cor, axi }, tgt: { … } } section canvases
-  constructor({ vr, getRef, colorOf, nameOf, getCursor, canvases }) {
+  // getFilled(): Map(label → fill opacity) — regions filled in every
+  // section (the regions shown in 3D), or null
+  constructor({ vr, getRef, colorOf, nameOf, getCursor, getFilled, canvases }) {
     this.vr = vr; this.getRef = getRef; this.colorOf = colorOf;
+    this.getFilled = getFilled || (() => null);
     this.nameOf = nameOf || (v => 'label ' + v); this.getCursor = getCursor || (() => null);
     this.panels = new Map();
     this.hover = { src: null, tgt: null };   // per set: { P, point, client } while the mouse is over a section
@@ -86,13 +89,14 @@ export class SectionOutlines {
     svg.setAttribute('class', 'section-outline');
     svg.style.cssText = 'position:absolute;pointer-events:none;overflow:hidden;display:none;';
     const g = document.createElementNS(NS, 'g');
+    const fill = document.createElementNS(NS, 'g');   // filled regions, under the outline
     const under = document.createElementNS(NS, 'path'), over = document.createElementNS(NS, 'path');
     for (const p of [under, over]) { p.setAttribute('fill', 'none'); p.setAttribute('vector-effect', 'non-scaling-stroke'); p.setAttribute('stroke-linejoin', 'round'); }
     under.setAttribute('stroke', 'rgba(0,0,0,0.75)'); under.setAttribute('stroke-width', '3.5');
     over.setAttribute('stroke-width', '1.6');
-    g.append(under, over); svg.appendChild(g);
+    g.append(fill, under, over); svg.appendChild(g);
     canvas.insertAdjacentElement('afterend', svg);
-    const P = { id, tag, pk, canvas, svg, g, under, over, key: null, geo: null, paths: null, label: 0, timer: null };
+    const P = { id, tag, pk, canvas, svg, g, fill, under, over, key: null, geo: null, paths: null, label: 0, fillKey: '', timer: null };
     this.panels.set(id, P);
     // hover (mouse, pen): the region under the pointer. Touch has no hover:
     // a tap moves the data cursor, whose region is outlined anyway.
@@ -244,18 +248,32 @@ export class SectionOutlines {
     const h = this.hover[tag];
     const label = h ? (h.P.geo ? this._labelAt(h.P, h.point[0], h.point[1]) : 0) : this._cursorLabel(tag);
     const ready = panels.every(P => P.geo && P.paths);
+    const filled = this.getFilled();
     let shown = false;
     for (const P of panels) {
       const d = ready && label ? P.paths.get(label) : null;
-      if (!d) { P.svg.style.display = 'none'; P.label = 0; continue; }
-      if (label !== P.label) {
+      // the filled regions (each section: those it cuts)
+      const fills = ready && filled ? [...filled].filter(([v]) => P.paths.has(v)) : [];
+      const fk = fills.map(([v, a]) => v + ':' + a + ':' + this.colorOf(v)).join(',') + '|' + P.key;
+      if (fk !== P.fillKey) {
+        P.fillKey = fk;
+        P.fill.replaceChildren(...fills.map(([v, a]) => {
+          const f = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          f.setAttribute('d', P.paths.get(v)); f.setAttribute('fill', this.colorOf(v) || '#fff');
+          f.setAttribute('fill-opacity', String(a)); f.setAttribute('stroke', 'none');
+          return f;
+        }));
+      }
+      if (!d && !fills.length) { P.svg.style.display = 'none'; P.label = 0; continue; }
+      if (!d) { P.under.setAttribute('d', ''); P.over.setAttribute('d', ''); P.label = 0; }
+      else if (label !== P.label) {
         P.under.setAttribute('d', d); P.over.setAttribute('d', d);
         P.over.setAttribute('stroke', this.colorOf(label) || '#fff');
         P.label = label;
       }
       this._place(P);
       P.svg.style.display = '';
-      if (h && P === h.P) shown = true;
+      if (d && h && P === h.P) shown = true;
     }
     // the name next to the mouse, while the hovered region is outlined
     if (shown) {
@@ -269,7 +287,7 @@ export class SectionOutlines {
 
   // The label volume in memory changed (another one, or its colors / names).
   refresh() {
-    for (const P of this.panels.values()) P.label = 0;
+    for (const P of this.panels.values()) { P.label = 0; P.fillKey = ''; }
     this._showSide('src'); this._showSide('tgt');
   }
 }

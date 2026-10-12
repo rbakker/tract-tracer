@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tractogram Observer</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -187,6 +191,8 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .focus-btn .fi-rays line{stroke:currentColor;stroke-width:1.2;stroke-linecap:round;}
 .focus-btn:hover{opacity:1;color:var(--bright);}
 .focus-btn.on{opacity:1;color:#ffd34d;}
+.focus-btn.grey,.focus-btn.on.grey{opacity:0.3;}   /* switched off: how it comes back */
+.focus-btn.grey:hover{opacity:0.6;}
 .focus-btn.on .fi-core{fill:currentColor;}
 .focus-btn.mixed{opacity:1;color:#ffd34d;}
 /* info icon (file header): a bold italic serif "i" */
@@ -213,7 +219,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 /* category headings (Anatomy / Parcellations / Streamline bundles) */
 .dt-cat{cursor:pointer;background:rgba(255,255,255,0.025);}
 .dt-cat .dt-label{color:var(--accent);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;}
-/* a labelled <select> in a settings area ("show as", "attach to") */
+/* a labelled <select autocomplete="off"> in a settings area ("show as", "attach to") */
 .dt-choice{display:flex;align-items:center;gap:6px;flex-basis:100%;min-width:0;}
 .dt-choice label{color:var(--dim);font-size:9px;letter-spacing:0.06em;white-space:nowrap;}
 .dt-choice select{min-width:0;max-width:100%;flex:1;}
@@ -264,7 +270,33 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .hover-tip .mt-id{color:var(--bright);font-size:11px;}
 .hover-tip.mt-stack{flex-direction:column;align-items:flex-start;gap:3px;padding-top:4px;padding-bottom:4px;}
 .hover-tip .mt-region{display:flex;align-items:center;gap:6px;}
-/* the 3D context label (showContextLabel): a small heading per thing over its one-line menu */
+/* the 3D menu (showCtxMenu): one summary row per kind, folding out in place */
+.hover-tip.ctx-menu{flex-direction:column;align-items:stretch;gap:1px;width:calc(290px * var(--z3d));max-width:calc(100vw - 12px);
+  overflow-y:auto;overflow-x:hidden;padding:4px 18px 5px 4px;cursor:default;}
+.hover-tip.ctx-menu.ctx-pinned{border-color:var(--accent);}
+.hover-tip .ctx-x{position:absolute;top:2px;right:3px;background:none;border:none;color:var(--dim);cursor:pointer;
+  font-size:13px;line-height:1;padding:0 2px;font-family:inherit;visibility:hidden;zoom:var(--z3d);}
+.hover-tip.ctx-pinned .ctx-x{visibility:visible;}
+.hover-tip .ctx-x:hover{color:var(--bright);}
+.hover-tip .ctx-caret{cursor:inherit;}
+.hover-tip .ctx-caret.ctx-leaf{font-size:9px;opacity:0.7;}
+.hover-tip .ctx-line.ctx-l0 ~ .ctx-line.ctx-l0{margin-top:5px;}   /* more room between the summaries */
+.hover-tip .ctx-moves{display:flex;gap:8px;flex-wrap:wrap;}
+.hover-tip .ctx-fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.hover-tip .ctx-tag{flex:none;width:76px;color:var(--dim);font-size:9px;letter-spacing:0.04em;}
+.hover-tip .ctx-fold{cursor:pointer;}
+.hover-tip .ctx-fold:hover .ctx-caret{color:var(--bright);}
+.hover-tip .ctx-line.ctx-l1{padding-left:12px;}
+.hover-tip .ctx-sub{padding-left:24px;}
+.hover-tip .ctx-sub.ctx-l1{padding-left:12px;}
+.hover-tip .ctx-sub.ctx-l2{padding-left:36px;}
+.hover-tip .ctx-text{color:var(--text);font-size:10px;white-space:nowrap;}
+.hover-tip .ctx-text b{color:var(--bright);font-weight:600;}
+.hover-tip .ctx-kind{color:var(--dim);font-size:9px;letter-spacing:0.06em;}
+.hover-tip .ctx-dim{color:var(--dim);}
+.hover-tip .ctx-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hover-tip .mt-card-in .mt-file{margin-top:0;}
+/* (older context-label styles, still used by the rows) */
 .hover-tip.ctx-label{position:fixed;z-index:5000;gap:1px;padding:4px 6px 5px 8px;}
 .hover-tip .ctx-head{font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);opacity:0.95;margin-top:7px;margin-bottom:1px;}
 .hover-tip .ctx-head:first-child{margin-top:0;}
@@ -530,6 +562,11 @@ input[type=file]{display:none;}
 .label-badge-name{color:var(--bright);font-size:10px;
   overflow:hidden;text-overflow:ellipsis;}
 .label-badge-name:empty{display:none;}
+.label-badge-reg{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;}
+.label-badge-check{pointer-events:auto;display:none;margin:0;}
+.label-badge-check.on{display:inline-block;}
+.label-badge-sun{pointer-events:auto;display:none;}
+.label-badge-sun.on{display:inline-flex;}
 .label-badge-copy{position:absolute;top:0;bottom:0;right:0;width:20px;
   display:flex;align-items:center;justify-content:center;
   pointer-events:auto;cursor:copy;color:var(--dim);font-size:11px;}
@@ -558,8 +595,8 @@ input[type=file]{display:none;}
 <body>
 <div id="tip"></div>
 <div id="gl-crash-banner"></div>
-<div class="label-badge" id="label-badge-src"><div class="label-badge-coord"></div><div class="label-badge-name"></div><span class="label-badge-copy" title="copy">⧉</span></div>
-<div class="label-badge" id="label-badge-tgt"><div class="label-badge-coord"></div><div class="label-badge-name"></div><span class="label-badge-copy" title="copy">⧉</span></div>
+<div class="label-badge" id="label-badge-src"><div class="label-badge-coord"></div><div class="label-badge-reg"><input type="checkbox" class="dt-check label-badge-check" autocomplete="off" title="this region in 3D (and filled in the sections)"><span class="label-badge-sun"></span><div class="label-badge-name"></div></div><span class="label-badge-copy" title="copy">⧉</span></div>
+<div class="label-badge" id="label-badge-tgt"><div class="label-badge-coord"></div><div class="label-badge-reg"><input type="checkbox" class="dt-check label-badge-check" autocomplete="off" title="this region in 3D (and filled in the sections)"><span class="label-badge-sun"></span><div class="label-badge-name"></div></div><span class="label-badge-copy" title="copy">⧉</span></div>
 
 <!-- LEFT: slice viewers A -->
 <div id="left">
@@ -689,7 +726,7 @@ input[type=file]{display:none;}
     </div>
     <div class="ctl-row probe-setting" data-tip="Probe radius in mm.\nStreamlines passing through the sphere (or 'ends-only') are selected.">
       <label>radius</label>
-      <input type="range" id="radius-slider" min="0.25" max="10" value="5" step="0.25">
+      <input autocomplete="off" type="range" id="radius-slider" min="0.25" max="10" value="5" step="0.25">
       <span class="ctl-val" id="radius-val">5.0 mm</span>
     </div>
     <div class="ctl-row probe-setting" data-tip="Which streamlines the probe hits. lines: any streamline passing through the probe sphere. ends: only streamlines with a start or end point inside the probe sphere.">
@@ -707,7 +744,7 @@ input[type=file]{display:none;}
 </div>
     <div class="ctl-row" data-tip="Opacity of the dimmed streamlines — those the highlight probe doesn't hit, and those outside the focused bundles — times their bundle's own opacity. Lower is dimmer.">
       <label>dimming</label>
-      <input type="range" id="context-slider" min="0" max="100" value="15" step="1">
+      <input autocomplete="off" type="range" id="context-slider" min="0" max="100" value="15" step="1">
       <span class="ctl-val" id="context-val">15%</span>
     </div>
 
@@ -715,7 +752,7 @@ input[type=file]{display:none;}
 
 <div class="ctl-row" data-tip="Streamline width in screen pixels. 0 switches lines off entirely (replaces the old None color option). In the 3D view this is the width at the NEAR end of the depth fade (the far end is fixed at 0.5px, always thinner). In the 2D slab panels width is a constant half this value (minimum 1px) — no depth fade there, since an orthographic slice has no meaningful camera depth.">
   <label>line·width</label>
-  <input type="range" id="line-width-slider" min="0" max="10" step="0.5" value="2">
+  <input autocomplete="off" type="range" id="line-width-slider" min="0" max="10" step="0.5" value="2">
   <span class="slider-val" id="line-width-val">2 px</span>
 </div>
 
@@ -735,18 +772,18 @@ input[type=file]{display:none;}
 </div>
 <div class="ctl-row" data-tip="Size of the end dots (ends and inner ends) in screen pixels. 0: no end dots.">
   <label>ends·size</label>
-  <input type="range" id="ends-size" min="0" max="16" step="0.5" value="6">
+  <input autocomplete="off" type="range" id="ends-size" min="0" max="16" step="0.5" value="6">
   <span class="slider-val" id="ends-size-val">6</span>
 </div>
 
 <div class="ctl-row" data-tip="Directional sheen strength (Kajiya-Kay tangent shading). A streamline lights up brightest where it runs ORTHOGONAL to the light direction, and goes dark where it points straight at (or away from) it — same as a real cylindrical strand: light traveling along a strand's own axis never faces any point on its surface head-on, since a cylinder's surface normals all point outward, perpendicular to that axis; light hitting the strand from the side illuminates the half facing it normally. 0 = flat color, no directional shading at all; 1 = full shading and sheen.">
   <label>reflectance</label>
-  <input type="range" id="reflectance-slider" min="0" max="1" step="0.05" value="0.5">
+  <input autocomplete="off" type="range" id="reflectance-slider" min="0" max="1" step="0.05" value="0.5">
   <span class="slider-val" id="reflectance-val">1.00</span>
 </div>
 <div class="ctl-row" data-tip="Streamlines shading each other, like light through hair: the more streamlines between a spot and the light, the darker it gets — shows where streamlines run and end behind others. 0 = off. Strongest with the light from the side (LIGHT: left or right).">
   <label>shadowing</label>
-  <input type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
+  <input autocomplete="off" type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
   <span class="slider-val" id="shadow-val">0%</span>
 </div>
 
@@ -775,12 +812,12 @@ input[type=file]{display:none;}
         <option value="below" selected>below</option>
         <option value="above">above</option>
       </select>
-      <input type="range" id="background-slider" min="0" max="100" value="10" step="1">
+      <input autocomplete="off" type="range" id="background-slider" min="0" max="100" value="10" step="1">
       <span class="ctl-val" id="background-val">0.10</span>
     </div>
     <div class="ctl-row" id="row-opacity" data-tip="0-100%, shown at right. Only affects RIM-LIT mode — how much of the glowing boundary builds up along each ray. Applies to scans, colour (DEC/FA) volumes, and labelled volumes alike.">
       <label>opacity</label>
-      <input type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
+      <input autocomplete="off" type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
       <span class="ctl-val" id="brain-alpha-val">50%</span>
     </div>
     <div class="ctl-row" id="row-cutout" style="display:none;" data-tip="First half of FOREGROUND's combined rule (see the row below for how the two combine into one) — defines what part of the SOLID/GLASS surface stays visible once you're behind an active clip plane with COVER, e.g. isolating grey matter and hiding white matter to reveal what's inside. Everything that fails the combined rule (both rows together) is hidden. ABOVE (default): value must be >= this threshold to count as foreground. BELOW: value must be <= threshold instead. All comparisons inclusive.">
@@ -789,7 +826,7 @@ input[type=file]{display:none;}
         <option value="above" selected>above</option>
         <option value="below">below</option>
       </select>
-      <input type="range" id="brain-thresh-slider" min="0" max="100" value="0" step="1">
+      <input autocomplete="off" type="range" id="brain-thresh-slider" min="0" max="100" value="0" step="1">
       <span class="ctl-val" id="brain-thresh-val">0.00</span>
     </div>
     <div class="ctl-row" id="row-cutout-below" style="display:none;" data-tip="Second half of FOREGROUND's rule, combined with row 1 above. AND BELOW (default): value must ALSO be <= this threshold to count as foreground — with both sliders at their defaults (above 0, and below 1), that's every possible value, so nothing is hidden by default. OR ABOVE: value counts as foreground if it matches row 1 OR is >= this threshold instead (a looser either/or rule — e.g. isolate a tissue band with row1=above/and-below, or exclude a band from the foreground with row1=below/or-above).">
@@ -798,17 +835,17 @@ input[type=file]{display:none;}
         <option value="and-below" selected>and below</option>
         <option value="or-above">or above</option>
       </select>
-      <input type="range" id="brain-cutout-below-slider" min="0" max="100" value="100" step="1">
+      <input autocomplete="off" type="range" id="brain-cutout-below-slider" min="0" max="100" value="100" step="1">
       <span class="ctl-val" id="brain-cutout-below-val">1.00</span>
     </div>
     <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
       <label>rim</label>
-      <input type="range" id="brain-rim-slider" min="0" max="100" value="33" step="1">
+      <input autocomplete="off" type="range" id="brain-rim-slider" min="0" max="100" value="33" step="1">
       <span class="ctl-val" id="brain-rim-val">1.00</span>
     </div>
     <div class="ctl-row" data-tip="Shading light direction. CENTER matches the old camera-aligned 'headlamp' light (flatter, but sometimes an easier fixed reference); LEFT/RIGHT nudges it off-axis, which reads as more three-dimensional on a static view.">
       <label>light</label>
-      <input type="range" id="light-slider" min="-100" max="100" value="0" step="1">
+      <input autocomplete="off" type="range" id="light-slider" min="-100" max="100" value="0" step="1">
       <span class="ctl-val" id="light-val">center</span>
     </div>
     <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead. FRAMES shows/hides all three plane rectangles without affecting clipping.">
@@ -846,27 +883,27 @@ input[type=file]{display:none;}
     <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.\nPitch = left-right axis · Yaw = up-down · Roll = front-back.\nUse Reset Planes to return to standard orientation.">SLICE PLANES</div>
     <div class="ctl-row" data-tip="Show streamline segments within a slab of this thickness (× voxel size) around each slice plane.">
       <label>thickness</label>
-      <input type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
+      <input autocomplete="off" type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
       <span class="ctl-val" id="slab-val">3.0×</span>
     </div>
     <div class="ctl-row" data-tip="Logarithmic gain, neutral (1.0x) in the middle.\nFor a scan: a gamma curve — raise to brighten, lower to darken — that always keeps true black and true white fixed, so background stays dark at any setting.\nFor a colour (DEC/FA) volume: brightens colours, which are dim by nature.\nApplies to both the 2D slices and the 3D glass brain.">
       <label>intensity</label>
-      <input type="range" id="contrast-slider" min="0" max="100" value="50" step="1">
+      <input autocomplete="off" type="range" id="contrast-slider" min="0" max="100" value="50" step="1">
       <span class="ctl-val" id="contrast-val">1.00×</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the left-right axis.">
       <label>pitch</label>
-      <input type="range" id="pitch-slider" min="-90" max="90" value="0" step="1">
+      <input autocomplete="off" type="range" id="pitch-slider" min="-90" max="90" value="0" step="1">
       <span class="ctl-val" id="pitch-val">0°</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the up-down axis.">
       <label>yaw</label>
-      <input type="range" id="yaw-slider" min="-90" max="90" value="0" step="1">
+      <input autocomplete="off" type="range" id="yaw-slider" min="-90" max="90" value="0" step="1">
       <span class="ctl-val" id="yaw-val">0°</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the front-back axis.">
       <label>roll</label>
-      <input type="range" id="roll-slider" min="-90" max="90" value="0" step="1">
+      <input autocomplete="off" type="range" id="roll-slider" min="-90" max="90" value="0" step="1">
       <span class="ctl-val" id="roll-val">0°</span>
     </div>
     <button id="rot-reset">reset planes</button>
@@ -894,7 +931,7 @@ input[type=file]{display:none;}
     </div>
     <div class="ctl-row" data-tip="The centre the brain turns around: world coordinates in mm (type and press Enter).">
       <label>center</label>
-      <input class="view-num" id="view-cx" type="text" inputmode="decimal"><input class="view-num" id="view-cy" type="text" inputmode="decimal"><input class="view-num" id="view-cz" type="text" inputmode="decimal">
+      <input autocomplete="off" class="view-num" id="view-cx" type="text" inputmode="decimal"><input autocomplete="off" class="view-num" id="view-cy" type="text" inputmode="decimal"><input autocomplete="off" class="view-num" id="view-cz" type="text" inputmode="decimal">
     </div>
     <div class="ctl-row"><label></label>
       <button class="accent-link dt-set-btn" id="view-center-cursor" data-tip="Turn around the 2D cursor (the cursor sections' point).">cursor</button>
@@ -902,11 +939,11 @@ input[type=file]{display:none;}
     </div>
     <div class="ctl-row" data-tip="How large the brain is shown: the radius in mm of the sphere that fills the window (smaller = closer).">
       <label>radius</label>
-      <input class="view-num" id="view-r" type="text" inputmode="decimal"><span class="ctl-val tools-status">mm</span>
+      <input autocomplete="off" class="view-num" id="view-r" type="text" inputmode="decimal"><span class="ctl-val tools-status">mm</span>
     </div>
     <div class="ctl-row" data-tip="The view as text: copy it to come back to it, send it to a colleague, or put it in a zip's index.json as &quot;view&quot;. Paste a view here and press apply (or Enter) to go there.">
       <label>view</label>
-      <input class="view-json" id="view-json" type="text" spellcheck="false">
+      <input autocomplete="off" class="view-json" id="view-json" type="text" spellcheck="false">
     </div>
     <div class="ctl-row"><label></label>
       <button class="accent-link dt-set-btn" id="view-copy">copy</button>
@@ -918,7 +955,7 @@ input[type=file]{display:none;}
     <div class="cfg-section" data-tip="Save one view as a PNG image: only the picture itself, without labels, buttons or panels on top of it.">SCREENSHOT</div>
     <div class="ctl-row" data-tip="Which view to save.">
       <label>view</label>
-      <select class="inline-select" id="shot-view"></select>
+      <select autocomplete="off" class="inline-select" id="shot-view"></select>
     </div>
     <div class="ctl-row" data-tip="Image size relative to the view on screen. Larger sizes are rendered again at that resolution (sharper than enlarging), with lines and dots scaled along.">
       <label>size</label>
@@ -930,18 +967,18 @@ input[type=file]{display:none;}
     </div>
     <div class="ctl-row shot-2d-row" data-tip="Sections: draw the orientation arrows (L/R, A/P, S/I) into the image.">
       <label>arrows</label>
-      <input type="checkbox" class="dt-check" id="shot-arrows" checked>
+      <input autocomplete="off" type="checkbox" class="dt-check" id="shot-arrows" checked>
     </div>
     <div class="ctl-row shot-2d-row" data-tip="Sections: include the cursor lines (and the probe ring). Off: only the image itself.">
       <label>cursor</label>
-      <input type="checkbox" class="dt-check" id="shot-cursor">
+      <input autocomplete="off" type="checkbox" class="dt-check" id="shot-cursor">
     </div>
     <div class="ctl-row"><label></label><button class="accent-link dt-set-btn" id="shot-save">save PNG</button><span class="ctl-val tools-status" id="shot-status"></span></div>
 
     <div class="cfg-section" data-tip="A movie of the 3D view turning once around (360°) the brain's inferior–superior axis (through the rotation centre), starting from the current view: the brain spins about its own vertical axis, however the view is tilted. Rendered frame by frame, so it is smooth however long it takes.">ROTATION MOVIE</div>
     <div class="ctl-row" data-tip="Length of one full turn, in seconds. The movie ends where it started, so a player set to loop plays it seamlessly.">
       <label>length</label>
-      <input type="range" id="mov-len" min="2" max="30" step="1" value="6">
+      <input autocomplete="off" type="range" id="mov-len" min="2" max="30" step="1" value="6">
       <span class="ctl-val" id="mov-len-val">6 s</span>
     </div>
     <div class="ctl-row" data-tip="Frames per second.">
@@ -1087,7 +1124,7 @@ import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTc
 import { MultiFileOpener } from './js/file-opener.js';
 import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
 import { LabelItem, LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
-import { FloatingPanel, PanelDockGroup, CardPanel } from './js/floating-panel.js';
+import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
@@ -2205,61 +2242,40 @@ function forEachEndOnScreen(fn) {
           (1 - (e[1] * px + e[5] * py + e[9] * pz + e[13]) / w) / 2 * H, w);
   }
 }
-// The bundle whose end is nearest the mouse (within 10 px; the nearer one
-// to the camera on a tie), or null.
-function pickBundleEnd(clientX, clientY) {
+// The bundles ending near the line of sight — a cylinder around it: every
+// end within SEARCH_PX (on screen) of the mouse, from the nearest such end
+// (to the camera) to twice the search radius (in mm, at that depth)
+// behind it — none behind wMax (a solid surface, see collectHits). Returns { gi (the nearest),
+// sx, sy (the mouse), ex, ey (its end on screen), near: [gi …] nearest
+// first } or null.
+const SEARCH_PX = 5;
+function pickBundleEnd(clientX, clientY, wMax = Infinity) {
   if (!_endPick) return null;
   const rect = threeCanvas.getBoundingClientRect();
-  const x = clientX - rect.left, y = clientY - rect.top, R2 = pickPx(10) ** 2;
+  const x = clientX - rect.left, y = clientY - rect.top, R = pickPx(SEARCH_PX), R2 = R * R;
   const cand = [];
   forEachEndOnScreen((j, sx, sy, w) => {
     const d = (sx - x) * (sx - x) + (sy - y) * (sy - y);
-    if (d <= R2) cand.push([d, w, j, sx, sy]);
+    if (d <= R2 && w <= wMax) cand.push([w, j, sx, sy]);  // (not behind a solid surface)
   });
-  // SOLID: only ends actually in view (tested nearest first, a few at most)
-  cand.sort((a, b) => a[0] - b[0]);
-  let best = null, bestD = Infinity, bestW = Infinity, tested = 0;
-  for (const [d, w, j, sx, sy] of cand) {
-    if (renderMode === 'solid') {
-      if (best && d > bestD + 4) break;          // can't win any more
-      if (++tested > 24) break;                  // bound the ray walks
-      if (hiddenBySolid(rect.left + sx, rect.top + sy, w)) continue;
-    }
-    if (d < bestD - 4 || (d <= bestD + 4 && w < bestW)) { best = { gi: _endPick.gid[j >> 1], sx: x, sy: y, ex: sx, ey: sy }; bestD = d; bestW = w; }
+  if (!cand.length) return null;
+  cand.sort((a, b) => a[0] - b[0]);                 // nearest to the camera first
+  const first = cand.findIndex(c => groups[_endPick.gid[c[1] >> 1]]);
+  if (first < 0) return null;
+  // the cylinder's depth: twice the search radius, in mm at that depth
+  // (perspective: 1 px = 2·w / (P11·H) mm)
+  const w0 = cand[first][0], depth = 2 * R * 2 * w0 / (camera.projectionMatrix.elements[5] * rect.height);
+  const near = [], seen = new Set();
+  for (let k = first; k < cand.length && cand[k][0] - w0 <= depth; k++) {
+    const gi = _endPick.gid[cand[k][1] >> 1];
+    if (seen.has(gi) || !groups[gi]) continue;
+    seen.add(gi); near.push(gi);
   }
-  if (!best || !groups[best.gi]) return null;
-  best.near = bundlesNearEnd(best, rect);
-  return best;
-}
-// Every bundle with an end within NEAR_PX (screen) of the picked end, the
-// picked bundle first, then by distance — for the bundle card's list.
-// SOLID: only ends in view (a few ray walks per bundle at most).
-const NEAR_PX = 30;
-function bundlesNearEnd(best, rect) {
-  const R2 = pickPx(NEAR_PX) ** 2, byGi = new Map();
-  forEachEndOnScreen((j, sx, sy, w) => {
-    const d = (sx - best.ex) ** 2 + (sy - best.ey) ** 2;
-    if (d > R2) return;
-    const gi = _endPick.gid[j >> 1];
-    if (gi === best.gi || !groups[gi]) return;
-    let a = byGi.get(gi); if (!a) byGi.set(gi, a = []);
-    a.push([d, sx, sy, w]);
-  });
-  const found = [];
-  for (const [gi, a] of byGi) {
-    a.sort((p, q) => p[0] - q[0]);
-    let dmin = null;
-    for (const [d, sx, sy, w] of a.slice(0, renderMode === 'solid' ? 4 : 1)) {
-      if (renderMode === 'solid' && hiddenBySolid(rect.left + sx, rect.top + sy, w)) continue;
-      dmin = d; break;
-    }
-    if (dmin !== null) found.push([dmin, gi]);
-  }
-  found.sort((p, q) => p[0] - q[0]);
-  return [best.gi, ...found.map(f => f[1])];
+  const [, j0, ex, ey] = cand[first];
+  return { gi: _endPick.gid[j0 >> 1], sx: x, sy: y, ex, ey, near };
 }
 // Lights up bundle gi's ends within 50 px of (sx, sy): the same dots in
-// their own colors, slightly larger, on top. null: off.
+// their own colors, slightly larger (depth-tested, so hidden where something solid is in front). null: off.
 let _hoverEnds = null, _roundDot = null;
 function roundDotTexture() {
   if (_roundDot) return _roundDot;
@@ -2267,20 +2283,23 @@ function roundDotTexture() {
   const x = c.getContext('2d'); x.fillStyle = '#fff'; x.beginPath(); x.arc(16, 16, 15, 0, 2 * Math.PI); x.fill();
   return (_roundDot = new THREE.CanvasTexture(c));
 }
+// gi: one bundle index or a list of them.
 function showHoverEnds(gi, sx, sy) {
   if (_hoverEnds) { scene.remove(_hoverEnds); _hoverEnds.geometry.dispose(); _hoverEnds.material.dispose(); _hoverEnds = null; }
-  if (gi != null && _endPick) {
+  const gis = gi == null ? [] : (Array.isArray(gi) ? gi : [gi]).filter(g => groups[g]);
+  if (gis.length && _endPick) {
     const pts = [], cols = [], P = _endPick.pos;
     // The ends' own colors, as drawn (SETTINGS › ends·color, and inner·ends
     // for ends inside the probe sphere) — 'bundle': the bundle color as the
     // end dots show it (x1.3, see makeEndpointDots); hidden ends: that too.
-    const bc = groups[gi].color || [1, 1, 1];
-    const colorOf = style => style.mode === 'flat' ? hexToRgbRaw(style.rgb) : bc.map(v => Math.min(1, v * 1.3));
-    const cOuter = colorOf(tgtStyle), cInner = colorOf(srcStyle);
+    const colorOf = (style, bc) => style.mode === 'flat' ? hexToRgbRaw(style.rgb) : bc.map(v => Math.min(1, v * 1.3));
+    const cols2 = new Map(gis.map(g => { const bc = groups[g].color || [1, 1, 1]; return [g, [colorOf(tgtStyle, bc), colorOf(srcStyle, bc)]]; }));
     const pr = _lastDotsProbe, r2 = pr ? pr.radius * pr.radius : -1;
     const rect = threeCanvas.getBoundingClientRect();
     forEachEndOnScreen((j, x, y, w) => {
-      if (_endPick.gid[j >> 1] !== gi || (x - sx) * (x - sx) + (y - sy) * (y - sy) > 50 * 50) return;
+      const cc = cols2.get(_endPick.gid[j >> 1]);
+      if (!cc || (x - sx) * (x - sx) + (y - sy) * (y - sy) > 50 * 50) return;
+      const [cOuter, cInner] = cc;
       if (hiddenBySolid(rect.left + x, rect.top + y, w)) return; // SOLID: don't reveal ends inside the brain
       const px = P[3*j], py = P[3*j+1], pz = P[3*j+2];
       pts.push(px, py, pz);
@@ -2291,7 +2310,8 @@ function showHoverEnds(gi, sx, sy) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-      _hoverEnds = new THREE.Points(geo, new THREE.PointsMaterial({ vertexColors: true, size: endsPx + 2, sizeAttenuation: false, depthTest: false, transparent: true, map: roundDotTexture() }));
+      // depth-tested and written like any solid thing: they stay right when the view turns
+      _hoverEnds = new THREE.Points(geo, new THREE.PointsMaterial({ vertexColors: true, size: endsPx + 2, sizeAttenuation: false, depthTest: true, depthWrite: true, alphaTest: 0.5, map: roundDotTexture() }));
       _hoverEnds.renderOrder = 10;
       scene.add(_hoverEnds);
     }
@@ -2304,18 +2324,21 @@ bundleTipEl.className = 'hover-tip';
 // On <body>, not in #middle: #middle is its own stacking layer, under the
 // floating cards — the label must stay in front of a pinned card.
 document.body.appendChild(bundleTipEl);
-let bundleHover = null;   // { gi, sx, sy } — the label
-let bundleCard = null;    // { gi } — the open card (bundleCardPanel)
+// The 3D menu (one at a time) — see "The 3D menu" below.
+let ctxMenu = null;       // { hits, key, sx, sy, pinned, open: Set, x, y }
 let _bundleTipTimer = null, _overBundleTip = false;
+// Hides the menu — a pinned one only with force (Esc, ×, a click elsewhere).
 function hideBundleTooltip(force = false) { // (name kept: the marker code calls it)
+  if (!ctxMenu) return;
   if (force) _overBundleTip = false;
-  if (!bundleHover || _overBundleTip) return;
-  if (colorPickerIn(bundleTipEl)) return; // its color picker is open
+  if (!force && (ctxMenu.pinned || _overBundleTip)) return;
+  if (!force && colorPickerIn(bundleTipEl)) return; // its color picker is open
   const ae = document.activeElement;
-  if (ae && ae.tagName === 'SELECT' && bundleTipEl.contains(ae)) return; // its pulldown is in use
-  bundleHover = null;
+  if (!force && ae && ae.tagName === 'SELECT' && bundleTipEl.contains(ae)) return; // its pulldown is in use
+  ctxMenu = null;
   bundleTipEl.style.display = 'none';
   showHoverEnds(null);
+  if (markerCard) closeMarkerCard();
 }
 // The spotlight (a desk lamp): "focus only this bundle". Off (grey): click
 // to focus only this bundle; on (lit, with a beam) while this bundle is
@@ -2335,186 +2358,85 @@ function lampIconSVG(on) {
 }
 // Is a color input inside el in use (its picker possibly open)?
 const colorPickerIn = el => { const a = document.activeElement; return !!a && a.type === 'color' && el.contains(a); };
-// The bundle's title: color swatch (a color input), focus icon, name —
-// in its 3D label and its card.
-function fillBundleTitle(el, g) {
-  el.innerHTML = '';
-  const sw = document.createElement('input');
-  sw.type = 'color';
-  sw.className = 'dt-swatch';
-  sw.value = rgbRawToHex(g.color || [1, 1, 1]);
-  sw.title = 'change bundle color';
-  sw.addEventListener('click', e => e.stopPropagation());
-  sw.addEventListener('input', () => setBundleColor(g, sw.value));
-  const solo = isSoloFocus(g);
-  const sb = document.createElement('button');
-  sb.className = 'solo-btn';
-  sb.className = 'solo-btn' + (solo ? ' on' : '');
-  sb.innerHTML = lampIconSVG(solo);
-  sb.title = solo ? 'focus all bundles again' : 'focus only this bundle (dim all others)';
-  sb.addEventListener('click', e => { e.stopPropagation(); soloFocus(g); });
-  const fb = makeFocusButton(!!g.focus, () => toggleFocus(g),
-    g.focus ? 'focused (drawn solid) — click: dim this bundle' : 'dimmed — click: focus this bundle (draw it solid)');
-  const name = document.createElement('span');
-  name.className = 'mt-id';
-  name.textContent = g.name;
-  const ib = makeInfoButton(() => showBundleHeader(g), 'header of ' + g.source.name);
-  el.append(sb, fb, ib, sw, name); // the swatch next to the name it colors
-}
-// The card: a CardPanel (floating-panel.js) — movable like the other
-// panels; once moved, later cards open where it was left.
-const bundleCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => {
-  bundleCard = null;
-  showHoverEnds(null);
-} });
-bundleCardPanel.el.addEventListener('pointerdown', () => { _cardBusy = true; }, true);
-// A card control was used: bring the DATA panel up to date.
-window.addEventListener('pointerup', () => { if (_cardBusy) { _cardBusy = false; dataStore.refresh(); } });
-bundleCardPanel.el.addEventListener('focusout', () => { if (bundleCard) dataStore.refresh(); });
-function openBundleCard(hit) {
-  const at = cardAnchor(hit.sx, hit.sy);
-  if (typeof closeMarkerCard === 'function') closeMarkerCard();
-  if (typeof closeVolumeCard === 'function') closeVolumeCard();
-  _overBundleTip = false;
-  bundleHover = null;
-  bundleTipEl.style.display = 'none';
-  bundleCard = { gi: hit.gi, sx: hit.sx, sy: hit.sy, near: (hit.near || [hit.gi]).slice() }; // the list stays while the card is open
-  renderBundleCard();
-  bundleCardPanel.openAt(...at);
-  showHoverEnds(hit.gi, hit.sx, hit.sy);
-}
-function closeBundleCard() {
-  if (bundleCard) bundleCardPanel.close();
-}
-let _cardBusy = false;    // a control in the card is being used: don't rebuild it
-// The card: the bundle's title and settings, then — when more bundles end
-// near the picked spot — every one of them (as the volume card lists the
-// regions): spotlight, on/off, color, name; a click on a name shows that
-// bundle's settings. The list is the one found when the card opened, so a
-// bundle switched off here stays listed (and can be switched on again).
-function renderBundleCard() {
-  const g = bundleCard && groups[bundleCard.gi];
-  const near = bundleCard ? bundleCard.near.filter(gi => groups[gi]) : [];
-  if (!g || (!hasBundleSettings(g) && near.length < 2)) { closeBundleCard(); return; }
-  // The title's color input stays while its picker is open.
-  if (!colorPickerIn(bundleCardPanel.titleEl)) fillBundleTitle(bundleCardPanel.titleEl, g);
-  const body = bundleCardPanel.body;
-  if (near.length > 1 && colorPickerIn(body)) return; // a row's color picker is open
-  body.innerHTML = '';
-  const settings = document.createElement('div');
-  settings.className = 'dt-settings';
-  if (hasBundleSettings(g) && g.visible) buildBundleSettings(g, settings);
-  if (near.length > 1) {
-    const head = document.createElement('div');
-    head.className = 'dt-toolbar-lbl ctx-sub';
-    head.textContent = near.length + ' bundles here, nearest first';
-    settings.appendChild(head);
-    const list = document.createElement('div');
-    list.className = 'dt-labels';
-    for (const gi of near) {
-      const row = document.createElement('div');
-      row.className = 'dt-row ctx-region';
-      row.append(...bundleRowControls(gi));
-      list.appendChild(row);
-    }
-    settings.appendChild(list);
-  }
-  body.append(settings);
-}
-// One bundle's row in the card: spotlight, checkbox, color, name.
-function bundleRowControls(gi) {
-  const g = groups[gi], out = [];
-  const solo = isSoloFocus(g);
-  const lb = document.createElement('button');
-  lb.className = 'solo-btn' + (solo ? ' on' : '');
-  lb.innerHTML = lampIconSVG(solo);
-  lb.title = solo ? 'focus all bundles again' : 'focus only this bundle (dim all others)';
-  lb.addEventListener('click', e => { e.stopPropagation(); soloFocus(g); });
-  const cb = document.createElement('input');
-  cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = !!g.visible;
-  cb.title = cb.checked ? 'shown — click: switch off' : 'switched off — click: show';
-  cb.addEventListener('click', e => e.stopPropagation());
-  cb.addEventListener('change', () => { if (g.item) g.item.visible = cb.checked; dataStore.refresh(); renderBundleCard(); });
-  const sw = document.createElement('input');
-  sw.type = 'color'; sw.className = 'dt-swatch';
-  sw.value = rgbRawToHex(g.color || [1, 1, 1]);
-  sw.title = 'change bundle color';
-  sw.addEventListener('click', e => e.stopPropagation());
-  sw.addEventListener('input', () => setBundleColor(g, sw.value));
-  const nm = document.createElement('span');
-  nm.className = 'mt-id' + (g.visible ? '' : ' ctx-off') + (gi === bundleCard.gi ? ' ctx-cur' : '');
-  nm.textContent = g.name;
-  nm.style.cursor = 'pointer';
-  nm.title = 'show this bundle\'s settings';
-  nm.addEventListener('click', e => { e.stopPropagation(); bundleCard.gi = gi; renderBundleCard(); showHoverEnds(gi, bundleCard.sx, bundleCard.sy); });
-  out.push(lb, cb, sw, nm);
-  return out;
-}
-// Something about the bundles changed (here or in the DATA panel): redraw
-// the open card — unless one of its own controls is in use.
+// Something about the bundles changed (here or in the DATA panel): the
+// open menu shows it — unless one of its own controls is in use.
 function bundleChanged() {
-  if (bundleCard && !_cardBusy) renderBundleCard();
-  if (bundleHover && bundleHover.ctx && bundleHover.hits.bundle && !colorPickerIn(bundleTipEl))
-    showContextLabel(bundleHover.hits);
+  if (ctxMenu && !_cardBusy && !colorPickerIn(bundleTipEl)) renderCtxMenu();
 }
-bundleTipEl.addEventListener('pointerdown', ev => ev.stopPropagation());
+let _cardBusy = false;    // a control in the menu is being used: don't rebuild it
+// A menu control was used: bring the DATA panel and the menu up to date.
+// (After the click that follows: a rebuild before it would swallow it.)
+window.addEventListener('pointerup', () => { if (_cardBusy) setTimeout(() => { _cardBusy = false; dataStore.refresh(); if (ctxMenu && !colorPickerIn(bundleTipEl)) renderCtxMenu(); }, 0); });
 bundleTipEl.addEventListener('wheel', ev => ev.stopPropagation());
-// (A finger lifting off the label also "leaves" it: on touch the label
-// stays until a tap elsewhere — see handleTap.)
 bundleTipEl.addEventListener('pointerenter', e => { if (e.pointerType === 'touch') return; _overBundleTip = true; clearTimeout(_bundleTipTimer); });
 bundleTipEl.addEventListener('pointerleave', e => { if (e.pointerType === 'touch') return; _overBundleTip = false; clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500); });
 
 let _hoverDebounceTimer = null, _lastPointerEvent = null;
 function doBundleHoverHitTest() {
-  if (!_lastPointerEvent || _overBundleTip) return;
+  if (!_lastPointerEvent || _overBundleTip || (ctxMenu && ctxMenu.pinned)) return;
   const h = collectHits(_lastPointerEvent.clientX, _lastPointerEvent.clientY);
   if (hitsEmpty(h)) {
-    if (_hoverEnds) showHoverEnds(null);
     clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
     return;
   }
-  clearTimeout(_bundleTipTimer); // still on something: keep (or update) the label
-  // lit-up ends follow the mouse: only where it rests near a bundle's ends
-  if (bundleHover && bundleHover.key === hitsKey(h)) { if (h.bundle) showHoverEnds(h.bundle.gi, h.bundle.sx, h.bundle.sy); return; }
-  // only the bundle whose card is open: no label for it
-  if (bundleCard && h.bundle && h.bundle.gi === bundleCard.gi && !h.marker && !h.brain && !h.frames) {
-    showHoverEnds(h.bundle.gi, h.bundle.sx, h.bundle.sy); return;
-  }
-  showContextLabel(h);
+  clearTimeout(_bundleTipTimer); // still on something: keep (or update) the menu
+  if (ctxMenu && ctxMenu.key === hitsKey(h)) return;
+  showCtxMenu(h);
 }
 
-// ── The 3D context label ─────────────────────────────────────
-// Everything under the mouse in one label: a small heading per thing
-// (volume, marker, bundle, frame) over its one-line menu. Order: in SOLID
-// mode the volume first (it is in front), else marker, bundle, volume;
-// frames last. Using a line's control does its action AND pins that
-// thing's card (movable; bundle, marker or volume — the volume card lists
-// every region under the cursor and the anatomy switch). Frames: just the
-// checkbox, as before.
+// ── What is under the mouse in 3D (for the 3D menu, below) ───
+// Markers, bundle ends, the anatomy, the regions along the line of sight,
+// and slice frame edges.
+// What is under the mouse. Nothing hidden counts: the first solid thing
+// on the line of sight — the anatomy in SOLID mode, a solid region mesh,
+// a marker — is where the search stops for every kind (a thing must be in
+// front of a solid surface; markers at the same spot all count). That
+// first solid point is also the menu's Coordinate.
+const _pickVP = new THREE.Matrix4(), _coordRay = new THREE.Raycaster(), _coordNdc = new THREE.Vector2();
+// camera depth (clip-space w) of a world point, as the picking functions measure it
+function camDepth(p) { const e = _pickVP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements; return e[3] * p[0] + e[7] * p[1] + e[11] * p[2] + e[15]; }
 function collectHits(clientX, clientY) {
   const rect = threeCanvas.getBoundingClientRect();
-  return {
+  const brain = pickBrain(clientX, clientY);
+  const solids = [];   // [w cut, ras, what, w of the surface]
+  if (brain && renderMode === 'solid' && brain.visible !== false) solids.push([brain.w - brain.margin, brain.ras, 'volume', brain.w]);
+  if (regionMeshes && regionMeshes.size) {
+    _coordNdc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    _coordRay.setFromCamera(_coordNdc, camera);
+    const hit = regionMeshes.pickSolid(_coordRay);
+    if (hit) { const w = camDepth(hit.point); solids.push([w, hit.point, 'region', w]); }
+  }
+  let wCut = Math.min(Infinity, ...solids.map(x => x[0]));
+  // regions: the one(s) forming the surface count too — up to 1.5 mm behind it
+  const wRegions = Math.min(Infinity, ...solids.map(x => x[3])) + 1.5;
+  const marker = pickMarker(clientX, clientY, wCut);
+  if (marker) {
+    const P = marker.rec.set.markers.pos, i = marker.index, pos = [P[3 * i], P[3 * i + 1], P[3 * i + 2]], w = camDepth(pos);
+    solids.push([w, pos, 'marker']);
+    wCut = Math.min(wCut, w + 0.01);
+  }
+  solids.sort((x, y) => x[0] - y[0]);
+  const h = {
     sx: clientX - rect.left, sy: clientY - rect.top,
-    marker: pickMarker(clientX, clientY),
-    bundle: pickBundleEnd(clientX, clientY),
-    brain: pickBrain(clientX, clientY),
-    region: pickRegions(clientX, clientY),
-    frames: !!pickFrameEdge(clientX, clientY),
+    marker, brain,
+    bundle: pickBundleEnd(clientX, clientY, wCut),
+    region: pickRegions(clientX, clientY, Math.min(wRegions, wCut === Infinity ? Infinity : wCut + 1.5)),
   };
+  h.coord = solids.length ? { ras: solids[0][1].slice(), what: solids[0][2] } : null;
+  return h;
 }
-const hitsEmpty = h => !h.marker && !h.bundle && !h.brain && !h.region && !h.frames;
-const hitsKey = h => [h.marker ? 'm' + h.marker.rec.file.name + ':' + h.marker.index : '',
-  h.bundle ? 'b' + h.bundle.gi : '',
+const hitsEmpty = h => !h.marker && !h.bundle && !h.brain && !h.region;
+const hitsKey = h => [h.marker ? 'm' + h.marker.rec.file.name + ':' + h.marker.index + '+' + (h.marker.all ? h.marker.all.length : 1) : '',
+  h.bundle ? 'b' + (h.bundle.near || [h.bundle.gi]).join(',') : '',
   h.brain ? 'v' + (activeVolume ? activeVolume.file.name : '') : '',
   h.region ? 'r' + h.region.labels[0] : '',
-  h.frames ? 'f' : ''].join('|');
-const ctxCount = h => (h.marker ? 1 : 0) + (h.bundle ? 1 : 0) + (h.brain ? 1 : 0) + (h.region ? 1 : 0) + (h.frames ? 1 : 0);
+  ].join('|');
 // The regions of the label volume in memory along the mouse ray, front to
 // back (at most 16), clip planes ignored — the meshes aren't clipped, and
-// deep regions stay reachable. { labels, ras: the first one's entry point }
+// deep regions stay reachable — up to the first solid surface (wMax). { labels, ras: the first one's entry point }
 // or null. Steps of half a voxel through the whole volume box.
 const _rgNear = new THREE.Vector3(), _rgFar = new THREE.Vector3();
-function pickRegions(clientX, clientY) {
+function pickRegions(clientX, clientY, wMax = Infinity) {
   const ref = endLabelSrc;
   if (!ref) return null;
   const rect = threeCanvas.getBoundingClientRect();
@@ -2533,6 +2455,9 @@ function pickRegions(clientX, clientY) {
   }
   if (t1 <= t0) return null;
   const step = 0.5 / Math.hypot(...d), raw = ref.raw, labels = [];
+  // camera depth along the ray (linear in t): stop behind a solid surface
+  const wN = camDepth(_rgNear.toArray()), wF = camDepth(_rgFar.toArray());
+  if (wMax < Infinity && wF > wN) t1 = Math.min(t1, (wMax - wN) / (wF - wN));
   let tFirst = null;
   for (let t = t0 + step / 2; t <= t1 && labels.length < 16; t += step) {
     const x = Math.round(o[0] + t * d[0]), y = Math.round(o[1] + t * d[1]), z = Math.round(o[2] + t * d[2]);
@@ -2544,160 +2469,283 @@ function pickRegions(clientX, clientY) {
   const p = _rgNear.clone().lerp(_rgFar, tFirst);
   return { labels, ras: p.toArray() };
 }
-// A control in a line: its own action first, then the card (deferred, so
-// the action's click handler — which stops the event — runs first).
-// Where a card opens: on the side of the point where the context label
-// is (placeTip may have put it left of / above the mouse), at its top.
-// Returns openAt arguments [x, y, opts].
-function cardAnchor(sx, sy) {
-  const rect = threeCanvas.getBoundingClientRect();
-  const x = rect.left + sx, y = rect.top + sy;
-  if (bundleTipEl.style.display !== 'none') {
-    const r = bundleTipEl.getBoundingClientRect();
-    if (r.width) return [x, y, { left: r.right <= x, top: r.top }];
-  }
-  return [x, y, {}];
-}
-function pinOnUse(line, open, skip = () => false) {
-  line.addEventListener('click', e => { if (!skip(e)) setTimeout(open, 0); }, true);
-}
-function showContextLabel(h) {
+// ── The 3D menu ──────────────────────────────────────────────
+// At most one menu in the 3D view: what is under the mouse, one summary
+// row per kind —
+//   ▸ Streamlines:  3 bundles nearby      (all their ends there light up)
+//     Volume:       ◩ T1w.nii.gz          (▸ only with several volumes)
+//   ▸ Parcellation: 5 regions in line of sight
+//   ▸ Markers:      1 nearby
+//     Frames:       ☐ visible
+// — always in this order, a kind left out when there's none of it here
+// — each ▸ folding out its items in place (and an item's ▸ its settings),
+// as in the DATA panel: nothing moves when something opens.
+// Following: shown when the mouse rests on something, replaced when it
+// rests on something else, hidden when it leaves (not while on the menu).
+// Pinned: by a click on the menu, or a click / tap on something in 3D —
+// then hovering leaves it alone and its list stays as found; it closes
+// with ×, Esc, or a click / tap elsewhere in 3D. It can be dragged (by any
+// spot that isn't a control); beyond the 3D view's bottom it scrolls.
+// What the user folded out stays folded out in the next menu opened by a
+// click (one is usually busy with streamlines, or with regions).
+const ctxOpenMemory = new Set();
+function showCtxMenu(h, { pinned = false } = {}) {
   clearTimeout(_bundleTipTimer);
-  bundleHover = { ctx: true, sx: h.sx, sy: h.sy, hits: h, key: hitsKey(h) };
+  if (markerCard) closeMarkerCard();
+  ctxMenu = { hits: h, key: hitsKey(h), sx: h.sx, sy: h.sy, pinned, open: new Set(pinned ? ctxOpenMemory : []) };
   const el = bundleTipEl;
-  el.className = 'hover-tip mt-small mt-stack ctx-label';
-  el.innerHTML = '';
-  const order = renderMode === 'solid' ? ['volume', 'region', 'marker', 'bundle', 'frame'] : ['marker', 'bundle', 'volume', 'region', 'frame'];
-  for (const kind of order) {
-    const line = ctxLine(kind, h);
-    if (!line) continue;
-    const head = document.createElement('div');
-    head.className = 'ctx-head';
-    head.textContent = kind === 'bundle' ? 'streamline bundle'
-      : kind === 'volume' ? 'anatomical volume' : kind === 'region' ? 'label volume' : kind;
-    el.append(head, line);
-  }
+  el.className = 'hover-tip ctx-label ctx-menu' + (pinned ? ' ctx-pinned' : '');
+  el.style.maxHeight = '';
   el.style.display = 'flex';
-  placeTip(el, h.sx, h.sy);
-  if (h.bundle) showHoverEnds(h.bundle.gi, h.bundle.sx, h.bundle.sy); else if (_hoverEnds) showHoverEnds(null);
+  renderCtxMenu();
+  placeTip(el, h.sx, h.sy);          // placed once; growing never moves it
+  const r = el.getBoundingClientRect();
+  ctxMenu.x = r.left; ctxMenu.y = r.top;
+  fitCtxMenu();
+  ctxLightEnds();
+  if (h.marker) setMarkerHoverState(h.marker);
 }
-function ctxLine(kind, h) {
-  const line = document.createElement('div');
-  line.className = 'mt-title ctx-line';
-  const openBtn = (open, title) => {
-    const b = document.createElement('button');
-    b.className = 'mt-open'; b.textContent = '»'; b.title = title;
-    b.addEventListener('click', e => { e.stopPropagation(); open(); });
-    return b;
+function pinCtxMenu() {
+  if (!ctxMenu || ctxMenu.pinned) return;
+  ctxMenu.pinned = true;
+  bundleTipEl.classList.add('ctx-pinned');
+}
+// The bundles' ends at the spot light up (all of them, or one while its row is hovered).
+function ctxLightEnds(only = null) {
+  const b = ctxMenu && ctxMenu.hits.bundle;
+  if (!b) { if (_hoverEnds) showHoverEnds(null); return; }
+  showHoverEnds(only != null ? [only] : (b.near || [b.gi]), b.sx, b.sy);
+}
+// Below the 3D view's bottom: a scrollbar (dragging the menu up gives it room).
+function fitCtxMenu() {
+  const el = bundleTipEl, cv = threeCanvas.getBoundingClientRect();
+  const top = el.getBoundingClientRect().top;
+  el.style.maxHeight = Math.max(60, cv.bottom - top - 6) + 'px';
+}
+const ctxPlural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+function renderCtxMenu() {
+  if (!ctxMenu) return;
+  const el = bundleTipEl, h = ctxMenu.hits, open = ctxMenu.open;
+  const scroll = el.scrollTop;
+  el.innerHTML = '';
+  const close = document.createElement('button');
+  close.className = 'ctx-x'; close.textContent = '×'; close.title = 'close (Esc)';
+  close.addEventListener('click', e => { e.stopPropagation(); hideBundleTooltip(true); setMarkerHoverState(null); });
+  el.appendChild(close);
+  const toggle = (key, exclusivePrefix = null) => {
+    const keep = !key.startsWith('m:');           // (a marker's place in the list means nothing elsewhere)
+    if (open.has(key)) { open.delete(key); ctxOpenMemory.delete(key); if (!keep && markerCard) closeMarkerCard(); }
+    else {
+      if (exclusivePrefix) for (const k of [...open, ...ctxOpenMemory]) if (k.startsWith(exclusivePrefix)) { open.delete(k); ctxOpenMemory.delete(k); }
+      open.add(key); if (keep) ctxOpenMemory.add(key);
+    }
+    renderCtxMenu();
   };
-  if (kind === 'bundle') {
-    if (!h.bundle) return null;
-    const g = groups[h.bundle.gi];
-    fillBundleTitle(line, g);
-    const more = (h.bundle.near || []).length - 1;
-    if (more > 0) {
-      const m = document.createElement('span'); m.className = 'mt-val'; m.textContent = '+' + more;
-      m.title = more + ' more bundle' + (more > 1 ? 's' : '') + ' here: see the card (»)';
-      line.appendChild(m);
+  // a row: caret (▸/▾, or an empty column), then its parts; a click on
+  // the row's free space (not a control) folds it
+  const row = (key, parts, { level = 0, exclusive = null } = {}) => {
+    const r = document.createElement('div');
+    r.className = 'ctx-line ctx-l' + level;
+    const c = document.createElement('span');
+    c.className = 'dt-caret ctx-caret';
+    if (!key) { c.textContent = '▪'; c.classList.add('ctx-leaf'); }
+    else {
+      c.textContent = open.has(key) ? '▾' : '▸';
+      r.classList.add('ctx-fold');
+      r.addEventListener('click', e => {
+        if (e.target.closest('button, input, select, label, .ctx-nofold')) return;
+        if (_ctxDragged) return;
+        toggle(key, exclusive);
+      });
     }
-    if (hasBundleSettings(g) || more > 0) {
-      line.appendChild(openBtn(() => openBundleCard(h.bundle), more > 0 ? 'all bundles here and settings (pins the card)' : 'settings (pins the card)'));
-      pinOnUse(line, () => openBundleCard(h.bundle), e => !!e.target.closest('input[type=color], .mt-open'));
-    }
-    return line;
-  }
-  if (kind === 'marker') {
-    if (!h.marker) return null;
-    const { rec, index } = h.marker, set = rec.set;
-    const cb = rec.overlay && rec.overlay.color_by || rec.style.color_by;
-    const p = cb && set.props.get(cb);
-    const val = p ? markerValueText(p, set.markers.values[p.name][index]) : null;
-    line.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>'
-      + (val != null ? '<span class="mt-val">' + esc(p.name) + ': ' + esc(val) + '</span>' : '');
-    line.classList.add('ctx-click');
-    const open = () => openMarkerCard(rec, index, h.marker.sx, h.marker.sy);
-    line.appendChild(openBtn(open, 'details (pins the card)'));
-    line.addEventListener('click', e => { if (!e.target.closest('.mt-open')) open(); });
-    return line;
-  }
-  if (kind === 'volume') {
-    if (!h.brain || !activeVolume) return null;
-    const open = () => openVolumeCard(h);
-    line.appendChild(renderModeToggle());
-    const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = activeVolume.label;
-    line.appendChild(nm);
-    pinOnUse(line, open, e => !!e.target.closest('.mt-open'));
-    line.appendChild(openBtn(open, 'details (pins the card)'));
-    return line;
-  }
-  if (kind === 'region') {
-    if (!h.region || !regionMeshes) return null;
-    const v = h.region.labels[0];  // the first region the ray meets
-    const open = () => openLabelCard(h);
-    line.append(...regionLineControls(v));
-    const more = h.region.labels.length - 1;
-    if (more > 0) {
-      const m = document.createElement('span'); m.className = 'mt-val'; m.textContent = '+' + more;
-      m.title = more + ' more region' + (more > 1 ? 's' : '') + ' along this line: see the card (»)';
-      line.appendChild(m);
-    }
-    pinOnUse(line, open, e => !!e.target.closest('input[type=color], .mt-open'));
-    line.appendChild(openBtn(open, 'all regions along this line (pins the card)'));
-    return line;
-  }
-  if (kind === 'frame') {
-    if (!h.frames) return null;
-    const lab = document.createElement('label');
-    lab.className = 'frame-row';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = framesVisible;
-    cb.addEventListener('change', () => {
-      const sEl = document.getElementById('clip-frames');
-      sEl.checked = cb.checked; sEl.dispatchEvent(new Event('change'));
-    });
-    const t = document.createElement('span'); t.className = 'mt-id'; t.textContent = 'frames';
-    lab.append(cb, t);
-    line.appendChild(lab);
-    return line;
-  }
-  return null;
+    r.append(c, ...parts);
+    el.appendChild(r);
+    return r;
+  };
+  const text = (t, cls = 'ctx-text') => { const s = document.createElement('span'); s.className = cls; s.textContent = t; return s; };
+  const count = (n, rest) => { const s = document.createElement('span'); s.className = 'ctx-text'; s.innerHTML = '<b>' + n + '</b> ' + esc(rest); return s; };
+  // a summary's tag ("Streamlines:" …), a fixed-width column
+  const tag = t => text(t, 'ctx-tag');
+  const nest = (level) => { const d = document.createElement('div'); d.className = 'dt-settings ctx-sub ctx-l' + level; el.appendChild(d); return d; };
+
+  const sections = {
+    bundle: () => {
+      if (!groups.length) return;            // (shown whenever there are streamlines)
+      const near = h.bundle ? (h.bundle.near || [h.bundle.gi]).filter(gi => groups[gi]) : [];
+      row(near.length ? 'bundles' : null, [tag('Streamlines:'), count(near.length, near.length === 1 ? 'bundle nearby' : 'bundles nearby')]);
+      if (!near.length || !open.has('bundles')) return;
+      for (const gi of near) {
+        const g = groups[gi], key = 'b:' + gi, has = hasBundleSettings(g) && g.visible;
+        const r = row(has ? key : null, bundleRowControls(gi), { level: 1, exclusive: 'b:' });
+        r.addEventListener('mouseenter', () => ctxLightEnds(gi));
+        r.addEventListener('mouseleave', () => ctxLightEnds());
+        if (has && open.has(key)) buildBundleSettings(g, nest(2));
+      }
+    },
+    volume: () => {
+      if (!activeVolume || !state.get('anat.file')) return; // (always there with a volume)
+      const multi = volumes.length > 1;
+      // checkbox: drawn or not (SETTINGS › shader none); sun: solid, or glass (unlit)
+      const on = renderMode !== 'none', solidish = (on ? renderMode : _shownRenderMode) === 'solid';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = on;
+      cb.title = on ? 'drawn — click: switch off' : 'switched off — click: draw';
+      cb.addEventListener('click', e => e.stopPropagation());
+      cb.addEventListener('change', () => setRenderMode(cb.checked ? _shownRenderMode : 'none'));
+      const fb = makeFocusButton(solidish, () => {
+        const next = solidish ? 'glass' : 'solid';
+        if (on) setRenderMode(next); else { _shownRenderMode = next; renderCtxMenu(); }
+      }, solidish ? 'solid — click: glass' : 'glass — click: solid');
+      if (!on) fb.classList.add('grey');
+      row(multi ? 'volume' : null, [tag('Volume:'), cb, fb, Object.assign(text(activeVolume.file.name, 'ctx-text ctx-fname'), { title: activeVolume.file.name })]);
+      if (multi && open.has('volume')) {
+        const d = nest(1);
+        d.appendChild(makeChoiceRow('anatomy', volumes.map((v, i) => [String(i), v.label]), String(volumes.indexOf(activeVolume)),
+          value => { const v = volumes[+value]; if (v) selectVolume(v).then(() => renderCtxMenu()); }, 'the volume shown'));
+      }
+    },
+    region: () => {
+      if (!regionMeshes || !labelVolCandidates().length) return; // (shown whenever there is a label volume)
+      const labels = endLabelSrc && h.region ? h.region.labels : [];
+      row('regions', [tag('Parcellation:'), endLabelSrc ? count(labels.length, labels.length === 1 ? 'region in line of sight' : 'regions in line of sight') : text('off', 'ctx-text ctx-dim')]);
+      if (!open.has('regions')) return;
+      nest(1).appendChild(labelVolumeChoiceRow());
+      for (const v of labels) row(null, regionRowControls(v), { level: 1 });
+    },
+    marker: () => {
+      if (!markerSets.length) return;        // (shown whenever there are markers)
+      const shown = markerSets.some(r => r.visible);
+      const all = h.marker ? (h.marker.all || [h.marker]) : [];
+      row('markers', [tag('Markers:'), shown ? count(all.length, 'nearby') : text('off', 'ctx-text ctx-dim')]);
+      if (!open.has('markers')) return;
+      // the marker files: on / off
+      for (const rec of markerSets) {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = !!rec.visible;
+        cb.title = rec.visible ? 'shown — click: switch off' : 'switched off — click: show';
+        cb.addEventListener('click', e => e.stopPropagation());
+        cb.addEventListener('change', () => { rec.visible = cb.checked; if (rec.group) rec.group.visible = cb.checked; registerMarkerItems(); render3D(); renderCtxMenu(); });
+        row(null, [cb, Object.assign(text(rec.set.name || rec.file.name, 'ctx-text ctx-fname'), { title: rec.file ? rec.file.name : '' })], { level: 1 });
+      }
+      all.forEach((m, i) => {
+        const { rec, index } = m, set = rec.set, key = 'm:' + i;
+        const cb = rec.overlay && rec.overlay.color_by || rec.style.color_by;
+        const p = cb && set.props.get(cb);
+        const val = p ? markerValueText(p, set.markers.values[p.name][index]) : null;
+        row(key, [text(set.markers.ids[index], 'mt-id ctx-name'), ...(val != null ? [text(p.name + ': ' + val, 'mt-val')] : [])], { level: 1, exclusive: 'm:' });
+        if (open.has(key)) {
+          if (!markerCard || markerCard.rec !== rec || markerCard.index !== index) openMarkerCard(rec, index);
+          const d = nest(2);
+          renderMarkerDetails(d);
+        }
+      });
+    },
+    frame: () => {
+      if (!state.get('anat.file')) return; // (always there with a volume: frames aren't picked)
+      const lab = document.createElement('label');
+      lab.className = 'frame-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = framesVisible;
+      cb.addEventListener('change', () => {
+        const sEl = document.getElementById('clip-frames');
+        sEl.checked = cb.checked; sEl.dispatchEvent(new Event('change'));
+      });
+      lab.append(cb, text(framesVisible ? 'visible' : 'hidden', 'ctx-text'));
+      cb.addEventListener('change', () => { lab.lastChild.textContent = cb.checked ? 'visible' : 'hidden'; });
+      row(null, [tag('Frames:'), lab]);
+    },
+  };
+  sections.coord = () => {
+    const c = h.coord;
+    if (!c) return;
+    row('coord', [tag('Coordinate:'), text(c.ras.map(v => v.toFixed(1)).join('  ') + ' mm', 'ctx-text')]).title = 'picked on the ' + c.what;
+    if (!open.has('coord')) return;
+    const d = nest(1);
+    d.classList.add('ctx-moves');
+    if (probeOn) d.append(makeSettingsButton('move probe here', () => state.update({ 'src.cursor': c.ras.slice() }), 'the probe (left sections) to this point'));
+    d.append(makeSettingsButton('move cursor here', () => state.update({ 'tgt.cursor': c.ras.slice() }), 'the cursor (right sections) to this point'));
+  };
+  for (const k of ['bundle', 'volume', 'region', 'marker', 'frame', 'coord']) sections[k]();
+  el.scrollTop = scroll;
+  if (el.style.display !== 'none') fitCtxMenu();
 }
-// A region's line in the 3D label (as a bundle's): spotlight (only this
-// one solid / all solid again), sun (in 3D: solid ⇄ glass; the first click
-// builds its mesh), swatch, name.
-function regionSoloButton(v) {
-  const solo = regionMeshes.isSolo(v);
+// Any press on the menu pins it; a press on a free spot (not a control)
+// that moves drags it (and the click that ends the drag folds nothing).
+let _ctxDragged = false;
+bundleTipEl.addEventListener('pointerdown', ev => {
+  ev.stopPropagation();
+  if (!ctxMenu) return;
+  _cardBusy = true;
+  pinCtxMenu();
+  _ctxDragged = false;
+  if (ev.button !== 0 || ev.target.closest('button, input, select, textarea, .dt-slider-row, .ctx-x')) return;
+  const r = bundleTipEl.getBoundingClientRect(), x0 = ev.clientX, y0 = ev.clientY;
+  const move = e => {
+    if (!_ctxDragged && Math.hypot(e.clientX - x0, e.clientY - y0) < 4) return;
+    _ctxDragged = true;
+    const cv = document.getElementById('middle').getBoundingClientRect();
+    const x = Math.min(Math.max(cv.left, r.left + e.clientX - x0), cv.right - 40);
+    const y = Math.min(Math.max(cv.top, r.top + e.clientY - y0), cv.bottom - 30);
+    bundleTipEl.style.left = x + 'px'; bundleTipEl.style.top = y + 'px';
+    fitCtxMenu();
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+    setTimeout(() => { _ctxDragged = false; }, 0);   // after the click that ends the drag
+  };
+  window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+});
+// One bundle's row: spotlight, checkbox, sun (grey while switched off), swatch, name.
+function bundleRowControls(gi) {
+  const g = groups[gi], out = [];
+  const solo = isSoloFocus(g);
   const lb = document.createElement('button');
   lb.className = 'solo-btn' + (solo ? ' on' : '');
   lb.innerHTML = lampIconSVG(solo);
-  lb.title = solo ? 'all regions solid again' : 'only this region solid (all others glass)';
-  lb.addEventListener('click', e => { e.stopPropagation(); regionMeshes.solo(v); });
-  return lb;
+  lb.title = solo ? 'focus all bundles again' : 'focus only this bundle (dim all others)';
+  lb.addEventListener('click', e => { e.stopPropagation(); soloFocus(g); });
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = !!g.visible;
+  cb.title = cb.checked ? 'shown — click: switch off' : 'switched off — click: show';
+  cb.addEventListener('click', e => e.stopPropagation());
+  cb.addEventListener('change', () => { if (g.item) g.item.visible = cb.checked; dataStore.refresh(); renderCtxMenu(); });
+  const fb = makeFocusButton(!!g.focus, () => toggleFocus(g),
+    g.focus ? 'focused (drawn solid) — click: dim this bundle' : 'dimmed — click: focus this bundle (draw it solid)');
+  if (!g.visible) fb.classList.add('grey');
+  const sw = document.createElement('input');
+  sw.type = 'color'; sw.className = 'dt-swatch';
+  sw.value = rgbRawToHex(g.color || [1, 1, 1]);
+  sw.title = 'change bundle color';
+  sw.addEventListener('click', e => e.stopPropagation());
+  sw.addEventListener('input', () => setBundleColor(g, sw.value));
+  const nm = document.createElement('span');
+  nm.className = 'mt-id ctx-name' + (g.visible ? '' : ' ctx-off');
+  nm.textContent = g.name; nm.title = g.name;
+  out.push(lb, cb, fb, sw, nm);
+  return out;
 }
+// A region's row in the 3D menu: checkmark (in 3D or not), sun (solid ⇄
+// glass; the first click builds its mesh), swatch, name, number.
 function regionNameEls(v) {
   const [name, hex] = labelEntry(v);
   const sw = labelSwatch(v, hex);
   const nm = document.createElement('span');
-  nm.className = 'mt-id' + (regionMeshes.has(v) ? '' : ' ctx-off');
-  nm.textContent = name + (regionMeshes.building(v) ? ' …' : '');
+  nm.className = 'mt-id ctx-name' + (regionMeshes.has(v) ? '' : ' ctx-off');
+  nm.textContent = name + (regionMeshes.building(v) ? ' …' : ''); nm.title = name;
   const id = document.createElement('span'); id.className = 'mt-val'; id.textContent = String(v);
   return [sw, nm, id];
 }
-function regionLineControls(v) {
-  const on = regionMeshes.has(v), foc = regionMeshes.focused(v);
-  const fb = makeFocusButton(foc, e => { if (e) e.stopPropagation(); regionMeshes.toggleFocus(v); },
-    !on ? 'show this region in 3D' : foc ? 'solid — click: glass' : 'glass — click: solid');
-  return [regionSoloButton(v), fb, ...regionNameEls(v)];
-}
-// A region's row in the label card (as a bundle's): spotlight, checkmark
-// (in 3D or not), swatch, name.
 function regionRowControls(v) {
   const cb = document.createElement('input');
   cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = regionMeshes.has(v);
   cb.title = cb.checked ? 'in 3D — click: remove' : 'click: show in 3D';
   cb.addEventListener('click', e => e.stopPropagation());
   cb.addEventListener('change', () => regionMeshes.setMember(v, cb.checked));
-  return [regionSoloButton(v), cb, ...regionNameEls(v)];
+  const on = regionMeshes.has(v), foc = regionMeshes.focused(v);
+  const fb = makeFocusButton(foc, () => regionMeshes.toggleFocus(v),
+    !on ? 'show this region in 3D' : foc ? 'solid — click: glass' : 'glass — click: solid');
+  if (!on) fb.classList.add('grey');
+  return [cb, fb, ...regionNameEls(v)];
 }
 // SOLID ⇄ GLASS for the anatomy: a square, half solid, half checkerboard.
 let _modeIconId = 0;
@@ -2733,80 +2781,9 @@ function setRenderMode(mode) {
     for (const x of document.querySelectorAll('input[name="render-mode"]')) x.checked = false;
     renderMode = mode; applyRenderModeUI(); updateGlassBrainUniforms();
   } else return;
-  if (bundleHover && bundleHover.ctx) showContextLabel(bundleHover.hits);
-  if (volumeCard) renderVolumeCard();
+  if (ctxMenu) renderCtxMenu();
 }
 
-// The volume card: the anatomy switch and the solid/glass toggle.
-let volumeCard = null; // { hits }
-const volumeCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => { volumeCard = null; } });
-function openVolumeCard(h) {
-  const at = cardAnchor(h.sx, h.sy);
-  closeBundleCard(); if (typeof closeMarkerCard === 'function') closeMarkerCard();
-  _overBundleTip = false; bundleHover = null; bundleTipEl.style.display = 'none'; showHoverEnds(null);
-  volumeCard = { hits: h };
-  renderVolumeCard();
-  if (!volumeCardPanel.isOpen) volumeCardPanel.openAt(...at);
-}
-function closeVolumeCard() { if (volumeCard) volumeCardPanel.close(); }
-function renderVolumeCard() {
-  if (!volumeCard || !activeVolume) { closeVolumeCard(); return; }
-  const title = volumeCardPanel.titleEl;
-  title.innerHTML = '';
-  const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = activeVolume.label;
-  title.append(renderModeToggle(), nm);
-  const body = volumeCardPanel.body;
-  body.innerHTML = '';
-  const st = document.createElement('div');
-  st.className = 'dt-settings';
-  st.appendChild(makeChoiceRow('anatomy', volumes.map((v, i) => [String(i), v.label]), String(volumes.indexOf(activeVolume)),
-    value => { const v = volumes[+value]; if (v) selectVolume(v).then(() => renderVolumeCard()); }, 'the volume shown'));
-  body.appendChild(st);
-}
-// The label card: the label volume in memory (switch), and every region
-// along the picked line, front to back: spotlight, checkmark, swatch, name.
-// The list is the one found when the card opened.
-let labelCard = null; // { labels }
-const labelCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 270, onClose: () => { labelCard = null; } });
-labelCardPanel.el.addEventListener('pointerdown', () => { _cardBusy = true; }, true);
-function openLabelCard(h) {
-  const at = cardAnchor(h.sx, h.sy);
-  closeBundleCard(); closeVolumeCard(); if (typeof closeMarkerCard === 'function') closeMarkerCard();
-  _overBundleTip = false; bundleHover = null; bundleTipEl.style.display = 'none'; showHoverEnds(null);
-  labelCard = { labels: h.region.labels.slice() };
-  renderLabelCard();
-  if (!labelCardPanel.isOpen) labelCardPanel.openAt(...at);
-}
-function closeLabelCard() { if (labelCard) labelCardPanel.close(); }
-function renderLabelCard() {
-  if (!labelCard) return;
-  if (!endLabelSrc || !regionMeshes) { closeLabelCard(); return; }
-  if (colorPickerIn(labelCardPanel.el)) return; // a swatch's picker is open
-  const title = labelCardPanel.titleEl;
-  title.innerHTML = '';
-  const nm = document.createElement('span'); nm.className = 'mt-id'; nm.textContent = endLabelSrc.vol.label;
-  title.append(nm);
-  const body = labelCardPanel.body;
-  body.innerHTML = '';
-  const st = document.createElement('div');
-  st.className = 'dt-settings';
-  st.appendChild(labelVolumeChoiceRow());
-  const head = document.createElement('div');
-  head.className = 'dt-toolbar-lbl ctx-sub';
-  const n = labelCard.labels.length;
-  head.textContent = n === 1 ? 'region along this line' : n + ' regions along this line, front to back';
-  st.appendChild(head);
-  const list = document.createElement('div');
-  list.className = 'dt-labels';
-  for (const v of labelCard.labels) {
-    const row = document.createElement('div');
-    row.className = 'dt-row ctx-region';
-    row.append(...regionRowControls(v));
-    list.appendChild(row);
-  }
-  st.appendChild(list);
-  body.appendChild(st);
-}
 // The label volume in memory: '---' or one of the parcellations.
 function labelVolumeChoiceRow() {
   const cands = labelVolCandidates(), cur = labelVol();
@@ -2821,7 +2798,7 @@ threeCanvas.addEventListener('mousemove', e => {
   if (e.buttons) { hideBundleTooltip(); return; }    // dragging the view
   // Moving away from the labelled spot ends the label (the label itself
   // keeps it while the mouse is on it).
-  if (bundleHover && Math.hypot(e.offsetX - bundleHover.sx, e.offsetY - bundleHover.sy) > 16) {
+  if (ctxMenu && !ctxMenu.pinned && Math.hypot(e.offsetX - ctxMenu.sx, e.offsetY - ctxMenu.sy) > 16) {
     clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
   }
   _hoverDebounceTimer = setTimeout(doBundleHoverHitTest, 250);
@@ -2891,7 +2868,7 @@ let clipFlip = false;
 // cut into whatever real tissue boundary lies behind it.
 let cover = true;
 // Shows the plane rectangles (default) — independent of clipping. Also
-// switchable from the 3D view: rest the mouse on a frame's edge.
+// switchable from the 3D view: the 3D menu's Frames row.
 let framesVisible = true;
 const PLANE_AXIS_INDEX = {sag:0, cor:1, axi:2}; // matches vr._getNormalAxis / vr._rot_dirs
 
@@ -3602,7 +3579,7 @@ function rebuildDots() {
 // ── The label volume in memory (the current label volume) ──
 // One label volume is kept (a compact copy of its labels), independent of
 // the volume the raymarcher shows: the one chosen in DATA (Parcellations'
-// first row, or the label volume card) — by default the first loaded
+// first row, or the 3D menu's regions) — by default the first loaded
 // parcellation with its own color table; '---' = none. It names the region
 // at the 2D cursor (the label badges) and under the mouse in 3D, outlines
 // regions in the sections, colors the end dots (ends·color: Label) and
@@ -4512,6 +4489,22 @@ function updateLabelHud(tag) {
     if (r) name = r[1];
   }
   nameEl.textContent = name;
+  // the region (label volume in memory) on / off in 3D — filled in the sections while on
+  const cb = el.querySelector('.label-badge-check'), r = regionMeshes && labelRefAt(cur), v = r && r[0];
+  cb.classList.toggle('on', !!v);
+  const sun = el.querySelector('.label-badge-sun');
+  sun.classList.toggle('on', !!v);
+  if (v) {
+    cb.checked = regionMeshes.has(v); cb.dataset.region = String(v);
+    cb.title = (cb.checked ? 'shown in 3D — click: hide' : 'show in 3D') + ' (filled in the sections while shown)';
+    // the sun: solid ⇄ glass (grey while switched off; the first click shows it)
+    const foc = regionMeshes.focused(v);
+    const fb = makeFocusButton(foc, () => regionMeshes.toggleFocus(v),
+      !cb.checked ? 'show this region in 3D' : foc ? 'solid — click: glass' : 'glass — click: solid');
+    if (!cb.checked) fb.classList.add('grey');
+    fb.addEventListener('pointerdown', e => e.stopPropagation());
+    sun.replaceChildren(fb);
+  }
   el.style.display = 'block';
   positionLabelBadge(tag);
 }
@@ -4868,14 +4861,16 @@ function applyRenderModeUI() {
   document.getElementById('row-cutout-below').style.display = isSolid ? '' : 'none';
   document.getElementById('row-rim').style.display = isSolid ? 'none' : '';
 }
+// The shader to come back to when the volume is switched on again (3D menu).
+let _shownRenderMode = 'glass';
 document.querySelectorAll('input[name="render-mode"]').forEach(r=>{
   r.addEventListener('change', ()=>{
     renderMode = r.value;
+    if (renderMode === 'glass' || renderMode === 'solid') _shownRenderMode = renderMode;
     applyRenderModeUI();
     updateGlassBrainUniforms();
-    // the solid/glass icon in an open volume card (and the context label) follows
-    if (volumeCard) renderVolumeCard();
-    if (bundleHover && bundleHover.ctx) showContextLabel(bundleHover.hits);
+    // the solid/glass icon in the 3D menu follows
+    if (ctxMenu) renderCtxMenu();
   });
 });
 applyRenderModeUI(); // reflect the default MODE (glass) on load
@@ -6011,7 +6006,7 @@ function makeChoiceRow(labelText, options, value, onChange, title = null) {
 // LABEL mode only colors the shown volume by its color table — the
 // raymarcher draws every region. Regions are switched on and off in 3D as
 // meshes of the label volume in memory (js/region-meshes.js): from the
-// 3D label, its card, and the DATA label list of that volume.
+// 3D menu, and the DATA label list of that volume.
 const LABEL_LIST_MAX = 255;      // rows listed in DATA (the rest: one "… N more" line)
 const LABEL_DISTINCT_MAX = 5000; // more distinct values: not a label volume
 // The label values present in the shown volume (computed once per volume
@@ -6034,7 +6029,7 @@ function labelInfoOf(vol) {
 const labelsShown = () => modality === 'seg' && activeVolume && !activeVolume.isColor;
 const NO_HIDDEN = new Set(); // (the raymarcher draws every region)
 const hiddenLabelsOf = () => NO_HIDDEN;
-// The volume whose regions the 3D label, card and meshes are about.
+// The volume whose regions the 3D menu and meshes are about.
 const labelVol = () => endLabelSrc ? endLabelSrc.vol : null;
 function labelEntry(v, vol = labelVol() || activeVolume) { // [name, '#rrggbb'] from the lookup table
   const map = labelMapOf(vol), e = map && map.get(v);
@@ -6201,9 +6196,9 @@ function labelsChanged() {
 // The region set or the label volume changed: the 3D label, the label
 // card and DATA show the new state.
 function labelUiChanged() {
-  if (bundleHover && bundleHover.ctx && !colorPickerIn(bundleTipEl)) showContextLabel(bundleHover.hits);
-  if (labelCard) renderLabelCard();
-  if (volumeCard) renderVolumeCard();
+  updateLabelHud('src'); updateLabelHud('tgt');
+  if (sectionOutlines) sectionOutlines.refresh();
+  if (ctxMenu && !colorPickerIn(bundleTipEl)) renderCtxMenu();
   dataStore.refresh();
 }
 // DATA: the shown parcellation's label list, in its settings area (»):
@@ -6488,7 +6483,7 @@ function registerTrckItem() {
   bundleChanged();
 }
 
-// A bundle's settings — the same in its DATA panel row and in its 3D card
+// A bundle's settings — the same in its DATA panel row and in the 3D menu
 // (hover a bundle's ends, then »): split by, color·by (only with data files;
 // see hasBundleSettings). The state lives on the group, so both stay in step (see
 // bundleChanged).
@@ -6507,22 +6502,22 @@ function showBundleHeader(g) {
 }
 // FOCUS: every bundle has a sun icon — lit: drawn solid (focused), unlit:
 // dimmed (SETTINGS › dimming). All bundles start focused. The sun is a
-// plain on/off toggle everywhere (DATA row, 3D label and card); the 3D
-// label and card also have the spotlight, "focus only this" (soloFocus).
+// plain on/off toggle everywhere (DATA row, 3D menu); the 3D
+// menu also has the spotlight, "focus only this" (soloFocus).
 function toggleFocus(g) {
   g.focus = !g.focus;
   focusChanged();
 }
 // Is g the only focused (visible) bundle?
 const isSoloFocus = g => g.focus && groups.every(x => x === g || !x.visible || !x.focus);
-// The 3D label/card's spotlight, "focus only this": g alone focused; when
+// The 3D menu's spotlight, "focus only this": g alone focused; when
 // it already is, all focused again.
 function soloFocus(g) {
   if (isSoloFocus(g)) for (const x of groups) x.focus = true;
   else { for (const x of groups) x.focus = false; g.focus = true; }
   focusChanged();
 }
-// A bundle's color, from its DATA swatch or its 3D label/card swatch.
+// A bundle's color, from its DATA swatch or its 3D menu swatch.
 function setBundleColor(g, hex, refreshTree = true) {
   g.color = hexToRgbRaw(hex);
   bundlePaletteRGB[groups.indexOf(g)] = g.color;
@@ -7259,7 +7254,7 @@ function buildMarkerGroup(rec) {
   let materials = null;
   if (rec.group) { materials = rec.group.userData; scene.remove(rec.group); disposeMarkerGroup(rec.group, true); }
   // rec.overlay: temporary choices made in a marker's pinned card (see the
-  // marker card below) on top of the settings; they end when the card closes.
+  // marker details in the 3D menu) on top of the settings; they end when those close.
   const ov = rec.overlay;
   const style = ov && ov.color_by ? { ...rec.style, color_by: ov.color_by, window: undefined } : rec.style;
   const filters = ov && ov.filters.length ? [...rec.filters, ...ov.filters] : rec.filters;
@@ -7482,13 +7477,14 @@ document.getElementById('middle').appendChild(markerTipEl);
 // it, nearest to the camera. Projects every visible marker — a few
 // thousand is well under a millisecond.
 const _pickM = new THREE.Matrix4();
-function pickMarker(clientX, clientY) {
+function pickMarker(clientX, clientY, wMax = Infinity) {
   if (!markerSets.length) return null;
   const rect = threeCanvas.getBoundingClientRect();
   const x = clientX - rect.left, y = clientY - rect.top, W = rect.width, H = rect.height;
   _pickM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   const e = _pickM.elements, P11 = camera.projectionMatrix.elements[5];
   let best = null, bestW = Infinity;
+  const all = [];   // every marker under the pointer (several can share a spot), nearest first
   for (const rec of markerSets) {
     if (!rec.visible || !rec.resolved) continue;
     const pos = rec.set.markers.pos, { size, sizeUnit } = rec.resolved, k = rec.sizeScale || 1;
@@ -7502,12 +7498,16 @@ function pickMarker(clientX, clientY) {
       const sy = (1 - (e[1] * px + e[5] * py + e[9] * pz + e[13]) / w) / 2 * H;
       const r = Math.max(pickPx(5), sizeUnit === 'px' ? size[i] * k / 2 : size[i] * k / 2 * P11 * 0.5 * H / w);
       const dx = sx - x, dy = sy - y;
-      if (dx * dx + dy * dy <= r * r && w < bestW) {
+      if (dx * dx + dy * dy <= r * r) {
+        if (w > wMax) continue;                      // behind a solid surface on the line of sight
+        if (all.length >= 32 && w >= bestW) continue;
         if (hiddenBySolid(rect.left + sx, rect.top + sy, w)) continue; // hidden by the solid brain
-        best = { rec, index: i, sx, sy }; bestW = w;
+        all.push({ rec, index: i, sx, sy, w });
+        if (w < bestW) { best = { rec, index: i, sx, sy }; bestW = w; }
       }
     }
   }
+  if (best) best.all = all.sort((a, b) => a.w - b.w).slice(0, 32);
   return best;
 }
 
@@ -7556,41 +7556,32 @@ markerTipEl.addEventListener('pointerenter', () => clearTimeout(_tipHideTimer));
 markerTipEl.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !markerCard) hideMarkerLabelSoon(); });
 ['pointerdown', 'wheel'].forEach(t => markerTipEl.addEventListener(t, ev => ev.stopPropagation()));
 
-function openMarkerCard(rec, index, sx, sy) {
-  _markerCardAt = cardAnchor(sx, sy);
-  closeBundleCard(); closeVolumeCard();
-  _overBundleTip = false; bundleHover = null; bundleTipEl.style.display = 'none'; showHoverEnds(null);
+// A marker's details, folded out in the 3D menu: its properties (a click
+// colors the markers by one — temporary, until the details close), "only"
+// filters, and "keep" to make those regular settings.
+function openMarkerCard(rec, index) {
   // Another file: the old file's temporary choices end. Same file: they
   // carry over, following the new marker (its category is highlighted).
   if (markerCard && markerCard.rec !== rec) closeMarkerCard(false);
   const ov = rec.overlay || (rec.overlay = { color_by: null, highlight: null, filters: [] });
   if (ov.highlight) ov.highlight = { prop: ov.highlight.prop, value: rec.set.markers.values[ov.highlight.prop][index] };
-  markerCard = { rec, index, sx, sy };
+  markerCard = { rec, index };
   buildMarkerGroup(rec);
-  renderMarkerCard();
   render3D();
 }
-
-let _markerCardAt = null; // where the marker card opens (cardAnchor)
-const markerCardPanel = new CardPanel({ group: new PanelDockGroup(), width: 260, onClose: () => closeMarkerCard() });
 function closeMarkerCard(rebuild = true) {
   if (!markerCard) return;
   const rec = markerCard.rec;
   markerCard = null;
   markerTipEl.style.display = 'none';
-  if (markerCardPanel.isOpen) markerCardPanel.close();
   if (rec.overlay) { rec.overlay = null; if (rebuild && rec.group) { buildMarkerGroup(rec); render3D(); registerMarkerItems(); } }
 }
-
-function renderMarkerCard() {
+const renderMarkerCard = () => renderCtxMenu();
+function renderMarkerDetails(box) {
   const { rec, index } = markerCard, set = rec.set, ov = rec.overlay;
-  // in a movable card (CardPanel) like the bundles'; its content keeps the
-  // marker card's own styles (.hover-tip .mt-…) through a wrapper
-  markerCardPanel.titleEl.innerHTML = '<span class="mt-id">' + esc(set.markers.ids[index]) + '</span>';
-  markerCardPanel.body.innerHTML = '';
   const el = document.createElement('div');
-  el.className = 'hover-tip mt-card mt-in-panel';
-  markerCardPanel.body.appendChild(el);
+  el.className = 'mt-card-in';
+  box.appendChild(el);
   const sub = document.createElement('div');
   sub.className = 'mt-file'; sub.textContent = set.name;
   el.appendChild(sub);
@@ -7663,7 +7654,7 @@ function renderMarkerCard() {
     const foot = document.createElement('div');
     foot.className = 'mt-foot';
     const note = document.createElement('span');
-    note.textContent = 'temporary — ends when this card closes';
+    note.textContent = 'temporary — ends when these details close';
     const keep = makeSettingsButton('keep', () => {
       if (ov.color_by) { rec.style.color_by = ov.color_by; delete rec.style.window; }
       for (const f of ov.filters) { rec.filters = rec.filters.filter(g => g.prop !== f.prop); rec.filters.push(f); }
@@ -7672,11 +7663,6 @@ function renderMarkerCard() {
     }, 'make the coloring and "only" conditions regular settings (DATA panel)');
     foot.append(note, keep);
     el.appendChild(foot);
-  }
-  if (!markerCardPanel.isOpen) {
-    const rect = threeCanvas.getBoundingClientRect();
-    const at = _markerCardAt || [rect.left + markerCard.sx, rect.top + markerCard.sy];
-    markerCardPanel.openAt(...at);
   }
 }
 
@@ -7718,69 +7704,27 @@ threeCanvas.addEventListener('pointerup', e => {
   clickAt(e.clientX, e.clientY);
 });
 
-// ── Touch ────────────────────────────────────────────────
-// A finger doesn't hover, so on touch it takes two taps: the first tap is
-// the mouse's rest (the label; the bundle's ends light up), a second tap
-// on the same thing — or on the label's » — is the click (the card). A tap
-// on empty space closes labels and cards; dragging orbits, pinching zooms
-// (never a tap). The label stays until the next tap, and opens above the
-// finger. Pick radii are larger for a finger (pickPx). Mouse and pen work
-// as before.
-// A click (or, on touch, a tap): nothing there closes labels and cards;
-// one thing with a card (a marker, or a bundle with settings) opens its
-// card right away; otherwise the context label shows (at once, no rest).
-// On touch the first tap shows the label and a second tap on the same
-// spot does the click.
-function clickAt(clientX, clientY, { touch = false } = {}) {
-  const h = collectHits(clientX, clientY);
-  if (hitsEmpty(h)) { closeBundleCard(); closeMarkerCard(); closeVolumeCard(); hideBundleTooltip(true); setMarkerHoverState(null); return; }
-  if (touch && !(bundleHover && bundleHover.ctx && bundleHover.key === hitsKey(h))) {
-    if (h.marker) setMarkerHoverState(h.marker);
-    showContextLabel(h);
-    return;
-  }
-  if (ctxCount(h) === 1 && h.marker) { closeBundleCard(); closeVolumeCard(); openMarkerCard(h.marker.rec, h.marker.index, h.marker.sx, h.marker.sy); return; }
-  if (ctxCount(h) === 1 && h.bundle && (hasBundleSettings(groups[h.bundle.gi]) || h.bundle.near.length > 1)) { openBundleCard(h.bundle); return; }
-  showContextLabel(h);
+// ── Clicks and taps on the 3D view ───────────────────────
+// A click (or a tap — a finger doesn't hover) shows the 3D menu for what
+// is there, pinned at once — on empty space too (its switches: volume,
+// parcellation, markers, frames); while a menu is pinned, a click on
+// empty space or on the same thing again closes it. Dragging orbits, pinching zooms
+// (never a tap); on touch the menu opens above the finger, and pick radii
+// are larger (pickPx).
+function clickAt(clientX, clientY) {
+  const h = collectHits(clientX, clientY), had = ctxMenu && ctxMenu.pinned ? ctxMenu.key : null;
+  if (ctxMenu) hideBundleTooltip(true);
+  if (had && (hitsEmpty(h) || had === hitsKey(h))) { setMarkerHoverState(null); return; } // a click elsewhere / again: closed
+  // on empty space too: the menu's switches (volume, parcellation, markers, frames) stay reachable
+  if (hitsEmpty(h) && !(state.get('anat.file') || groups.length || markerSets.length)) return;
+  showCtxMenu(h, { pinned: true });
 }
 function handleTap(clientX, clientY) {
   _touchPick = true;
-  try { clickAt(clientX, clientY, { touch: true }); }
+  try { clickAt(clientX, clientY); }
   finally { _touchPick = false; }
 }
 
-// ── Slice frames card ────────────────────────────────────
-// Clicking (not hovering) on the EDGE of a slice frame in 3D — within
-// 5 px of its outline; the inside of a frame stays free for everything
-// else — opens a small card to show/hide each frame. Markers and bundle
-// ends come first: only a click that hits neither checks the frames.
-const _pickF = new THREE.Matrix4();
-function pickFrameEdge(clientX, clientY) {
-  const rect = threeCanvas.getBoundingClientRect();
-  const x = clientX - rect.left, y = clientY - rect.top, W = rect.width, H = rect.height;
-  _pickF.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-  const e = _pickF.elements;
-  const proj = (px, py, pz) => {
-    const w = e[3] * px + e[7] * py + e[11] * pz + e[15];
-    if (w <= 0) return null;
-    return [((e[0] * px + e[4] * py + e[8] * pz + e[12]) / w + 1) / 2 * W, (1 - (e[1] * px + e[5] * py + e[9] * pz + e[13]) / w) / 2 * H];
-  };
-  let best = null, bestD = pickPx(5);
-  for (const k of ['sag', 'cor', 'axi']) {
-    const m = planeMeshes[k];
-    if (!m) continue;
-    const pos = m.children[1].geometry.attributes.position.array; // the outline: 5 points (closed)
-    for (let j = 0; j < 4; j++) {
-      const a = proj(pos[3*j], pos[3*j+1], pos[3*j+2]), b = proj(pos[3*j+3], pos[3*j+4], pos[3*j+5]);
-      if (!a || !b) continue;
-      const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1;
-      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2));
-      const d = Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
-      if (d < bestD) { bestD = d; best = k; }
-    }
-  }
-  return best;
-}
 // ── Picking the brain (anatomy) in 3D ────────────────────
 // The glass brain has no geometry — the shader walks a ray through the
 // volume per pixel — so it's picked the same way, on the CPU, for the
@@ -7958,8 +7902,7 @@ document.addEventListener('keydown', e => {
   const typing = ae && (/^(TEXTAREA|SELECT)$/.test(ae.tagName) || (ae.tagName === 'INPUT' && !/^(checkbox|radio|color|range|button)$/.test(ae.type)));
   if (e.key !== 'Escape' || typing) return;
   if (markerCard) closeMarkerCard();
-  else if (bundleCard) closeBundleCard();
-  else if (volumeCard) closeVolumeCard();
+  if (ctxMenu) { hideBundleTooltip(true); setMarkerHoverState(null); }
 });
 
 // SHOW ONLY: filters on the marker properties, combined with AND. A
@@ -8110,7 +8053,12 @@ document.body.addEventListener('drop',async e=>{
   set('brain-cutout-below-slider', 100,          ['brain-cutout-below-val', cutoutBelowThresh.toFixed(2)]);
   set('brain-rim-slider',    33,               ['brain-rim-val',   (1/glassBrainRimPow).toFixed(2)]);
   set('contrast-slider',     50,               ['contrast-val',    contrastGain.toFixed(2)+'×']);
+  set('background-slider',   Math.round(backgroundThresh * 100), ['background-val', backgroundThresh.toFixed(2)]);
+  set('light-slider',        Math.round(lightBias * 100), ['light-val', lightBias === 0 ? 'CENTER' : lightBias < 0 ? 'LEFT' : 'RIGHT']);
+  set('mov-len',             6,                ['mov-len-val',     '6 s']);
 })();
+// (Every control in the page also has autocomplete="off", so the browser
+// does not bring back values from before a reload — keep that for new ones.)
 
 // Wire canvases
 for(const k of ['sag','cor','axi']){
@@ -8125,12 +8073,17 @@ for(const k of ['sag','cor','axi']){
     'tgt',
     updateSlicesB);
 }
+// Fill opacity, in the 2D sections, of a region shown in 3D: solid (sun lit) or glass (dimmed).
+const REGION_FILL_SOLID = 0.5, REGION_FILL_GLASS = 0.25;
 // Region outlines in the sections — hovered region, else the data cursor's (js/section-outlines.js),
 // from the label volume in memory.
 sectionOutlines = new SectionOutlines({
   vr, canvases: { src: canvasA, tgt: canvasB },
   getRef: () => endLabelSrc,
   getCursor: tag => state.get(tag + '.cursor'),
+  // the regions shown in 3D, filled (REGION_FILL_SOLID / REGION_FILL_GLASS)
+  getFilled: () => regionMeshes && regionMeshes.visible && regionMeshes.size
+    ? new Map([...regionMeshes.set.keys()].map(v => [v, regionMeshes.focused(v) ? REGION_FILL_SOLID : REGION_FILL_GLASS])) : null,
   nameOf: v => {
     const ref = endLabelSrc, map = ref && (ref.vol === activeVolume && lutMap ? lutMap : ref.map), e = map && map.get(v);
     return e ? e.name : 'label ' + v + ' (unmapped)';
@@ -8305,6 +8258,15 @@ resizeAll();
   // Label-badge copy: only the small icon is clickable (pointer-events:auto
   // on just that element) — the rest of the badge stays click-through so
   // it never blocks interacting with the slice underneath it.
+  document.querySelectorAll('.label-badge-check').forEach(cb => {
+    cb.addEventListener('pointerdown', e => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const v = +cb.dataset.region;
+      if (!v || !regionMeshes) return;
+      if (cb.checked) { regionMeshes.setMember(v, true); if (!regionMeshes.focused(v)) regionMeshes.toggleFocus(v); }
+      else regionMeshes.setMember(v, false);
+    });
+  });
   document.querySelectorAll('.label-badge-copy').forEach(el => {
     el.addEventListener('click', () => {
       const badge = el.closest('.label-badge');

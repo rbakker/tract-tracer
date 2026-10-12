@@ -58,7 +58,7 @@ class LoadedItem {
     this.onSelect = null;           // (item) => void — radio selection
     this.onColorChange = null;      // (item, hex) => void — swatch edit (bundles)
     this.onFocusToggle = null;      // (item, event) => void — focus icon (bundles); shown when set
-    this.onInfo = null;             // (item) => void — info icon before the swatch (e.g. the file header); shown when set
+    this.onInfo = null;             // (item) => void — info icon at the end of the row (e.g. the file header); shown when set
     this.focused = false;           // the focus icon's state
     // Per-item settings, shown INLINE under the row when its settings
     // toggle (» at the row's right end) is open. The app fills the area:
@@ -424,6 +424,7 @@ class DataTreeView {
     if (item.onFocusToggle) {
       focusBtn = makeFocusButton(item.focused, e => item.onFocusToggle(item, e),
         item.focused ? 'focused — click: unfocus' : 'focus: draw this bundle solid, dim the others (adds to the focused bundles)');
+      if (!item.visible) focusBtn.classList.add('grey'); // switched off: the sun is only remembered
     }
 
     let swatch = null;
@@ -480,11 +481,11 @@ class DataTreeView {
     row.appendChild(caret);
     if (!item.isCategory || item.selectAll) row.appendChild(selector);
     if (focusBtn) row.appendChild(focusBtn);
-    if (item.onInfo) row.appendChild(makeInfoButton(() => item.onInfo(item), item.infoTitle || 'info'));
     if (swatch) row.appendChild(swatch);
     row.appendChild(label);
     if (tag) row.appendChild(tag);
     row.appendChild(menuBtn);
+    if (item.onInfo) row.appendChild(makeInfoButton(() => item.onInfo(item), item.infoTitle || 'info')); // help-like: at the end
     wrap.appendChild(row);
 
     if (item.buildSettings && item.settingsOpen) {
