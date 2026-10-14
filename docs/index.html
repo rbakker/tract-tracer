@@ -1217,7 +1217,7 @@ const pipeline = [
       await loadAnat(file);
       state.set('anat.file', file.name)
     } catch(e) {
-      alert('Error loading anatomy from "'+file+'"');
+      alert('Error loading anatomy from "' + (file && file.name || file) + '":\n' + ((e && e.message) || e));
       console.error(e.stack || e)
       state.set('anat.file', undefined)
     }
@@ -1232,7 +1232,7 @@ const pipeline = [
 	  await loadTrckBundle(desc, desc.mode || 'replace');
 	  if (trckParents.length) state.set('trck.file', trckParents.length === 1 ? trckParents[0].name : trckParents.length + ' files');
 	} catch(e) {
-	  alert('Error loading tractogram from "'+(isBundleDescriptor ? 'bundle set' : val)+'"');
+	  alert('Error loading tractogram from "' + (isBundleDescriptor ? 'bundle set' : (val && val.name || val)) + '":\n' + ((e && e.message) || e));
 	  console.error(e.stack || e)
 	  state.set('trck.file',undefined)
 	}
@@ -6038,7 +6038,7 @@ async function selectVolume(vol) {
     await loadAnat(vol.file);
     state.set('anat.file', vol.file.name);
   } catch (e) {
-    alert('Error loading anatomy from "' + vol.file.name + '"');
+    alert('Error loading anatomy from "' + vol.file.name + '":\n' + ((e && e.message) || e));
     console.error(e.stack || e);
     registerVolumeItems(); // put the radio back on the volume that's still shown
   }
