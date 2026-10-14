@@ -62,36 +62,43 @@ export async function parseNifti(buf) {
   const start = Math.round(vox_offset);
   const n = nx * ny * nz; // Size of exactly one 3D spatial volume
 
-  // Determine the byte size per element based on NIfTI datatype 
-  // to prevent reading out-of-bounds on the underlying ArrayBuffer
+  // Bytes per element for the NIfTI datatype (to stay inside the ArrayBuffer)
   let bytesPerElement = 1;
   if ([4, 512].includes(datatype)) bytesPerElement = 2;
-  else if ([8, 16].includes(datatype)) bytesPerElement = 4;
-  else if (datatype === 64) bytesPerElement = 8;
+  else if ([8, 16, 768].includes(datatype)) bytesPerElement = 4;
+  else if ([64, 1024, 1280].includes(datatype)) bytesPerElement = 8;
 
   // Ensure our slice or view length strictly caps at `n` elements (the first 3D volume)
+  const bytes = () => buf.slice(start, start + n * bytesPerElement); // aligned copy
   let data;
   if (datatype === 2) {
     data = new Uint8Array(buf, start, n);
   } else if (datatype === 4) {
-    data = new Int16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    data = new Int16Array(bytes(), 0, n);
   } else if (datatype === 8) {
-    data = new Int32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    data = new Int32Array(bytes(), 0, n);
   } else if (datatype === 16) {
-    data = new Float32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    data = new Float32Array(bytes(), 0, n);
   } else if (datatype === 64) {
     // Cast 64-bit float down to 32-bit float for WebGL/memory optimization
-    const f = new Float64Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    const f = new Float64Array(bytes(), 0, n);
     data = new Float32Array(n);
     for (let i = 0; i < n; i++) data[i] = f[i];
   } else if (datatype === 256) {
     data = new Int8Array(buf, start, n);
   } else if (datatype === 512) {
-    data = new Uint16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
+    data = new Uint16Array(bytes(), 0, n);
+  } else if (datatype === 768) {
+    data = new Uint32Array(bytes(), 0, n);                      // DT_UINT32 (e.g. label volumes from nibabel)
+  } else if (datatype === 1024 || datatype === 1280) {
+    // 64-bit integers (labels): to 32-bit float, exact up to 16,777,216
+    const b = datatype === 1024 ? new BigInt64Array(bytes(), 0, n) : new BigUint64Array(bytes(), 0, n);
+    data = new Float32Array(n);
+    for (let i = 0; i < n; i++) data[i] = Number(b[i]);
   } else {
     throw 'Unsupported NIfTI datatype ' + datatype;
   }
-
+  
   let mn=Infinity, mx=-Infinity;
   for(let i=0;i<data.length;i+=7){ if(data[i]<mn)mn=data[i]; if(data[i]>mx)mx=data[i]; }
 

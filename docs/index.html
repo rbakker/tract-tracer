@@ -2248,11 +2248,11 @@ function forEachEndOnScreen(fn) {
 // behind it — none behind wMax (a solid surface, see collectHits). Returns { gi (the nearest),
 // sx, sy (the mouse), ex, ey (its end on screen), near: [gi …] nearest
 // first } or null.
-const SEARCH_PX = 5;
+const SEARCH_PX = 40;
 function pickBundleEnd(clientX, clientY, wMax = Infinity) {
   if (!_endPick) return null;
   const rect = threeCanvas.getBoundingClientRect();
-  const x = clientX - rect.left, y = clientY - rect.top, R = pickPx(SEARCH_PX), R2 = R * R;
+  const x = clientX - rect.left, y = clientY - rect.top, R = SEARCH_PX, R2 = R * R; // (not scaled for touch: a search area, not pointer slack)
   const cand = [];
   forEachEndOnScreen((j, sx, sy, w) => {
     const d = (sx - x) * (sx - x) + (sy - y) * (sy - y);
@@ -2265,17 +2265,19 @@ function pickBundleEnd(clientX, clientY, wMax = Infinity) {
   // the cylinder's depth: twice the search radius, in mm at that depth
   // (perspective: 1 px = 2·w / (P11·H) mm)
   const w0 = cand[first][0], depth = 2 * R * 2 * w0 / (camera.projectionMatrix.elements[5] * rect.height);
-  const near = [], seen = new Set();
+  const near = [], seen = new Set(), ends = [];   // ends: every end in the cylinder (they light up)
   for (let k = first; k < cand.length && cand[k][0] - w0 <= depth; k++) {
     const gi = _endPick.gid[cand[k][1] >> 1];
-    if (seen.has(gi) || !groups[gi]) continue;
-    seen.add(gi); near.push(gi);
+    if (!groups[gi]) continue;
+    ends.push(cand[k][1]);
+    if (!seen.has(gi)) { seen.add(gi); near.push(gi); }
   }
   const [, j0, ex, ey] = cand[first];
-  return { gi: _endPick.gid[j0 >> 1], sx: x, sy: y, ex, ey, near };
+  return { gi: _endPick.gid[j0 >> 1], sx: x, sy: y, ex, ey, near, ends };
 }
-// Lights up bundle gi's ends within 50 px of (sx, sy): the same dots in
-// their own colors, slightly larger (depth-tested, so hidden where something solid is in front). null: off.
+// Lights up the given ends (indices into _endPick — the ends the bundle
+// picker found, so what is lit is exactly what was picked): the same dots
+// in their own colors, slightly larger, depth-tested. null: off.
 let _hoverEnds = null, _roundDot = null;
 function roundDotTexture() {
   if (_roundDot) return _roundDot;
@@ -2283,29 +2285,24 @@ function roundDotTexture() {
   const x = c.getContext('2d'); x.fillStyle = '#fff'; x.beginPath(); x.arc(16, 16, 15, 0, 2 * Math.PI); x.fill();
   return (_roundDot = new THREE.CanvasTexture(c));
 }
-// gi: one bundle index or a list of them.
-function showHoverEnds(gi, sx, sy) {
+function showHoverEnds(ends) {
   if (_hoverEnds) { scene.remove(_hoverEnds); _hoverEnds.geometry.dispose(); _hoverEnds.material.dispose(); _hoverEnds = null; }
-  const gis = gi == null ? [] : (Array.isArray(gi) ? gi : [gi]).filter(g => groups[g]);
-  if (gis.length && _endPick) {
+  if (ends && ends.length && _endPick) {
     const pts = [], cols = [], P = _endPick.pos;
     // The ends' own colors, as drawn (SETTINGS › ends·color, and inner·ends
     // for ends inside the probe sphere) — 'bundle': the bundle color as the
-    // end dots show it (x1.3, see makeEndpointDots); hidden ends: that too.
+    // end dots show it (x1.3, see makeEndpointDots).
     const colorOf = (style, bc) => style.mode === 'flat' ? hexToRgbRaw(style.rgb) : bc.map(v => Math.min(1, v * 1.3));
-    const cols2 = new Map(gis.map(g => { const bc = groups[g].color || [1, 1, 1]; return [g, [colorOf(tgtStyle, bc), colorOf(srcStyle, bc)]]; }));
     const pr = _lastDotsProbe, r2 = pr ? pr.radius * pr.radius : -1;
-    const rect = threeCanvas.getBoundingClientRect();
-    forEachEndOnScreen((j, x, y, w) => {
-      const cc = cols2.get(_endPick.gid[j >> 1]);
-      if (!cc || (x - sx) * (x - sx) + (y - sy) * (y - sy) > 50 * 50) return;
-      const [cOuter, cInner] = cc;
-      if (hiddenBySolid(rect.left + x, rect.top + y, w)) return; // SOLID: don't reveal ends inside the brain
+    for (const j of ends) {
+      const g = groups[_endPick.gid[j >> 1]];
+      if (!g) continue;
+      const bc = g.color || [1, 1, 1];
       const px = P[3*j], py = P[3*j+1], pz = P[3*j+2];
       pts.push(px, py, pz);
       const inner = pr && (px - pr.cursor[0]) ** 2 + (py - pr.cursor[1]) ** 2 + (pz - pr.cursor[2]) ** 2 <= r2;
-      cols.push(...(inner ? cInner : cOuter));
-    });
+      cols.push(...colorOf(inner ? srcStyle : tgtStyle, bc));
+    }
     if (pts.length) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
@@ -2338,7 +2335,20 @@ function hideBundleTooltip(force = false) { // (name kept: the marker code calls
   ctxMenu = null;
   bundleTipEl.style.display = 'none';
   showHoverEnds(null);
+  showVirtualProbe(null);
   if (markerCard) closeMarkerCard();
+}
+// A faint sphere where the virtual probe found its streamlines (3D menu).
+let _vpMesh = null;
+function showVirtualProbe(vp) {
+  if (_vpMesh) { scene.remove(_vpMesh); _vpMesh.geometry.dispose(); _vpMesh.material.dispose(); _vpMesh = null; }
+  if (vp) {
+    _vpMesh = new THREE.Mesh(new THREE.SphereGeometry(vp.r, 12, 8),
+      new THREE.MeshBasicMaterial({ color: srcStyle.rgb, wireframe: true, transparent: true, opacity: 0.45, depthWrite: false }));
+    _vpMesh.position.set(...vp.center);
+    scene.add(_vpMesh);
+  }
+  render3D();
 }
 // The spotlight (a desk lamp): "focus only this bundle". Off (grey): click
 // to focus only this bundle; on (lit, with a beam) while this bundle is
@@ -2395,6 +2405,78 @@ function doBundleHoverHitTest() {
 const _pickVP = new THREE.Matrix4(), _coordRay = new THREE.Raycaster(), _coordNdc = new THREE.Vector2();
 // camera depth (clip-space w) of a world point, as the picking functions measure it
 function camDepth(p) { const e = _pickVP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements; return e[3] * p[0] + e[7] * p[1] + e[11] * p[2] + e[15]; }
+// ── The virtual probe (probe on) ─────────────────────────────
+// With the probe on, the 3D menu reports what a probe would find where
+// the mouse points, instead of bundles: the streamline points (ends-only
+// mode: the streamline ends) in a cylinder around the line of sight, of
+// the probe's radius and twice that in length, starting at the nearest
+// such point (as the bundle picker's cylinder); the median of their
+// positions along the line is the probe centre — never beyond the first
+// solid surface (wCut), though what lies behind that surface does count. At that centre the probe's own
+// test (ends within the radius, or streamlines passing through) gives the
+// count. Returns { center: [x,y,z], count, r, ends } or null.
+const _vpO = new THREE.Vector3(), _vpD = new THREE.Vector3();
+let _vpBox = null, _vpMark = null;
+function pickVirtualProbe(clientX, clientY, wCut) {
+  if (!gridIdx || !allStreamlines || !allPts) return null;
+  const rect = threeCanvas.getBoundingClientRect(), R = radius, R2 = R * R;
+  const nx0 = ((clientX - rect.left) / rect.width) * 2 - 1, ny0 = -((clientY - rect.top) / rect.height) * 2 + 1;
+  _vpO.copy(camera.position);
+  _vpD.set(nx0, ny0, 0.5).unproject(camera).sub(_vpO).normalize();
+  const o = _vpO.toArray(), d = _vpD.toArray();
+  const ss = [];   // positions along the line of the points in the cylinder
+  let tMin = Infinity;
+  const take = (x, y, z) => {
+    const px = x - o[0], py = y - o[1], pz = z - o[2];
+    const t = px * d[0] + py * d[1] + pz * d[2];
+    if (t > 0 && px * px + py * py + pz * pz - t * t <= R2) { ss.push(t); if (t < tMin) tMin = t; }
+  };
+  if (probeEndsOnly) {
+    for (const t of allStreamlines) {
+      const n = t.length / 3; if (n < 1) continue;
+      take(t[0], t[1], t[2]); if (n > 1) take(t[3 * n - 3], t[3 * n - 2], t[3 * n - 1]);
+    }
+  } else {
+    // the streamline points: spheres along the line (radius 1.12 R, one per R) cover the cylinder
+    if (!_vpBox || _vpBox.pts !== allPts) {
+      const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < allPts.length; i += 3) for (let c = 0; c < 3; c++) { const v = allPts[i + c]; if (v < mn[c]) mn[c] = v; if (v > mx[c]) mx[c] = v; }
+      _vpBox = { pts: allPts, mn, mx };
+      _vpMark = new Uint8Array(allPts.length / 3);
+    }
+    let t0 = 0, t1 = Infinity;
+    for (let c = 0; c < 3; c++) {
+      const lo = _vpBox.mn[c] - R, hi = _vpBox.mx[c] + R;
+      if (Math.abs(d[c]) < 1e-12) { if (o[c] < lo || o[c] > hi) return null; continue; }
+      const ta = (lo - o[c]) / d[c], tb = (hi - o[c]) / d[c];
+      t0 = Math.max(t0, Math.min(ta, tb)); t1 = Math.min(t1, Math.max(ta, tb));
+    }
+    if (!(t1 > t0)) return null;
+    const marked = [];
+    for (let t = t0; t <= t1 + R; t += R) {
+      if (t - 1.2 * R > tMin + 2 * R) break;   // past the cylinder's far end
+      for (const pi of gridIdx.queryRadius(o[0] + t * d[0], o[1] + t * d[1], o[2] + t * d[2], 1.12 * R)) {
+        if (_vpMark[pi]) continue;
+        _vpMark[pi] = 1; marked.push(pi);
+        take(allPts[3 * pi], allPts[3 * pi + 1], allPts[3 * pi + 2]);
+      }
+    }
+    for (const pi of marked) _vpMark[pi] = 0;
+  }
+  if (!ss.length) return null;
+  ss.sort((a, b) => a - b);
+  // the cylinder: from the nearest point to 2 radii behind it
+  const tFar = ss[0] + 2 * R;
+  let m = ss.length; while (m > 1 && ss[m - 1] > tFar) m--;
+  let tc = ss[m >> 1];
+  if (wCut < Infinity) {                      // not beyond the first solid surface
+    const w0 = camDepth(o), w1 = camDepth([o[0] + d[0], o[1] + d[1], o[2] + d[2]]);
+    if (w1 > w0) tc = Math.min(tc, (wCut - w0) / (w1 - w0));
+  }
+  const c = [o[0] + tc * d[0], o[1] + tc * d[1], o[2] + tc * d[2]];
+  return { center: c, count: probeHitIds(c[0], c[1], c[2], false).length, r: R, ends: probeEndsOnly };
+}
+const virtualProbeOn = () => probeOn && !probeBypassed() && !!gridIdx;
 function collectHits(clientX, clientY) {
   const rect = threeCanvas.getBoundingClientRect();
   const brain = pickBrain(clientX, clientY);
@@ -2416,20 +2498,23 @@ function collectHits(clientX, clientY) {
     wCut = Math.min(wCut, w + 0.01);
   }
   solids.sort((x, y) => x[0] - y[0]);
+  const vprobe = virtualProbeOn() ? pickVirtualProbe(clientX, clientY, wCut) : null;
   const h = {
     sx: clientX - rect.left, sy: clientY - rect.top,
-    marker, brain,
-    bundle: pickBundleEnd(clientX, clientY, wCut),
+    marker, brain, vprobe,
+    bundle: virtualProbeOn() ? null : pickBundleEnd(clientX, clientY, wCut),   // the probe replaces the bundle picker
     region: pickRegions(clientX, clientY, Math.min(wRegions, wCut === Infinity ? Infinity : wCut + 1.5)),
   };
-  h.coord = solids.length ? { ras: solids[0][1].slice(), what: solids[0][2] } : null;
+  h.coord = vprobe && vprobe.count ? { ras: vprobe.center.slice(), what: 'probe' }
+    : solids.length ? { ras: solids[0][1].slice(), what: solids[0][2] } : null;
   return h;
 }
-const hitsEmpty = h => !h.marker && !h.bundle && !h.brain && !h.region;
+const hitsEmpty = h => !h.marker && !h.bundle && !h.brain && !h.region && !(h.vprobe && h.vprobe.count);
 const hitsKey = h => [h.marker ? 'm' + h.marker.rec.file.name + ':' + h.marker.index + '+' + (h.marker.all ? h.marker.all.length : 1) : '',
   h.bundle ? 'b' + (h.bundle.near || [h.bundle.gi]).join(',') : '',
   h.brain ? 'v' + (activeVolume ? activeVolume.file.name : '') : '',
   h.region ? 'r' + h.region.labels[0] : '',
+  h.vprobe ? 'p' + h.vprobe.count + '@' + h.vprobe.center.map(v => v.toFixed(0)).join(',') : '',
   ].join('|');
 // The regions of the label volume in memory along the mouse ray, front to
 // back (at most 16), clip planes ignored — the meshes aren't clipped, and
@@ -2503,6 +2588,7 @@ function showCtxMenu(h, { pinned = false } = {}) {
   ctxMenu.x = r.left; ctxMenu.y = r.top;
   fitCtxMenu();
   ctxLightEnds();
+  showVirtualProbe(h.vprobe && h.vprobe.count ? h.vprobe : null);
   if (h.marker) setMarkerHoverState(h.marker);
 }
 function pinCtxMenu() {
@@ -2510,11 +2596,11 @@ function pinCtxMenu() {
   ctxMenu.pinned = true;
   bundleTipEl.classList.add('ctx-pinned');
 }
-// The bundles' ends at the spot light up (all of them, or one while its row is hovered).
+// The picked ends light up (all of them, or one bundle's while its row is hovered).
 function ctxLightEnds(only = null) {
   const b = ctxMenu && ctxMenu.hits.bundle;
   if (!b) { if (_hoverEnds) showHoverEnds(null); return; }
-  showHoverEnds(only != null ? [only] : (b.near || [b.gi]), b.sx, b.sy);
+  showHoverEnds(only != null ? (b.ends || []).filter(j => _endPick.gid[j >> 1] === only) : b.ends);
 }
 // Below the 3D view's bottom: a scrollbar (dragging the menu up gives it room).
 function fitCtxMenu() {
@@ -2571,6 +2657,25 @@ function renderCtxMenu() {
   const sections = {
     bundle: () => {
       if (!groups.length) return;            // (shown whenever there are streamlines)
+      if (virtualProbeOn()) {                // probe on: what a probe here finds
+        const vp = h.vprobe, n = vp ? vp.count : 0;
+        row(null, [tag('Streamlines:'), count(n.toLocaleString(), (probeEndsOnly ? 'end here' : 'pass through here')),
+          text('≤ ' + (+radius.toPrecision(3)) + ' mm', 'ctx-text ctx-dim')]);
+        return;
+      }
+      if (!isBundle && groups.length === 1) { // one tractogram, probe off: as the volume — on/off, focused/dimmed, its name
+        const g = groups[0];
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = !!g.visible;
+        cb.title = g.visible ? 'shown — click: hide' : 'hidden — click: show';
+        cb.addEventListener('click', e => e.stopPropagation());
+        cb.addEventListener('change', () => { if (g.item) g.item.visible = cb.checked; dataStore.refresh(); renderCtxMenu(); });
+        const fb = makeFocusButton(!!g.focus, () => toggleFocus(g), g.focus ? 'focused (drawn solid) — click: dim' : 'dimmed — click: focus (draw solid)');
+        if (!g.visible) fb.classList.add('grey');
+        const name = trckParents[0] ? trckParents[0].name : g.name;
+        row(null, [tag('Streamlines:'), cb, fb, Object.assign(text(name, 'ctx-text ctx-fname'), { title: name })]);
+        return;
+      }
       const near = h.bundle ? (h.bundle.near || [h.bundle.gi]).filter(gi => groups[gi]) : [];
       row(near.length ? 'bundles' : null, [tag('Streamlines:'), count(near.length, near.length === 1 ? 'bundle nearby' : 'bundles nearby')]);
       if (!near.length || !open.has('bundles')) return;
@@ -2658,7 +2763,7 @@ function renderCtxMenu() {
   sections.coord = () => {
     const c = h.coord;
     if (!c) return;
-    row('coord', [tag('Coordinate:'), text(c.ras.map(v => v.toFixed(1)).join('  ') + ' mm', 'ctx-text')]).title = 'picked on the ' + c.what;
+    row('coord', [tag('Coordinate:'), text(c.ras.map(v => v.toFixed(1)).join('  ') + ' mm', 'ctx-text')]).title = c.what === 'probe' ? 'the virtual probe centre' : 'picked on the ' + c.what;
     if (!open.has('coord')) return;
     const d = nest(1);
     d.classList.add('ctx-moves');
@@ -5949,6 +6054,7 @@ document.getElementById('fi-load').addEventListener('change', async e => {
   const files = Array.from(e.target.files || []);
   e.target.value = ''; // allow re-picking the same file(s) next time
   if (!files.length) return;
+  cancelDownloads();           // a download still running (URL, demo) must not replace these afterwards
   try { await dispatchOpenedFiles(files); }
   catch(err) { alert('File load error: '+err); }
 });
@@ -8025,6 +8131,7 @@ document.body.addEventListener('drop',async e=>{
   e.preventDefault();
   const files = Array.from(e.dataTransfer.files || []);
   if (!files.length) { console.log('File drop failed.'); return; }
+  cancelDownloads();
   try { await dispatchOpenedFiles(files); }
   catch(err) { alert('File load error: '+err); }
 });
@@ -8106,6 +8213,8 @@ regionMeshes = new RegionMeshes({
   }),
 });
 const _rmLightCam = new THREE.Vector3();
+// Console: how dimmed regions are drawn — 'glass' (default) or 'inside'.
+window.setRegionDimMode = mode => regionMeshes.setDimMode(mode);
 if (endLabelSrc) regionMeshes.setRef(endLabelSrc);
 resizeAll();
 
@@ -8293,8 +8402,18 @@ resizeAll();
 // sees live progress (percentage if Content-Length is available, a running
 // MB count otherwise) instead of the welcome screen sitting frozen for the
 // ~30s a large demo file can take to download.
+// Downloads (?load=, the demos) in progress: a drop or LOAD… cancels them,
+// so a slow download can't replace data loaded meanwhile.
+let _downloads = new AbortController();
+function cancelDownloads() {
+  _downloads.abort();
+  _downloads = new AbortController();
+  setProgress('');
+}
+const isAbort = e => e && e.name === 'AbortError';
 async function fetchWithProgress(url, label) {
-  const res = await fetch(url);
+  const signal = _downloads.signal;
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(label + ': HTTP ' + res.status);
   const total = +res.headers.get('Content-Length') || 0;
   if (!res.body || !res.body.getReader) {
@@ -8316,13 +8435,18 @@ async function fetchWithProgress(url, label) {
       ? `${label} ${Math.min(100, Math.round(received/total*100))}% (${mb} / ${(total/1024/1024).toFixed(1)} MB)`
       : `${label} ${mb} MB…`);
   }
+  if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
   return new Blob(chunks, { type: res.headers.get('Content-Type') || '' });
 }
 
 async function loadDemoFile(url, kind) {
   const name = url.split('/').pop();
   const label = kind === 'anat' ? 'downloading anatomy' : 'downloading tractogram';
-  const blob = await fetchWithProgress(url, label);
+  const signal = _downloads.signal;
+  let blob;
+  try { blob = await fetchWithProgress(url, label); }
+  catch (e) { if (isAbort(e)) return; throw e; }
+  if (signal.aborted) return;           // cancelled by another load meanwhile
   // (An anatomy file loaded this way is added to the volume list by
   // loadAnat itself — see volumeForFile.)
   const file = new File([blob], name);
@@ -8337,7 +8461,7 @@ async function loadDemoFile(url, kind) {
 // The server must allow cross-origin requests (CORS:
 // Access-Control-Allow-Origin) — otherwise the browser blocks the fetch.
 async function loadFromUrls(urls) {
-  const files = [];
+  const files = [], signal = _downloads.signal;
   for (const url of urls) {
     let name;
     try {
@@ -8346,6 +8470,7 @@ async function loadFromUrls(urls) {
     let blob;
     try { blob = await fetchWithProgress(url, 'downloading ' + name); }
     catch (e) {
+      if (isAbort(e)) return;           // cancelled: other data was loaded meanwhile
       setProgress('');
       alert('Could not download\n' + url + '\n\n' + ((e && e.message) || e)
             + '\n\nIf the file exists, its server may not allow loading from other sites (CORS).');
@@ -8356,6 +8481,7 @@ async function loadFromUrls(urls) {
     if (!/\.[a-z0-9]+$/i.test(name) && /zip/i.test(blob.type)) name += '.zip';
     files.push(new File([blob], name, { type: blob.type }));
   }
+  if (signal.aborted) return;
   setProgress('');
   try { await dispatchOpenedFiles(files); }
   catch (err) { alert('File load error: ' + err); }
@@ -8370,10 +8496,12 @@ if (new URLSearchParams(location.search).has('demo')) {
   const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
     setProgress('checking demo files…');
-    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoAnat,'anat'); }
-    catch(e){ console.error(e); setProgress('anatomy download failed — see console'); }
-    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoTck,'trck'); }
-    catch(e){ console.error(e); setProgress('tractogram download failed — see console'); }
+    const signal = _downloads.signal;
+    try { const r=await fetch(demoAnat,{method:'HEAD',signal}); if(r.ok && !signal.aborted) await loadDemoFile(demoAnat,'anat'); }
+    catch(e){ if (isAbort(e)) return; console.error(e); setProgress('anatomy download failed — see console'); }
+    if (signal.aborted) return;
+    try { const r=await fetch(demoTck ,{method:'HEAD',signal}); if(r.ok && !signal.aborted) await loadDemoFile(demoTck,'trck'); }
+    catch(e){ if (isAbort(e)) return; console.error(e); setProgress('tractogram download failed — see console'); }
   }
   tryDemoLoad();
 }
@@ -8382,10 +8510,12 @@ if (new URLSearchParams(location.search).has('MacBNA_M03')) {
   const demoTck = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/sub-M03_tractogram.tck';
   async function tryDemoLoad() {
     setProgress('checking demo files…');
-    try { const r=await fetch(demoAnat,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoAnat,'anat'); }
-    catch(e){ console.error(e); setProgress('anatomy download failed — see console'); }
-    try { const r=await fetch(demoTck ,{method:'HEAD'}); if(r.ok) await loadDemoFile(demoTck,'trck'); }
-    catch(e){ console.error(e); setProgress('tractogram download failed — see console'); }
+    const signal = _downloads.signal;
+    try { const r=await fetch(demoAnat,{method:'HEAD',signal}); if(r.ok && !signal.aborted) await loadDemoFile(demoAnat,'anat'); }
+    catch(e){ if (isAbort(e)) return; console.error(e); setProgress('anatomy download failed — see console'); }
+    if (signal.aborted) return;
+    try { const r=await fetch(demoTck ,{method:'HEAD',signal}); if(r.ok && !signal.aborted) await loadDemoFile(demoTck,'trck'); }
+    catch(e){ if (isAbort(e)) return; console.error(e); setProgress('tractogram download failed — see console'); }
   }
   tryDemoLoad();
 }

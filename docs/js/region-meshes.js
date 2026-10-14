@@ -39,7 +39,7 @@ const FS = `
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 uniform vec3  u_color;
-uniform float u_glass;
+uniform float u_glass;        // 0 solid, 1 glass, 3 inner wall (solid back faces)
 uniform float u_rimPow;
 uniform float u_alphaMult;
 uniform vec3  u_lightDir;     // the direction the light travels
@@ -52,7 +52,9 @@ uniform float u_depthRadius;
 ` + LIGHT_FALLOFF_GLSL + `
 void main() {
   vec3 N = normalize(vNormal);
-  if (!gl_FrontFacing) N = -N;
+  // the inner wall faces inward (three.js draws BackSide with the winding
+  // flipped, so gl_FrontFacing can't tell); otherwise toward the viewer
+  if (u_glass > 2.5) N = -N; else if (!gl_FrontFacing) N = -N;
   vec3 V = normalize(cameraPosition - vWorldPos);
   vec3 L = u_pointLight > 0.5 ? normalize(u_lightPos - vWorldPos) : -normalize(u_lightDir);
   float diffuse = max(dot(N, L), 0.0);
@@ -62,7 +64,8 @@ void main() {
   float spec = Hlen > 1e-4 ? pow(max(dot(N, Hraw / Hlen), 0.0), 32.0) * smoothstep(0.02, 0.25, Hlen) : 0.0;
   vec3 col = u_color * (u_ambient + (1.0 - u_ambient) * diffuse * fall) + vec3(0.25 * spec * fall);
   float alpha = 1.0;
-  if (u_glass > 0.5) alpha = clamp(pow(1.0 - abs(dot(N, V)), u_rimPow) * u_alphaMult, 0.0, 1.0);
+  if (u_glass > 2.5) col *= 0.75;                       // the inner wall: a little darker
+  else if (u_glass > 0.5) alpha = clamp(pow(1.0 - abs(dot(N, V)), u_rimPow) * u_alphaMult, 0.0, 1.0);
   gl_FragColor = vec4(col, alpha);
 }`;
 
@@ -98,6 +101,9 @@ export class RegionMeshes {
       u_camFwd: { value: new THREE.Vector3(0, 0, -1) }, u_depthTarget: { value: new THREE.Vector3() },
       u_depthRadius: { value: 1 },
     };
+    // How a dimmed region is drawn: 'glass' (rim) or 'inside' (glass
+    // front, its inner walls solid). setDimMode().
+    this.dimMode = 'glass';
     this._r = new THREE.Vector3(); this._u = new THREE.Vector3();
     try {
       this.worker = new Worker(new URL('./region-mesh-worker.js', import.meta.url), { type: 'module' });
@@ -149,7 +155,7 @@ export class RegionMeshes {
   // the checkmark: in the set (solid) or not
   setMember(v, on) {
     if (on && !this.set.has(v)) this._add(v, true);
-    else if (!on && this.set.has(v)) { const e = this.set.get(v); if (e.mesh) this.group.remove(e.mesh), e.mesh.material.dispose(); this.set.delete(v); }
+    else if (!on && this.set.has(v)) { this._drop(this.set.get(v)); this.set.delete(v); }
     else return;
     this._changed();
   }
@@ -166,11 +172,18 @@ export class RegionMeshes {
     const hit = raycaster.intersectObjects(solid, false)[0];
     return hit ? { label: hit.object.userData.region, point: hit.point.toArray(), distance: hit.distance } : null;
   }
+  setDimMode(mode) {
+    if (!['glass', 'inside'].includes(mode)) return this.dimMode;
+    this.dimMode = mode;
+    for (const v of this.set.keys()) this._style(v);
+    this.render();
+    return mode;
+  }
   get visible() { return this.group.visible; }
   setVisible(on) { this.group.visible = !!on; this._changed(); }
   // empty the set
   clear(notify = true) {
-    for (const e of this.set.values()) if (e.mesh) { this.group.remove(e.mesh); e.mesh.material.dispose(); }
+    for (const e of this.set.values()) this._drop(e);
     this.set.clear();
     if (notify) this._changed();
   }
@@ -228,6 +241,12 @@ export class RegionMeshes {
     return g;
   }
 
+  _drop(e) {
+    if (!e.mesh) return;
+    this.group.remove(e.mesh); e.mesh.material.dispose();
+    if (e.back) e.back.material.dispose();
+  }
+
   _mesh(v, geo) {
     const e = this.set.get(v);
     if (!e || !geo || e.mesh) return;
@@ -240,6 +259,14 @@ export class RegionMeshes {
     m.userData.region = v;
     m.onBeforeRender = (renderer, scene, cam) => this._sync(cam);
     e.mesh = m;
+    // the inner walls ('inside' dim mode): the same surface, back faces, solid
+    const back = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+      vertexShader: VS, fragmentShader: FS, side: THREE.BackSide,
+      uniforms: { ...this.uniforms, u_color: mat.uniforms.u_color, u_glass: { value: 3 } },
+    }));
+    back.onBeforeRender = m.onBeforeRender;
+    back.visible = false;
+    m.add(back); e.back = back;
     this.group.add(m);
     this._style(v);
   }
@@ -249,12 +276,14 @@ export class RegionMeshes {
   _style(v) {
     const e = this.set.get(v), m = e && e.mesh;
     if (!m) return;
-    const glass = !e.focus, mat = m.material;
+    const glass = !e.focus, mat = m.material, mode = this.dimMode;
+    // dimmed: glass (front faces), or inside (glass over solid inner walls)
     mat.uniforms.u_glass.value = glass ? 1 : 0;
     mat.transparent = glass; mat.depthWrite = !glass;
     mat.side = glass ? this.THREE.FrontSide : this.THREE.DoubleSide;
     mat.needsUpdate = true;
     m.renderOrder = glass ? 998 : 0;
+    if (e.back) e.back.visible = glass && mode === 'inside';
   }
 
   // the light, as for the streamlines (scene3d.js attachStreamlineShading)
