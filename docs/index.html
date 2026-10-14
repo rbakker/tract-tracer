@@ -1048,7 +1048,7 @@ input[type=file]{display:none;}
   <div id="welcome">
     <h2>TRACTOGRAM OBSERVER</h2>
     <p>Use the DATA menu to get started</p>
-    <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">10k MacBNA M01 demo</a><br/>or <a id="demo-btn" class="accent-link" href="?MacBNA_M03">1M MacBNA M03 demo</a></p>
+    <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">10k MacBNA M01 demo</a><br/>or <a id="demo-btn-m03" class="accent-link" href="?MacBNA_M03">1M MacBNA M03 demo</a></p>
   </div>
 
   <!-- Loading progress — deliberately NOT inside #welcome: the anatomy
@@ -8505,20 +8505,11 @@ if (new URLSearchParams(location.search).has('demo')) {
   }
   tryDemoLoad();
 }
-if (new URLSearchParams(location.search).has('MacBNA_M03')) {
-  const demoAnat = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/anat_dwireg.nii.gz';
-  const demoTck = 'https://data.tractogram.observer/MacBNA/M03/2026aug18a/sub-M03_tractogram.tck';
-  async function tryDemoLoad() {
-    setProgress('checking demo files…');
-    const signal = _downloads.signal;
-    try { const r=await fetch(demoAnat,{method:'HEAD',signal}); if(r.ok && !signal.aborted) await loadDemoFile(demoAnat,'anat'); }
-    catch(e){ if (isAbort(e)) return; console.error(e); setProgress('anatomy download failed — see console'); }
-    if (signal.aborted) return;
-    try { const r=await fetch(demoTck ,{method:'HEAD',signal}); if(r.ok && !signal.aborted) await loadDemoFile(demoTck,'trck'); }
-    catch(e){ if (isAbort(e)) return; console.error(e); setProgress('tractogram download failed — see console'); }
-  }
-  tryDemoLoad();
-}
+// ?MacBNA_M03 — the subject's zip: anatomies, label volumes with their
+// lookup tables (CHARM, SARM, D99, tissue), tractogram and index.json —
+// loaded exactly as ?load=<its URL> would.
+if (new URLSearchParams(location.search).has('MacBNA_M03'))
+  loadFromUrls(['https://data.tractogram.observer/MacBNA/M03/2026aug18a/M03.zip']);
 
 
 </script>
