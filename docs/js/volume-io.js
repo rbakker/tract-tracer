@@ -35,35 +35,35 @@ function integerRangeMax(datatype) {
   }
 }
 
+
 // Reads exactly `n` elements of the given NIfTI datatype starting at byte
 // offset `start` in `buf`, always returning a Float32Array of length n.
-function readVolumeFloat32(buf, start, n, datatype, bytesPerElement) {
-  if (datatype === 2) {
-    const src = new Uint8Array(buf, start, n);
-    const out = new Float32Array(n); out.set(src); return out;
-  } else if (datatype === 4) {
-    const src = new Int16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-    const out = new Float32Array(n); out.set(src); return out;
-  } else if (datatype === 8) {
-    const src = new Int32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-    const out = new Float32Array(n); out.set(src); return out;
-  } else if (datatype === 16) {
-    return new Float32Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-  } else if (datatype === 64) {
-    const f = new Float64Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-    const out = new Float32Array(n);
-    for (let i = 0; i < n; i++) out[i] = f[i];
-    return out;
-  } else if (datatype === 256) {
-    const src = new Int8Array(buf, start, n);
-    const out = new Float32Array(n); out.set(src); return out;
-  } else if (datatype === 512) {
-    const src = new Uint16Array(buf.slice(start, start + n * bytesPerElement), 0, n);
-    const out = new Float32Array(n); out.set(src); return out;
-  } else {
-    throw 'Unsupported NIfTI datatype ' + datatype;
-  }
+// (Little-endian, like the rest of the reader.)
+const NIFTI_TYPES = {
+  2:    [1, Uint8Array],      // UINT8
+  4:    [2, Int16Array],      // INT16
+  8:    [4, Int32Array],      // INT32
+  16:   [4, Float32Array],    // FLOAT32
+  64:   [8, Float64Array],    // FLOAT64
+  256:  [1, Int8Array],       // INT8
+  512:  [2, Uint16Array],     // UINT16
+  768:  [4, Uint32Array],     // UINT32 (e.g. label volumes from nibabel)
+  1024: [8, BigInt64Array],   // INT64
+  1280: [8, BigUint64Array],  // UINT64
+};
+function readVolumeFloat32(buf, start, n, datatype) {
+  const t = NIFTI_TYPES[datatype];
+  if (!t) throw 'Unsupported NIfTI datatype ' + datatype;
+  const [bytes, Arr] = t;
+  // a copy of just these bytes: aligned for the typed array, and never past the first volume
+  const src = new Arr(buf.slice(start, start + n * bytes), 0, n);
+  if (Arr === Float32Array) return src;
+  const out = new Float32Array(n);
+  if (Arr === BigInt64Array || Arr === BigUint64Array) { for (let i = 0; i < n; i++) out[i] = Number(src[i]); }
+  else out.set(src);   // the others convert directly
+  return out;
 }
+
 
 export async function parseNifti(file) {
   let buf = await file.arrayBuffer();
