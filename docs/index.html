@@ -4158,6 +4158,23 @@ function attachLut(lut, vol) {
   lut.volume = vol; vol.lut = lut;
   vol.category = 'parcellation'; vol.categorySource = 'lut';
 }
+// A drop's single lookup table that no rule could place (rule 5 in
+// dispatchOpenedFiles): waits until all of the drop's volumes are
+// classified, then goes with the one that is a parcellation (none or
+// several: it stays unattached). Returns the volume it went with.
+let pendingAutoLut = null; // { lut, vols }
+function resolveAutoLut() {
+  const p = pendingAutoLut;
+  if (!p) return null;
+  if (p.lut.volume || !luts.includes(p.lut)) { pendingAutoLut = null; return null; }
+  const vols = p.vols.filter(v => volumes.includes(v));
+  if (vols.some(v => v.category == null)) return null; // not all classified yet
+  pendingAutoLut = null;
+  const labels = vols.filter(v => v.category === 'parcellation' && !v.lut && !v.isColor);
+  if (labels.length !== 1) return null;
+  attachLut(p.lut, labels[0]);
+  return labels[0];
+}
 function detachLut(lut) {
   if (lut.volume) lut.volume.lut = null;
   lut.volume = null;
@@ -4321,6 +4338,7 @@ async function classifyPendingVolumes() {
         vol.classifyFailed = true;
         if (vol.category == null) { vol.category = 'anatomy'; vol.categorySource = 'error'; }
       }
+      if (resolveAutoLut() === activeVolume) applyActiveVolumeDisplay();
       registerVolumeItems();
     }
   } finally { _classifying = false; }
@@ -4370,6 +4388,7 @@ async function loadAnat(f){
     vol.category = !isColorData && looksLikeParcellation(anat) ? 'parcellation' : 'anatomy';
     vol.categorySource = 'sniff';
   }
+  resolveAutoLut(); // (its table, if it gets one, is used just below)
   activeVolume = vol;
   // The lookup table belongs to the volume: this one's own, or an
   // automatic one (made below if needed).
@@ -6032,7 +6051,12 @@ async function dispatchOpenedFiles(rawFiles){
       attachLut(lut, target);
       if (target === activeVolume) activeChanged = true;
     }
+    // 5. one lookup table in a drop with volumes, matched by none of the
+    //    above: it goes with the drop's one label volume, once the
+    //    volumes are classified (see resolveAutoLut).
+    if (!target && lutEntries.length === 1 && newVols.length) pendingAutoLut = { lut, vols: newVols.slice() };
   }
+  if (pendingAutoLut && resolveAutoLut() === activeVolume) activeChanged = true;
 
   if (newVols.length) {
     // Load the first new volume; the rest are listed, classified in the
