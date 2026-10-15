@@ -283,6 +283,10 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .hover-tip .ctx-line.ctx-l0 ~ .ctx-line.ctx-l0{margin-top:5px;}   /* more room between the summaries */
 .hover-tip .ctx-moves{display:flex;gap:8px;flex-wrap:wrap;}
 .hover-tip .ctx-fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.hover-tip .ctx-link{background:none;border:none;padding:0;font:inherit;font-size:10px;color:var(--accent);
+  cursor:pointer;white-space:nowrap;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.25);text-underline-offset:2px;}
+.hover-tip .ctx-link b{font-weight:600;}
+.hover-tip .ctx-link:hover{color:var(--bright);}
 .hover-tip .ctx-tag{flex:none;width:76px;color:var(--dim);font-size:9px;letter-spacing:0.04em;}
 .hover-tip .ctx-fold{cursor:pointer;}
 .hover-tip .ctx-fold:hover .ctx-caret{color:var(--bright);}
@@ -2338,13 +2342,16 @@ function hideBundleTooltip(force = false) { // (name kept: the marker code calls
   showVirtualProbe(null);
   if (markerCard) closeMarkerCard();
 }
-// A faint sphere where the virtual probe found its streamlines (3D menu).
+// A sphere where the virtual probe found its streamlines (3D menu).
+const VIRTUAL_PROBE_COLOR = '#ffdd00';
 let _vpMesh = null;
 function showVirtualProbe(vp) {
   if (_vpMesh) { scene.remove(_vpMesh); _vpMesh.geometry.dispose(); _vpMesh.material.dispose(); _vpMesh = null; }
   if (vp) {
-    _vpMesh = new THREE.Mesh(new THREE.SphereGeometry(vp.r, 12, 8),
-      new THREE.MeshBasicMaterial({ color: srcStyle.rgb, wireframe: true, transparent: true, opacity: 0.45, depthWrite: false }));
+    // construction-site yellow, a coarser mesh: clearly not the real probe
+    // (and lemon rather than amber, to stay apart from the coronal orange)
+    _vpMesh = new THREE.Mesh(new THREE.SphereGeometry(vp.r, 8, 6),
+      new THREE.MeshBasicMaterial({ color: VIRTUAL_PROBE_COLOR, wireframe: true, transparent: true, opacity: 0.8, depthWrite: false }));
     _vpMesh.position.set(...vp.center);
     scene.add(_vpMesh);
   }
@@ -2659,8 +2666,20 @@ function renderCtxMenu() {
       if (!groups.length) return;            // (shown whenever there are streamlines)
       if (virtualProbeOn()) {                // probe on: what a probe here finds
         const vp = h.vprobe, n = vp ? vp.count : 0;
-        row(null, [tag('Streamlines:'), count(n.toLocaleString(), (probeEndsOnly ? 'end here' : 'pass through here')),
-          text('≤ ' + (+radius.toPrecision(3)) + ' mm', 'ctx-text ctx-dim')]);
+        const what = probeEndsOnly ? 'end here' : 'pass through here';
+        let summary;
+        if (n) {   // a link: put the probe here (and show them)
+          summary = document.createElement('button');
+          summary.className = 'ctx-link';
+          summary.innerHTML = '<b>' + n.toLocaleString() + '</b> ' + what;
+          summary.title = 'move the probe here — selects these streamlines';
+          summary.addEventListener('click', e => {
+            e.stopPropagation();
+            state.update({ 'src.cursor': vp.center.slice() });
+            hideBundleTooltip(true);
+          });
+        } else summary = count(0, what);
+        row(null, [tag('Streamlines:'), summary, text('≤ ' + (+radius.toPrecision(3)) + ' mm', 'ctx-text ctx-dim')]);
         return;
       }
       if (!isBundle && groups.length === 1) { // one tractogram, probe off: as the volume — on/off, focused/dimmed, its name
