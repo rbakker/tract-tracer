@@ -27,6 +27,50 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 #right{border-left:1px solid var(--border);}
 #left .slice-row,#right .slice-row{flex:1;min-height:0;}
 #middle{flex:1;position:relative;overflow:visible;z-index:100;min-width:0;}
+/* ── LEFT RAIL: classic tabs on a dark strip, one per page of the left
+   column; the shown page's tab is dark like the column, runs into it and
+   glows (clipped on the column side). The tab only centres; the text is
+   turned in its span. A <div>, not a <button>: Firefox clips a button's
+   content box, which cut the first letter's edge of the turned text. ── */
+#rail{width:28px;flex:none;display:flex;flex-direction:column;background:var(--bg);padding-top:6px;gap:6px;position:relative;
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:none;}
+#rail::-webkit-scrollbar{display:none;}
+/* the selected tab's edge, continued along the column's left edge above
+   and below it (placed by the tab code, section 11b) */
+.rail-edge{position:absolute;right:0;width:1px;background:rgba(155,187,255,0.55);pointer-events:none;z-index:2;
+  box-shadow:0 0 6px 1px rgba(110,160,255,0.4);clip-path:inset(0 0 0 -12px);}
+.rail-tab{display:flex;align-items:center;justify-content:center;margin-left:4px;width:calc(100% - 4px);box-sizing:border-box;
+  background:#a3adbb;color:#0a0e14;border-radius:8px 0 0 8px;font-family:inherit;font-size:11px;font-weight:600;
+  letter-spacing:0.06em;padding:12px 0;cursor:pointer;user-select:none;position:relative;flex:none;}
+.rail-tab span{text-transform:uppercase;letter-spacing:0.18em;writing-mode:vertical-rl;transform:rotate(180deg);line-height:1.2;white-space:nowrap;padding:2px 0;}
+.rail-tab:hover{background:#c1c9d4;color:#000;}
+.rail-tab.on{background:var(--panel);color:var(--bright);font-weight:500;z-index:1;
+  box-shadow:0 0 0 1px rgba(155,187,255,0.55),0 0 10px 2px rgba(110,160,255,0.45);
+  clip-path:inset(-16px 0 -16px -16px);}
+.rail-fold{flex:none;background:none;border:none;color:var(--dim);font-size:15px;line-height:1;padding:8px 0;cursor:pointer;font-family:inherit;}
+.rail-fold:hover{color:var(--bright);}
+.rail-fold-top{padding:2px 0 4px;}
+.rail-fold:not(.rail-fold-top){margin-top:auto;}
+body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings the column back */
+/* a page of the left column other than the probe's sections */
+#left{position:relative;}
+#left-page{position:absolute;inset:0;z-index:5;background:var(--panel);display:none;flex-direction:column;}
+#left-page.on{display:flex;}
+.lp-head{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);flex:none;}
+.lp-title{color:var(--accent);font-size:9px;letter-spacing:0.16em;flex:none;}
+.lp-sub{color:var(--dim);font-size:9px;letter-spacing:0.06em;flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lp-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:8px 0;box-sizing:border-box;}
+.lp-body .dt-scroll{max-height:none;overflow:visible;}
+#left-page .lp-body > *{zoom:var(--ui);}   /* the UI's size, as the panels had (see "UI size") */
+.lp-body > .panel-content{padding:4px 12px 8px;}
+.lp-body .dt-toolbar{position:sticky;top:0;z-index:1;background:var(--panel);}
+.lp-empty{padding:18px 16px;display:flex;flex-direction:column;gap:12px;color:var(--text);font-size:10px;line-height:1.6;letter-spacing:0.02em;}
+.lp-empty p{margin:0;}
+.lp-empty b{color:var(--bright);font-weight:500;}
+.lp-empty .lp-load{align-self:flex-start;background:rgba(74,170,255,0.08);border:1px solid var(--accent);color:var(--accent);
+  font-family:inherit;font-size:10px;letter-spacing:0.12em;padding:6px 16px;cursor:pointer;}
+.lp-empty .lp-load:hover{background:var(--accent);color:#04070a;}
+.lp-empty a{color:var(--accent);}
 #three-canvas{width:100%;height:100%;display:block;}
 
 /* ── SLICE ROWS ── */
@@ -153,12 +197,18 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .hover-tip .frame-row{display:flex;align-items:center;gap:6px;cursor:pointer;padding-right:4px;}
 .panel-content{display:block;}
 
-/* ── DATA TREE (FILE panel) ── */
-#file-load-row{margin-bottom:12px;}
-#load-btn-main{width:100%;background:rgba(74,170,255,0.08);border:1px solid var(--accent);
-  color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px;
-  letter-spacing:0.12em;padding:9px 0;cursor:pointer;transition:background 0.15s,color 0.15s;}
-#load-btn-main:hover{background:var(--accent);color:#04070a;}
+/* ── ☰ MENU (top left): LOAD… and the left column's tabs ── */
+#main-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:170px;flex-direction:column;gap:2px;
+  background:rgb(8,11,15);border:2px solid var(--border);padding:6px;box-shadow:0 6px 24px rgba(0,0,0,0.55);}
+#main-menu.open{display:flex;}
+#main-menu button{background:none;border:1px solid transparent;color:var(--dim);font-family:'JetBrains Mono',monospace;
+  font-size:11px;letter-spacing:0.04em;text-align:left;padding:6px 10px;cursor:pointer;}
+#main-menu button:hover{color:var(--bright);background:rgba(255,255,255,0.05);}
+#main-menu button.on{color:var(--bright);border-left:2px solid var(--accent);}
+#main-menu .mm-load{border-color:var(--accent);color:var(--accent);background:rgba(74,170,255,0.08);text-align:center;margin-bottom:6px;}
+#main-menu .mm-about{margin-top:6px;border-top:1px solid var(--border);}
+#main-menu .mm-load:hover{background:var(--accent);color:#04070a;}
+/* ── DATA TREE (the left column's tabs) ── */
 .data-tree{border:1px solid var(--border);margin-bottom:14px;min-height:36px;}
 .dt-empty{color:var(--dim);font-size:10px;letter-spacing:0.06em;padding:10px 12px;}
 /* Separator ABOVE each row (not below): every row sits in its own
@@ -487,7 +537,7 @@ input[type=file]{display:none;}
 .view-num,.view-json{background:rgba(255,255,255,0.06);color:var(--text);border:1px solid rgba(255,255,255,0.18);border-radius:3px;
   font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 4px;min-width:0;}
 .view-num{width:52px;margin-right:4px;text-align:right;}
-#panel-tools .dt-set-btn{margin-right:10px;}
+#panel-content-tools .dt-set-btn{margin-right:10px;}
 .view-json{flex:1;}
 .view-num:focus,.view-json:focus{outline:none;border-color:var(--accent);}
 .ctl-val.tools-status{flex:1;text-align:left;color:var(--dim);margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -516,6 +566,7 @@ input[type=file]{display:none;}
    on one line within the settings panel's width. */
 .clip-radio-row{display:flex;justify-content:flex-start;gap:5px;}
 .clip-radio-opt{position:relative;cursor:pointer;user-select:none;flex:none;}
+.ctl-row label.clip-radio-opt{min-width:0;flex:0 1 64px;}   /* 64 px apart (the .ctl-row label width) while there's room; closer in a narrow column */
 .clip-radio-opt input{position:absolute;opacity:0;width:0;height:0;}
 .clip-radio-opt > span{display:inline-block;font-size:9px;letter-spacing:0.05em;line-height:1;
   padding:4px 6px;border:1px solid var(--rc-color);border-radius:3px;
@@ -527,7 +578,7 @@ input[type=file]{display:none;}
 .cro-axi{--rc-color:var(--axi);}
 .cro-none{--rc-color:var(--dim);}
 .cro-qual{--rc-color:var(--accent);}
-.clip-sub-row{display:flex;gap:16px;margin:9px 0 3px 0;}
+.clip-sub-row{display:flex;gap:16px;margin:9px 0 3px 0;padding-left:70px;} /* indented under clip·plane: its options */
 .clip-sub-row .ctl-toggle{gap:6px;}
 .inline-select{background:rgba(255,255,255,0.06);color:var(--text);
   border:1px solid rgba(255,255,255,0.18);border-radius:3px;
@@ -602,6 +653,17 @@ input[type=file]{display:none;}
 <div class="label-badge" id="label-badge-src"><div class="label-badge-coord"></div><div class="label-badge-reg"><input type="checkbox" class="dt-check label-badge-check" autocomplete="off" title="this region in 3D (and filled in the sections)"><span class="label-badge-sun"></span><div class="label-badge-name"></div></div><span class="label-badge-copy" title="copy">⧉</span></div>
 <div class="label-badge" id="label-badge-tgt"><div class="label-badge-coord"></div><div class="label-badge-reg"><input type="checkbox" class="dt-check label-badge-check" autocomplete="off" title="this region in 3D (and filled in the sections)"><span class="label-badge-sun"></span><div class="label-badge-name"></div></div><span class="label-badge-copy" title="copy">⧉</span></div>
 
+<!-- LEFT RAIL: one tab per page of the left column (see section 11b) -->
+<div id="rail">
+  <button class="rail-fold rail-fold-top" title="fold the column (back via ☰)">‹</button>
+  <div class="rail-tab" role="button" tabindex="0" data-page="anatomy"><span>Anatomy</span></div>
+  <div class="rail-tab" role="button" tabindex="0" data-page="streamlines"><span>Tracts</span></div>
+  <div class="rail-tab on" role="button" tabindex="0" data-page="probe"><span>Probe</span></div>
+  <div class="rail-tab" role="button" tabindex="0" data-page="markers"><span>Markers</span></div>
+  <div class="rail-tab" role="button" tabindex="0" data-page="settings"><span>Settings</span></div>
+  <div class="rail-tab" role="button" tabindex="0" data-page="tools"><span>Tools</span></div>
+  <button class="rail-fold" title="fold the column (back via ☰)">‹</button>
+</div>
 <!-- LEFT: slice viewers A -->
 <div id="left">
   <div class="slice-row" id="row-sag-src">
@@ -647,68 +709,28 @@ input[type=file]{display:none;}
   <canvas id="three-canvas"></canvas>
   <!-- Top-left buttons -->
   <div id="top-btns">
+    <button class="top-btn icon-only" id="menu-btn" title="menu" aria-haspopup="true"><span class="icon">☰</span></button>
     <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
-    <button class="top-btn" id="load-btn"><span class="icon">⊞</span>DATA</button>
-    <button class="top-btn" id="settings-btn"><span class="icon">⚙</span>SETTINGS</button>
-    <button class="top-btn" id="tools-btn"><span class="icon">☰</span>TOOLS</button>
+    <!-- the ☰ menu: Load…, the left column's tabs (see section 11b), About… -->
+    <div id="main-menu" role="menu">
+      <button class="mm-load" data-act="load">Load…</button>
+      <button data-page="anatomy">Anatomy</button>
+      <button data-page="streamlines">Tracts</button>
+      <button data-page="probe">Probe</button>
+      <button data-page="markers">Markers</button>
+      <button data-page="settings">Settings</button>
+      <button data-page="tools">Tools</button>
+      <button class="mm-about" data-act="about">About…</button>
+    </div>
   </div>
+  <!-- LOAD… (the ☰ menu, the tabs' LOAD buttons) opens this; every load
+       goes through dispatchOpenedFiles, as a drop does -->
+  <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.txt,.lut,.json,.zip" style="display:none">
 
-  <!-- Floating panel: FILE -->
-  <div id="panel-file" class="app-panel">
-    <div class="app-panel-titlebar">
-      <span class="grip">⠿</span><span class="app-panel-title">DATA</span>
-      <button class="app-panel-close" title="close">×</button>
-    </div>
-    <div class="app-panel-body">
 
-    <div id="panel-content-file" class="panel-content">
-    <!-- Single LOAD… button — routes through the exact same
-         dispatchOpenedFiles()/MultiFileOpener pipeline as dropping
-         file(s) anywhere on the page: it inspects filename/extension to
-         decide anatomy vs tractogram vs LUT vs bundle vs zip, rather
-         than the old per-type drop zones. -->
-    <div id="file-load-row">
-      <button id="load-btn-main"><span class="icon">⊞</span>LOAD…</button>
-      <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.txt,.lut,.json,.zip">
-    </div>
-
-    <!-- Collapsible tree of what's currently loaded, under three
-         category headings (Anatomy / Parcellations / Streamline
-         bundles), each row with its selector and an inline settings
-         toggle (see js/loaded-data.js). -->
-    <div id="data-tree-root" class="data-tree"></div>
-
-    <div class="cfg-section">EXPORT / SESSION</div>
-    <div class="dz-row">
-      <div class="drop-zone" id="dz-save">
-        <div class="tag">SAVE SELECTION</div>
-        <div class="name">.tck</div>
-      </div>
-      <div class="dz-right">
-        <p id="save-status">select streamlines first</p>
-        <button class="accent-link disabled" id="btn-show-indices">show indices</button>
-      </div>
-    </div>
-    <div class="dz-row">
-      <div class="drop-zone" id="dz-state">
-        <div class="tag">SESSION STATE</div>
-        <div class="name">.json</div>
-      </div>
-      <div class="dz-right">
-        <button class="accent-link" id="btn-show-state">show state</button>
-      </div>
-    </div>
-    </div><!-- /panel-content-file -->
-    </div><!-- /app-panel-body -->
-  </div><!-- /panel-file -->
-
-  <!-- Floating panel: SETTINGS -->
-  <div id="panel-settings" class="app-panel">
-    <div class="app-panel-titlebar">
-      <span class="grip">⠿</span><span class="app-panel-title">SETTINGS</span>
-      <button class="app-panel-close" title="close">×</button>
-    </div>
-    <div class="app-panel-body">
+  <!-- SETTINGS and TOOLS: pages of the left column, moved there at start
+     (section 11b); parked here, hidden, until then -->
+  <div id="left-stash" style="display:none">
 
     <div id="panel-content-settings" class="panel-content">
     <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
@@ -852,7 +874,7 @@ input[type=file]{display:none;}
       <input autocomplete="off" type="range" id="light-slider" min="-100" max="100" value="0" step="1">
       <span class="ctl-val" id="light-val">center</span>
     </div>
-    <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead. FRAMES shows/hides all three plane rectangles without affecting clipping.">
+    <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead.">
       <label>clip·plane</label>
       <div class="clip-radio-row">
         <label class="clip-radio-opt cro-none"><input type="radio" autocomplete="off" name="clip-plane" value="none" checked><span>none</span></label>
@@ -876,11 +898,6 @@ input[type=file]{display:none;}
         <input type="checkbox" autocomplete="off" id="clip-cover" checked>
         <div class="pill"></div>
         <span class="tog-label">cover</span>
-      </label>
-      <label class="ctl-toggle">
-        <input type="checkbox" autocomplete="off" id="clip-frames" checked>
-        <div class="pill"></div>
-        <span class="tog-label">frames</span>
       </label>
     </div>
 
@@ -912,16 +929,6 @@ input[type=file]{display:none;}
     </div>
     <button id="rot-reset">reset planes</button>
     </div><!-- /panel-content-settings -->
-    </div><!-- /app-panel-body -->
-  </div><!-- /panel-settings -->
-
-  <!-- Floating panel: TOOLS (screenshot, rotation movie, about) -->
-  <div id="panel-tools" class="app-panel">
-    <div class="app-panel-titlebar">
-      <span class="grip">⠿</span><span class="app-panel-title">TOOLS</span>
-      <button class="app-panel-close" title="close">×</button>
-    </div>
-    <div class="app-panel-body">
     <div id="panel-content-tools" class="panel-content">
     <div class="cfg-section" data-tip="The 3D view: from where the brain is seen, the centre it turns around, and how large it is shown. Copy it to come back to it later, share it, or put it in a zip's index.json as its opening view.">VIEW</div>
     <div class="ctl-row" data-tip="Turn the brain to be seen from this side: Left, Right, Anterior, Posterior, Superior, Inferior.">
@@ -1015,11 +1022,29 @@ input[type=file]{display:none;}
     </div>
     <div class="ctl-row"><label></label><button class="accent-link dt-set-btn" id="mov-save">save movie</button><span class="ctl-val tools-status" id="mov-status"></span></div>
 
-    <div class="cfg-section">ABOUT</div>
-    <div class="ctl-row"><label></label><button class="accent-link dt-set-btn" id="tools-about">about this app…</button></div>
+    <div class="cfg-section">EXPORT / SESSION</div>
+    <div class="dz-row">
+      <div class="drop-zone" id="dz-save">
+        <div class="tag">SAVE SELECTION</div>
+        <div class="name">.tck</div>
+      </div>
+      <div class="dz-right">
+        <p id="save-status">select streamlines first</p>
+        <button class="accent-link disabled" id="btn-show-indices">show indices</button>
+      </div>
+    </div>
+    <div class="dz-row">
+      <div class="drop-zone" id="dz-state">
+        <div class="tag">SESSION STATE</div>
+        <div class="name">.json</div>
+      </div>
+      <div class="dz-right">
+        <button class="accent-link" id="btn-show-state">show state</button>
+      </div>
+    </div>
+
     </div><!-- /panel-content-tools -->
-    </div><!-- /app-panel-body -->
-  </div><!-- /panel-tools -->
+  </div><!-- /left-stash -->
 
   <!-- Floating panel: ABOUT (opened from TOOLS) -->
   <div id="panel-about" class="app-panel">
@@ -1051,8 +1076,8 @@ input[type=file]{display:none;}
   <!-- Welcome screen (shown when no data loaded) -->
   <div id="welcome">
     <h2>TRACTOGRAM OBSERVER</h2>
-    <p>Use the DATA menu to get started</p>
-    <p style="margin-top:6px;">or load the <a id="demo-btn" class="accent-link" href="?demo">10k MacBNA M01 demo</a><br/>or <a id="demo-btn-m03" class="accent-link" href="?MacBNA_M03">1M MacBNA M03 demo</a></p>
+    <p><a id="demo-btn" class="accent-link" href="?demo">10k MacBNA M01 demo</a></p>
+    <p style="margin-top:6px;"><a id="demo-btn-m03" class="accent-link" href="?MacBNA_M03">1M MacBNA M03 demo</a></p>
   </div>
 
   <!-- Loading progress — deliberately NOT inside #welcome: the anatomy
@@ -1123,6 +1148,9 @@ input[type=file]{display:none;}
 import * as THREE from 'three';
 import { parseNifti, parseMif, parseWebmCodecs as parseWebm } from './js/volume-io.js';
 import { parseLUT, buildLutRGBA } from './js/lut-io.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
          parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
 import { MultiFileOpener } from './js/file-opener.js';
@@ -1384,8 +1412,9 @@ function updateProbeRadiusRange(setDefault) {
   if (gridIdx) updateProbe();
 }
 // The STREAMLINE PROBE switch. Off: every (visible) streamline is shown,
-// the probe sphere/ring and the probe's slice panel (left) are hidden, and
-// the probe's settings rows with it. A bundle-set load switches it off, a
+// the probe sphere/ring are hidden, the PROBE tab of the left column says
+// what the probe does (when streamlines are loaded, see section 11b), and
+// the probe's settings rows are hidden. A bundle-set load switches it off, a
 // whole-tractogram load on. The RADIUS slider's rightmost position (ALL)
 // does the selection part of the same thing with the panel kept.
 function probeBypassed() { return !probeOn || radius >= radiusMaxMm; }
@@ -1393,7 +1422,7 @@ function setProbeOn(on, { update = true } = {}) {
   const changed = probeOn !== on;
   probeOn = on;
   showProbeRows();
-  if (typeof setLeftPanelHidden === 'function') setLeftPanelHidden(!on);
+  if (window.leftTabsChanged) window.leftTabsChanged();
   if (!changed || !update) return;
   if (on && gridIdx && gridIdx.cs !== radius && radius < radiusMaxMm) gridIdx = new GridIndex(allPts, radius);
   updateProbeGap();
@@ -2343,16 +2372,23 @@ function hideBundleTooltip(force = false) { // (name kept: the marker code calls
   if (markerCard) closeMarkerCard();
 }
 // A sphere where the virtual probe found its streamlines (3D menu).
-const VIRTUAL_PROBE_COLOR = '#ffdd00';
+// The probe spheres, both drawn by probeWire: the real probe white, the
+// virtual one (where hovering would put it) grey.
+const PROBE_WIRE = { color: 0xffffff, segs: [12, 8], px: 1.5, outlinePx: 4 };
+const VIRTUAL_PROBE_WIRE = { color: 0xa8aeb6, segs: [12, 8], px: 1.25, outlinePx: 3.5 };
+// A wire sphere of radius r at center, as outlined lines (see outlinedLines).
+function probeWire(r, center, { color, segs, px, outlinePx }) {
+  const wire = new THREE.WireframeGeometry(new THREE.SphereGeometry(r, ...segs));
+  const g = outlinedLines(wire.attributes.position.array, color, px, outlinePx);
+  wire.dispose();
+  g.position.set(...center);
+  return g;
+}
 let _vpMesh = null;
 function showVirtualProbe(vp) {
-  if (_vpMesh) { scene.remove(_vpMesh); _vpMesh.geometry.dispose(); _vpMesh.material.dispose(); _vpMesh = null; }
+  if (_vpMesh) { scene.remove(_vpMesh); disposeTree(_vpMesh); _vpMesh = null; }
   if (vp) {
-    // construction-site yellow, a coarser mesh: clearly not the real probe
-    // (and lemon rather than amber, to stay apart from the coronal orange)
-    _vpMesh = new THREE.Mesh(new THREE.SphereGeometry(vp.r, 8, 6),
-      new THREE.MeshBasicMaterial({ color: VIRTUAL_PROBE_COLOR, wireframe: true, transparent: true, opacity: 0.8, depthWrite: false }));
-    _vpMesh.position.set(...vp.center);
+    _vpMesh = probeWire(vp.r, vp.center, VIRTUAL_PROBE_WIRE);
     scene.add(_vpMesh);
   }
   render3D();
@@ -2564,11 +2600,11 @@ function pickRegions(clientX, clientY, wMax = Infinity) {
 // ── The 3D menu ──────────────────────────────────────────────
 // At most one menu in the 3D view: what is under the mouse, one summary
 // row per kind —
-//   ▸ Streamlines:  3 bundles nearby      (all their ends there light up)
+//   ▸ Streamlines:  3 bundles visible nearby      (all their ends there light up)
 //     Volume:       ◩ T1w.nii.gz          (▸ only with several volumes)
 //   ▸ Parcellation: 5 regions in line of sight
 //   ▸ Markers:      1 nearby
-//     Frames:       ☐ visible
+//     Cursor:       ☐ frames ☐ axes
 // — always in this order, a kind left out when there's none of it here
 // — each ▸ folding out its items in place (and an item's ▸ its settings),
 // as in the DATA panel: nothing moves when something opens.
@@ -2696,7 +2732,7 @@ function renderCtxMenu() {
         return;
       }
       const near = h.bundle ? (h.bundle.near || [h.bundle.gi]).filter(gi => groups[gi]) : [];
-      row(near.length ? 'bundles' : null, [tag('Streamlines:'), count(near.length, near.length === 1 ? 'bundle nearby' : 'bundles nearby')]);
+      row(near.length ? 'bundles' : null, [tag('Streamlines:'), count(near.length, near.length === 1 ? 'bundle visible nearby' : 'bundles visible nearby')]);
       if (!near.length || !open.has('bundles')) return;
       for (const gi of near) {
         const g = groups[gi], key = 'b:' + gi, has = hasBundleSettings(g) && g.visible;
@@ -2764,19 +2800,22 @@ function renderCtxMenu() {
         }
       });
     },
-    frame: () => {
-      if (!state.get('anat.file')) return; // (always there with a volume: frames aren't picked)
-      const lab = document.createElement('label');
-      lab.className = 'frame-row';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = framesVisible;
-      cb.addEventListener('change', () => {
-        const sEl = document.getElementById('clip-frames');
-        sEl.checked = cb.checked; sEl.dispatchEvent(new Event('change'));
-      });
-      lab.append(cb, text(framesVisible ? 'visible' : 'hidden', 'ctx-text'));
-      cb.addEventListener('change', () => { lab.lastChild.textContent = cb.checked ? 'visible' : 'hidden'; });
-      row(null, [tag('Frames:'), lab]);
+    frame: () => {   // the cursor in 3D: its frames and its axes
+      if (!state.get('anat.file')) return; // (always there with a volume: neither is picked)
+      const opt = (name, on, set) => {
+        const lab = document.createElement('label');
+        lab.className = 'frame-row';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = on;
+        cb.addEventListener('change', () => set(cb.checked));
+        lab.append(cb, text(name, 'ctx-text'));
+        return lab;
+      };
+      const both = document.createElement('span');
+      both.style.display = 'flex'; both.style.gap = '10px';
+      both.append(opt('frames', framesVisible, on => { framesVisible = on; updatePlaneMeshes(); }),
+                  opt('axes', cursorAxesOn, on => { cursorAxesOn = on; updatePlaneMeshes(); }));
+      row(null, [tag('Cursor:'), both]);
     },
   };
   sections.coord = () => {
@@ -2992,7 +3031,7 @@ let clipFlip = false;
 // cut into whatever real tissue boundary lies behind it.
 let cover = true;
 // Shows the plane rectangles (default) — independent of clipping. Also
-// switchable from the 3D view: the 3D menu's Frames row.
+// switchable from the 3D view: the 3D menu's Cursor row (with the axes).
 let framesVisible = true;
 const PLANE_AXIS_INDEX = {sag:0, cor:1, axi:2}; // matches vr._getNormalAxis / vr._rot_dirs
 
@@ -3005,9 +3044,59 @@ function updatePlaneMeshes() {
       if (planeMeshes[k]) scene.add(planeMeshes[k]);
     }
   }
+  updateCursorAxes();
   updateClipUniforms();
   render3D();
 }
+
+// Line segments (pairs of points, flat xyz) as screen-space wide lines in
+// a color, over a wider dark outline: visible on dark and light alike
+// (plain WebGL lines are always 1 px, see three's LineSegments2).
+const _olRes = new THREE.Vector2();
+function outlinedLines(positions, color, px, outlinePx) {
+  const group = new THREE.Group();
+  [[0x000000, outlinePx, 0.7], [color, px, 1]].forEach(([c, w, opacity], n) => {
+    const m = new LineMaterial({ color: c, linewidth: w, transparent: true, opacity, depthWrite: false });
+    const l = new LineSegments2(new LineSegmentsGeometry().setPositions(positions), m);
+    l.renderOrder = 10 + n;
+    l.onBeforeRender = r => { r.getSize(_olRes); m.resolution.copy(_olRes); };
+    group.add(l);
+  });
+  return group;
+}
+const disposeTree = o => o.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material) x.material.dispose(); });
+
+// ── Cursor axes ───────────────────────────────────────────────────────────
+// Per plane, a line through the cursor along the plane's normal (SAG:
+// left–right), spanning the frames. All white, with a dark outline so
+// they also stand out on white (bright anatomy, light background, white
+// streamlines): plane colors would mislead, as a plane's line in a
+// section runs across its normal, not along it. Switched on in the 3D
+// menu's Cursor row, next to the frames.
+let cursorAxesOn = false, cursorAxesMesh = null;
+const CURSOR_AXES_PX = 1.5, CURSOR_AXES_OUTLINE_PX = 4;   // line, outline width (CSS px)
+function updateCursorAxes() {
+  if (cursorAxesMesh) { scene.remove(cursorAxesMesh); disposeTree(cursorAxesMesh); cursorAxesMesh = null; }
+  const c = state.get('tgt.cursor'), vox = state.get('anat.vox_mm');
+  if (!cursorAxesOn || !state.get('anat.file') || !c || !vox || !vr._rot_dirs) return;
+  const keys = ['sag', 'cor', 'axi'];
+  const dirs = keys.map((k, i) => vr._rot_dirs[i]);                       // plane normals (RAS)
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const at = (t, d) => [0, 1, 2].map(m => c[m] + t * d[m]);
+  const pts = [];
+  keys.forEach((k, i) => {
+    // extent: the other planes' frames, measured along this normal
+    const other = keys[(i + 1) % 3];
+    const pc = vr.getPlaneCorners(other, state.get('tgt.view.' + other) || c);
+    if (!pc) return;
+    const ts = pc.map(p => dot([p[0] - c[0], p[1] - c[1], p[2] - c[2]], dirs[i]));
+    const t0 = Math.min(...ts), t1 = Math.max(...ts);
+    pts.push(...at(t0, dirs[i]), ...at(t1, dirs[i]));
+  });
+  cursorAxesMesh = outlinedLines(pts, 0xffffff, CURSOR_AXES_PX, CURSOR_AXES_OUTLINE_PX);
+  scene.add(cursorAxesMesh);
+}
+
 
 // Keeps the glass-brain shader's clip-plane uniforms (u_clipDir/u_clipNormal/
 // u_clipPoint) in sync with the chosen clip plane, invert state, plane
@@ -3417,18 +3506,22 @@ function visibleOnly(ids) {
 // context (probeContext x the file's opacity), and the ones the probe hits
 // solid on top. Only with the probe on and a real radius (not ALL).
 const highlightActive = () => (probeOn && probeMode === 'highlight' && !probeBypassed()) || !!focusMask();
-// FOCUS: g.focus per bundle (all true at load). Focused bundles are drawn
-// solid, the others dimmed; with the probe on, only the focused bundles'
-// streamlines the probe hits are solid (and in probe select mode only the
-// focused bundles are drawn at all). Per group: 1 = focused — or null
-// when every visible bundle is focused (nothing dimmed: plain rendering).
+// FOCUS: g.focus per bundle (all true at load). With the probe off (or at
+// ALL), focused bundles are drawn solid and the others dimmed. With the
+// probe on, the focus is ignored: the probe selects from all visible
+// bundles — highlight mode draws its hits solid and the rest faint,
+// select mode only its hits. Per group: 1 = focused — or null when every
+// visible bundle is focused or the probe is selecting (plain rendering).
+const focusIgnored = () => probeOn && !probeBypassed();
 function focusMask() {
+  if (focusIgnored()) return null;
   const vis = groups.filter(g => g.visible);
   if (vis.every(g => g.focus !== false)) return null;   // all focused: nothing dimmed
   return Uint8Array.from(groups, g => g.focus !== false && g.visible ? 1 : 0);
 }
 // For the status line: the focused bundles, when some are dimmed.
 function focusNames() {
+  if (focusIgnored()) return [];
   const vis = groups.filter(g => g.visible);
   if (vis.every(g => g.focus !== false)) return [];
   return vis.filter(g => g.focus !== false).map(g => g.name);
@@ -3498,18 +3591,17 @@ function updateProbe(opts = {}){
   // so skip drawing it in this mode.
   const showAll = probeBypassed();
   const hl = highlightActive();
-  if(probeSphere) scene.remove(probeSphere);
+  if(probeSphere) { scene.remove(probeSphere); disposeTree(probeSphere); }
   if (!showAll) {
-    const sg=new THREE.SphereGeometry(radius,12,8);
-    probeSphere=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:srcStyle.rgb,wireframe:true}));
-    probeSphere.position.set(cx,cy,cz); scene.add(probeSphere);
+    probeSphere = probeWire(radius, [cx, cy, cz], PROBE_WIRE);
+    scene.add(probeSphere);
   } else {
     probeSphere=null;
   }
   const budget = MAX_RENDER_POINTS[qualityTier];
-  // The SOLID set ("hits"): the probe's hits, limited to the focused
-  // bundles if any; with the probe off (or at ALL) and a focus: all of the
-  // focused bundles' streamlines.
+  // The SOLID set ("hits"): the probe's hits; with the probe off (or at
+  // ALL) and a focus: all of the focused bundles' streamlines (F is null
+  // while the probe selects, see focusMask).
   const F = focusMask();
   const inF = id => F[streamlineBundleId ? streamlineBundleId[id] : 0] === 1;
   let hits = probeHitIds(cx, cy, cz, showAll);
@@ -3578,10 +3670,8 @@ function updateProbe(opts = {}){
     renderIds = thinSqrt(hits, budget);
     isThinned = renderIds !== hits;
   } else {
-    // Everything visible is drawn — except in probe select mode with a
-    // focus: only the focused bundles.
+    // Everything visible is drawn.
     visible = visibleOnly(allStreamlines.map((_,i) => i));
-    if (F && !showAll && probeMode === 'select') visible = visible.filter(inF);
     isThinned = thinSqrt(visible, budget) !== visible;
     if (!isThinned) renderIds = visible;
     else {
@@ -3926,7 +4016,7 @@ function collectState() {
       cutoutT1, cutoutBelowThresh, cutoutRow1Above, cutoutRow2AndBelow,
       contrastGain,
       pitch, yaw, roll,
-      renderMode, qualityTier, clipPlane, clipFlip, cover, framesVisible,
+      renderMode, qualityTier, clipPlane, clipFlip, cover, framesVisible, cursorAxesOn,
     },
     probe: {
       cursor: state.get('src.cursor')
@@ -4363,9 +4453,14 @@ function applyActiveVolumeDisplay() {
   if (!vol || !currentAnat) return;
   useVolumeLut(vol);
   if (vol.isColor) { registerVolumeItems(); return; }
-  setModality(vol.category === 'parcellation' ? 'seg' : 'anat');
+  setModality(vol.category === 'parcellation' && !activeAsAnatomy ? 'seg' : 'anat');
 }
 
+// A volume chosen as the one shown (ANATOMY radios, the 3D menu's
+// anatomy choice, see selectVolume) is drawn as anatomy, also a label
+// volume: no region colors. A freshly loaded label volume is shown with
+// them (Label mode). activeAsAnatomy: how the active volume was chosen.
+let _showAsAnatomy = false, activeAsAnatomy = false;
 async function loadAnat(f){
   const dzAnatP = document.getElementById('dz-anat-status');
   if (dzAnatP) { dzAnatP.textContent = 'loading…'; dzAnatP.className = 'is-loading'; }
@@ -4396,7 +4491,8 @@ async function loadAnat(f){
   // MODALITY for the newly loaded volume: 3-channel data is
   // direction-encoded, a parcellation is shown in Label (SEG) mode, the
   // rest in plain ANAT. The MODALITY control stays a manual override.
-  modality = isColorData ? 'dec' : vol.category === 'parcellation' ? 'seg' : 'anat';
+  activeAsAnatomy = _showAsAnatomy; _showAsAnatomy = false;
+  modality = isColorData ? 'dec' : vol.category === 'parcellation' && !activeAsAnatomy ? 'seg' : 'anat';
   document.getElementById('modality-' + modality).checked = true;
   document.getElementById('modality-dec').disabled = !isColorData;
   document.getElementById('modality-seg').disabled = isColorData;
@@ -5037,10 +5133,6 @@ document.getElementById('clip-cover').addEventListener('change', e=>{
   cover = e.target.checked;
   updatePlaneMeshes();
 });
-document.getElementById('clip-frames').addEventListener('change', e=>{
-  framesVisible = e.target.checked;
-  updatePlaneMeshes();
-});
 document.getElementById('shadow-slider').addEventListener('input', e => {
   document.getElementById('shadow-val').textContent = e.target.value + '%';
   setShadowAmount(+e.target.value / 100);
@@ -5071,32 +5163,15 @@ async function loadAboutContent() {
 }
 
 const panelGroup = new PanelDockGroup();
-const filePanel = new FloatingPanel({
-  panelEl: document.getElementById('panel-file'),
-  anchorEl: document.getElementById('fullscreen-btn'),
-  triggerBtn: document.getElementById('load-btn'),
-  group: panelGroup,
-});
-const settingsPanel = new FloatingPanel({
-  panelEl: document.getElementById('panel-settings'),
-  anchorEl: document.getElementById('fullscreen-btn'),
-  triggerBtn: document.getElementById('settings-btn'),
-  group: panelGroup,
-});
 const aboutPanel = new FloatingPanel({
   panelEl: document.getElementById('panel-about'),
   anchorEl: document.getElementById('fullscreen-btn'),
   group: panelGroup,
   onOpen: () => loadAboutContent(),
 });
-const toolsPanel = new FloatingPanel({
-  panelEl: document.getElementById('panel-tools'),
-  anchorEl: document.getElementById('fullscreen-btn'),
-  triggerBtn: document.getElementById('tools-btn'),
-  group: panelGroup,
-  onOpen: () => { fillShotViews(); refreshViewTool(); viewStatus(viewSource ? 'auto: ' + viewSource : ''); },
-});
-document.getElementById('tools-about').addEventListener('click', e => { e.stopPropagation(); aboutPanel.open(); });
+// TOOLS shown (a left column tab, section 11b): its live parts follow
+function toolsShown() { fillShotViews(); refreshViewTool(); viewStatus(viewSource ? 'auto: ' + viewSource : ''); }
+
 
 // ── TOOLS › VIEW ────────────────────────────────────────────
 // Shows and edits the current view (see currentView/applyView): the same
@@ -5123,8 +5198,8 @@ function refreshViewTool() {
   if (_viewToolRaf) return;
   _viewToolRaf = requestAnimationFrame(() => {
     _viewToolRaf = 0;
-    const panel = document.getElementById('panel-tools');
-    if (!panel || getComputedStyle(panel).display === 'none') return;
+    const panel = document.getElementById('panel-content-tools');
+    if (!panel || !panel.offsetParent) return;   // (its tab not shown)
     const v = currentView(), ae = document.activeElement;
     const put = (id, val) => { const el = document.getElementById(id); if (el !== ae) el.value = val; };
     put('view-cx', r1(v.center[0])); put('view-cy', r1(v.center[1])); put('view-cz', r1(v.center[2]));
@@ -6078,21 +6153,20 @@ async function dispatchOpenedFiles(rawFiles){
 async function selectVolume(vol) {
   if (vol === activeVolume || !volumes.includes(vol)) return;
   try {
+    _showAsAnatomy = true;   // chosen as the volume shown: a label volume too, without its region colors
     await loadAnat(vol.file);
     state.set('anat.file', vol.file.name);
   } catch (e) {
+    _showAsAnatomy = false;
     alert('Error loading anatomy from "' + vol.file.name + '":\n' + ((e && e.message) || e));
     console.error(e.stack || e);
     registerVolumeItems(); // put the radio back on the volume that's still shown
   }
 }
 
-// Single LOAD… button (FILE panel) — routes through the exact same
-// dispatchOpenedFiles()/MultiFileOpener pipeline as the whole-page drop
-// below, rather than the old per-type drop zones/click targets.
-document.getElementById('load-btn-main').addEventListener('click', () => {
-  document.getElementById('fi-load').click();
-});
+// LOAD… (the ☰ menu, the tabs' LOAD buttons) — routes through the exact
+// same dispatchOpenedFiles()/MultiFileOpener pipeline as the whole-page
+// drop below.
 document.getElementById('fi-load').addEventListener('change', async e => {
   const files = Array.from(e.target.files || []);
   e.target.value = ''; // allow re-picking the same file(s) next time
@@ -6102,15 +6176,14 @@ document.getElementById('fi-load').addEventListener('change', async e => {
   catch(err) { alert('File load error: '+err); }
 });
 
-// ── Loaded-data tree (FILE panel) ──────────────────────────
+// ── Loaded-data tree (the left column's tabs) ──────────────────────────
 // One overall LoadedDataStore + file-type-specific item classes (see
 // js/loaded-data.js), rendered as a collapsible tree by DataTreeView.
 // The store only tracks what's loaded/visible; registerVolumeItems/
 // registerTrckItem below are the app-specific glue that
 // wires each item's on/off checkbox to what little visibility control
 // the renderer currently exposes.
-const dataStore = new LoadedDataStore();
-new DataTreeView(document.getElementById('data-tree-root'), dataStore);
+const dataStore = new LoadedDataStore(); // shown in the left column's tabs (section 11b)
 
 function rgbRawToHex([r, g, b]) {
   const c = v => Math.max(0, Math.min(255, Math.round(v * 255))).toString(16).padStart(2, '0');
@@ -6423,6 +6496,7 @@ function buildLabelList(vol, el) {
 function registerVolumeItems() {
   setTimeout(() => { syncEndLabelRadios(); ensureLabelRef(); }, 0); // a label volume in memory (2D badges, Label end colors)
   const multi = volumes.length > 1;
+  // ANATOMY: every volume (label volumes too), its radio the volume shown
   const volumeItem = vol => {
     const item = new AnatomyItem(vol.label);
     const isActive = vol === activeVolume;
@@ -6448,22 +6522,40 @@ function registerVolumeItems() {
       item.tag = vol.lut ? 'LUT' : 'auto colors';
       if (vol.lut) item.tooltip += '\nlookup table: ' + vol.lut.name;
     }
+    // (a label volume's settings are under Parcellations)
+    if (vol.category !== 'parcellation') {
+      item.buildSettings = (_, el) => buildVolumeSettings(vol, el);
+      proxySettingsOpen(item, vol);
+    }
+    return item;
+  };
+  // PARCELLATIONS: the label volumes, their own radio the label volume in
+  // memory (its regions in 3D, the outlines and names in the sections);
+  // clicking the chosen one again: none
+  const labelItem = vol => {
+    const item = new AnatomyItem(vol.label);
+    item.tooltip = (vol.label === vol.file.name ? vol.file.name : vol.label + '\n' + vol.file.name)
+                 + (vol.lut ? '\nlookup table: ' + vol.lut.name : '');
+    item.selectorType = 'radio';
+    item.radioGroup = 'labelvol';
+    item.radioDeselectable = true;
+    Object.defineProperty(item, 'selected', { get: () => wantedLabelVol() === vol, set() {}, configurable: true });
+    item.onSelect = () => chooseLabelVolume(wantedLabelVol() === vol ? null : vol);
+    item.tag = vol.lut ? 'LUT' : 'auto colors';
     item.buildSettings = (_, el) => buildVolumeSettings(vol, el);
     proxySettingsOpen(item, vol);
     return item;
   };
-  const anatomy = volumes.filter(v => v.category !== 'parcellation').map(volumeItem);
-  const parcellations = volumes.filter(v => v.category === 'parcellation').map(volumeItem);
+  const anatomy = volumes.map(volumeItem);
+  const parcellations = volumes.filter(v => v.category === 'parcellation').map(labelItem);
   for (const l of luts) if (!l.volume) parcellations.push(lutItem(l));
   dataStore.parcellationToolbar = makeLabelToolbar();
   dataStore.setVolumes(anatomy, parcellations);
 }
 
-// First row under Parcellations: the label volume in memory (its regions
-// in 3D, the outlines and names in the sections, Label end colors) — a
-// choice, '---' for none (which also empties the regions in 3D) — and,
-// as for bundles, a checkbox showing or hiding all its regions in 3D and
-// the sun: all regions solid (or, when all are, all glass).
+// First row under Parcellations (whose radios choose the label volume in
+// memory): as for bundles, a checkbox showing or hiding all its regions
+// in 3D and the sun: all regions solid (or, when all are, all glass).
 function makeLabelToolbar() {
   return new ToolbarItem((_, bar) => {
     const n = regionMeshes ? regionMeshes.size : 0;
@@ -6480,10 +6572,11 @@ function makeLabelToolbar() {
       if (!all && regionMeshes.anyFocused) fb.classList.add('mixed');
       bar.append(cb, fb);
     }
-    const row = labelVolumeChoiceRow();
-    row.style.flex = '1'; row.style.margin = '0';
-    row.title = n ? n + ' region' + (n > 1 ? 's' : '') + ' in 3D' : 'no regions in 3D yet: switch them on from the 3D view (sun) or the label list';
-    bar.appendChild(row);
+    const lbl = document.createElement('span');
+    lbl.className = 'dt-toolbar-lbl';
+    lbl.textContent = n ? 'all ' + n + ' region' + (n > 1 ? 's' : '') + ' in 3D' : 'no regions in 3D yet';
+    lbl.title = n ? '' : 'switch regions on from the 3D view, the section badges or the label list';
+    bar.appendChild(lbl);
   });
 }
 
@@ -6626,7 +6719,8 @@ function registerTrckItem() {
     proxySettingsOpen(bi, g);
     return bi;
   });
-  dataStore.streamlineToolbar = makeStreamlineToolbar();
+  // (one group — a single tractogram, not split: its own row says it all)
+  dataStore.streamlineToolbar = groups.length > 1 ? makeStreamlineToolbar() : null;
   dataStore.setStreamlines(rows);
   rebuildDqzChildItems();
   bundleChanged();
@@ -8301,11 +8395,43 @@ resizeAll();
     resizeAll();
   }
 
+  // Default widths. A side column of width s holds three sections of
+  // s × H/3; the 3D view is m × H with m = what's left. Aims: the 3D view
+  // square (m/H = 1), the sections 1.5 : 1 (s = H/2). s minimises the
+  // summed squared log ratios to those aims (each column counts once):
+  //   f(s) = n·ln²(s/(H/2)) + ln²(m/H),  m = W − n·s − separators − rail
+  // (n = 1 or 2 side columns). When the window is too narrow for both, s
+  // lands between. Until a separator is dragged, the
+  // widths follow the window (double-click a separator to go back to this).
+  let autoWidths = true;
+  const railW = () => { const r = document.getElementById('rail'); return r && r.offsetParent ? r.offsetWidth : 0; };
+  function squarestSide(W, H, n) {
+    const avail = W - railW() - SEP * n;
+    const f = s => { const m = avail - n * s; return m <= 1 || s <= 1 ? Infinity : n * Math.log(2 * s / H) ** 2 + Math.log(m / H) ** 2; };
+    let a = 1, b = avail / n - 1;                       // golden-section search (f is unimodal)
+    const g = (Math.sqrt(5) - 1) / 2;
+    for (let it = 0; it < 60; it++) {
+      const c = b - g * (b - a), d = a + g * (b - a);
+      if (f(c) < f(d)) b = d; else a = c;
+    }
+    return Math.round((a + b) / 2);
+  }
+  function applyDefaultWidths() {
+    const W = totalW(), H = body.clientHeight;
+    if (!W || !H) return;
+    const leftShown = left.style.display !== 'none';
+    const s = squarestSide(W, H, leftShown ? 2 : 1);
+    setWidths(leftShown ? s : squarestSide(W, H, 2), s);
+  }
+  window.addEventListener('resize', () => { if (autoWidths) applyDefaultWidths(); });
+  for (const sep of [sepL, sepR]) sep.addEventListener('dblclick', () => { autoWidths = true; applyDefaultWidths(); });
+
   function makeDragger(sep, getOtherW, buildWidths) {
     let startX, startW;
     sep.style.touchAction = 'none'; // don't let the browser scroll/zoom the page while dragging
     sep.addEventListener('pointerdown', e => {
       e.preventDefault();
+      autoWidths = false;
       startX = e.clientX;
       startW = getOtherW();
       sep.classList.add('dragging');
@@ -8332,8 +8458,10 @@ resizeAll();
     if (left.style.display === d) return;
     left.style.display = d;
     sepL.style.display = d;
-    resizeAll();
+    if (autoWidths) applyDefaultWidths(); else resizeAll();
   };
+  window.applyDefaultWidths = applyDefaultWidths;
+  applyDefaultWidths();
 
   // Left separator: dragging right narrows left panel (or widens it leftward)
   makeDragger(sepL,
@@ -8346,6 +8474,168 @@ resizeAll();
     () => right.getBoundingClientRect().width,
     (startW, delta) => [left.getBoundingClientRect().width, startW - delta]
   );
+})();
+
+// ═══════════════════════════════════════════════════════════
+// 11b. LEFT COLUMN TABS
+// ═══════════════════════════════════════════════════════════
+// The rail's tabs pick what the left column shows:
+//   ANATOMY      volumes and parcellations (the loaded-data tree's
+//                Anatomy and Parcellations groups)
+//   STREAMLINES  the bundles / tractogram and their data files
+//   PROBE        the probe's sections; with streamlines loaded and the
+//                probe off, what the probe does and a switch to turn it on
+//                (without streamlines the probe is just a second cursor)
+//   MARKERS      the markers files
+//   SETTINGS     how things are drawn (was a floating panel)
+//   TOOLS        view, screenshot, movie, export / session
+// A tab with nothing loaded says what to load and has a LOAD button.
+// Clicking the shown tab, or ‹ (top and bottom of the rail), folds the
+// column away, rail and all. The ☰ menu (top left) has Load…, opens any
+// tab (unfolding the column) and About….
+// A load picks the tab for what was loaded (streamlines: STREAMLINES for a
+// bundle set, PROBE for a whole tractogram; else volumes: ANATOMY; else
+// markers: MARKERS) — unless a data tab was picked by hand since
+// everything was last empty (SETTINGS or TOOLS shown: always).
+(function initLeftTabs() {
+  const left = document.getElementById('left');
+  const page = document.createElement('div');
+  page.id = 'left-page';
+  left.appendChild(page);
+  const tabs = [...document.querySelectorAll('.rail-tab')];
+  const folds = [...document.querySelectorAll('.rail-fold')];
+  const rail = document.getElementById('rail');
+  const edges = [0, 1].map(() => { const e = document.createElement('div'); e.className = 'rail-edge'; rail.appendChild(e); return e; });
+  let current = 'anatomy', folded = false, userPicked = false;
+  function placeEdges() {
+    const t = !folded && tabs.find(t => t.dataset.page === current);
+    for (const e of edges) e.style.display = t ? '' : 'none';
+    if (!t) return;
+    const top = t.offsetTop - 1, bot = t.offsetTop + t.offsetHeight + 1;
+    Object.assign(edges[0].style, { top: '0px', height: Math.max(0, top) + 'px' });
+    Object.assign(edges[1].style, { top: bot + 'px', height: Math.max(0, rail.scrollHeight - bot) + 'px' });
+  }
+  new ResizeObserver(placeEdges).observe(rail);
+
+  const openFiles = () => document.getElementById('fi-load').click();
+  const emptyFill = html => el => {
+    const d = document.createElement('div');
+    d.className = 'lp-empty';
+    d.innerHTML = html;
+    const b = document.createElement('button');
+    b.className = 'lp-load';
+    b.textContent = 'LOAD…';
+    b.addEventListener('click', openFiles);
+    d.appendChild(b);
+    el.appendChild(d);
+  };
+  const panes = {};
+  const listPane = (key, opts) => {
+    const body = document.createElement('div');
+    body.className = 'lp-body';
+    page.appendChild(body);
+    new DataTreeView(body, dataStore, opts);
+    panes[key] = body;
+  };
+  listPane('anatomy', { categories: ['anatomy', 'parcellations'], empty: emptyFill(
+    '<p><b>Load a volume</b> to get started. Supported formats are .nii and .nii.gz, and <a href="doc.html?webm-format" target="_blank" rel="noopener">.webm</a> (a compact video-compressed volume).</p>' +
+    '<p>For a <b>parcellation</b>, load the label volume together with its lookup table: a FreeSurfer or ITK-SNAP LUT file.</p>') });
+  listPane('streamlines', { categories: ['streamlines'], flat: true, empty: emptyFill(
+    '<p><b>Load a streamlines file</b> to get started. Supported formats are .tck (MRtrix), .trk (TrackVis) and <a href="doc.html?dqz-format" target="_blank" rel="noopener">.dqz</a> (a compressed .tck).</p>') });
+  listPane('markers', { categories: ['markers'], flat: true, empty: emptyFill(
+    '<p><b>Load a markers file</b> to place points (and links between them) in the view, with their properties shown on mouse-over: ' +
+    'a .json file in the <a href="doc.html?markers-format" target="_blank" rel="noopener">markers format</a>.</p>') });
+  for (const key of ['settings', 'tools']) {   // the former floating panels' contents
+    const body = document.createElement('div');
+    body.className = 'lp-body';
+    body.appendChild(document.getElementById('panel-content-' + key));
+    page.appendChild(body);
+    panes[key] = body;
+  }
+  { // PROBE, when it's off (with streamlines loaded)
+    const d = document.createElement('div');
+    d.className = 'lp-empty';
+    d.innerHTML = '<p>Use the <b>probe</b> to select streamlines that terminate in or pass through a sphere with adjustable radius and location.</p>';
+    const sw = document.createElement('label');
+    sw.className = 'ctl-toggle';
+    sw.innerHTML = '<input type="checkbox" autocomplete="off"><div class="pill"></div><span class="tog-label">probe</span>';
+    sw.querySelector('input').addEventListener('change', () => {
+      const r = document.getElementById('probe-mode-' + (probeMode || 'select'));
+      r.checked = true;
+      r.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    d.appendChild(sw);
+    const body = document.createElement('div');
+    body.className = 'lp-body';
+    body.appendChild(d);
+    page.appendChild(body);
+    panes.probe = body;
+  }
+
+  const hasStreamlines = () => dataStore.streamlineItems.length > 0;
+  function show() {
+    for (const t of tabs) t.classList.toggle('on', !folded && t.dataset.page === current);
+    document.body.classList.toggle('left-folded', folded);   // (before the widths: the rail goes too)
+    setLeftPanelHidden(folded);
+    const probeSections = current === 'probe' && (probeOn || !hasStreamlines());
+    for (const [k, el] of Object.entries(panes)) el.style.display = k === current ? '' : 'none';
+    if (panes.probe.style.display === '') panes.probe.querySelector('input').checked = false;
+    page.classList.toggle('on', !probeSections);
+    const badge = document.getElementById('label-badge-src');
+    if (badge) badge.style.visibility = probeSections ? '' : 'hidden';
+    placeEdges();
+    for (const b of menu.querySelectorAll('[data-page]')) b.classList.toggle('on', !folded && b.dataset.page === current);
+    if (!folded && current === 'tools') toolsShown();
+  }
+  const pick = key => {
+    if (key === current && !folded) folded = true;
+    else { current = key; folded = false; }
+    userPicked = true;
+    show();
+  };
+  const open = key => { current = key; folded = false; userPicked = true; show(); };
+
+  // the ☰ menu
+  const menu = document.getElementById('main-menu'), menuBtn = document.getElementById('menu-btn');
+  const closeMenu = () => { menu.classList.remove('open'); menuBtn.classList.remove('active'); };
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const on = !menu.classList.contains('open');
+    menu.classList.toggle('open', on); menuBtn.classList.toggle('active', on);
+  });
+  menu.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    e.stopPropagation();
+    closeMenu();
+    if (b.dataset.act === 'load') openFiles();
+    else if (b.dataset.act === 'about') aboutPanel.open();
+    else open(b.dataset.page);
+  });
+  document.addEventListener('pointerdown', e => { if (!menu.contains(e.target) && e.target !== menuBtn && !menuBtn.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+  for (const t of tabs) {
+    t.addEventListener('click', () => pick(t.dataset.page));
+    t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(t.dataset.page); } });
+  }
+  for (const f of folds) f.addEventListener('click', () => { folded = true; show(); });
+
+  // what's loaded: a group that just got its first rows picks the tab
+  let had = { vol: false, str: false, mk: false };
+  dataStore.listen(() => {
+    const has = { vol: dataStore.anatomyItems.length + dataStore.parcellationItems.length > 0,
+                  str: hasStreamlines(), mk: dataStore.markerItems.length > 0 };
+    if (!has.vol && !has.str && !has.mk) userPicked = false;
+    const added = (has.vol && !had.vol) || (has.str && !had.str) || (has.mk && !had.mk);
+    had = has;
+    if (added && (!userPicked || current === 'settings' || current === 'tools')) {   // (those aren't about data)
+      current = has.str ? (isBundle ? 'streamlines' : 'probe') : has.vol ? 'anatomy' : 'markers';
+      folded = false;
+    }
+    show();
+  });
+  window.leftTabsChanged = show;
+  show();
 })();
 
 // ═══════════════════════════════════════════════════════════

@@ -109,7 +109,7 @@ export class MultiFileOpener {
       const sidecar = sidecarForTarget.get(name) || null;
 
       if (ext === '.webm') {
-        // Only .webm needs the merged combo, since parseWebm's signature
+        // Only .webm needs the merged combo, since parseWebmCodecs' signature
         // takes one object - other formats just get sidecar attached
         // alongside file for now, unused until something needs it.
         if (!sidecar) console.warn(`${name} has no matching sidecar - loading without metadata.`);

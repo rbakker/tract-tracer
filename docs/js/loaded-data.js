@@ -234,6 +234,17 @@ class LoadedDataStore {
   clearVolumes() { this.setVolumes([], []); }
   clearStreamlines() { this.streamlineItems = []; this._fire(); }
 
+  // Several views can show (parts of) the tree: each listens here.
+  listen(fn) { (this._listeners = this._listeners || []).push(fn); }
+
+  // The category groups for these keys (all, in the standard order, when
+  // none are given), filled, the empty ones left out.
+  rootsFor(keys) {
+    this.roots; // (fills every group)
+    return (keys || ['anatomy', 'parcellations', 'streamlines', 'markers'])
+      .map(k => this.categories[k]).filter(g => g.children.length);
+  }
+
   get roots() {
     const { anatomy, parcellations, streamlines, markers } = this.categories;
     const fill = (group, items) => {
@@ -250,6 +261,7 @@ class LoadedDataStore {
 
   _fire() {
     if (this.onChange) this.onChange();
+    for (const fn of this._listeners || []) fn();
   }
 }
 
@@ -298,25 +310,31 @@ function makeSettingsButton(label, onClick, title = null) {
 // settings toggle (» — opens/closes the item's inline settings area, see
 // buildSettings). Re-renders whenever the store reports a structural
 // change.
+// Options: categories — the category keys this view shows (default all);
+// flat — one category, shown without its heading row (its rows become the
+// main rows); empty(el) — fills the view when there's nothing to show.
 class DataTreeView {
-  constructor(container, store) {
+  constructor(container, store, { categories = null, flat = false, empty = null } = {}) {
     this.container = container;
     this.container.classList.add('dt-root'); // CSS hook, see .dt-row's separator rule
     this.store = store;
-    store.onChange = () => this.render();
+    this.categories = categories; this.flat = flat; this.empty = empty;
+    store.listen(() => this.render());
     this.render();
   }
 
   render() {
     this.container.innerHTML = '';
-    const roots = this.store.roots;
+    const roots = this.store.rootsFor(this.categories);
     if (!roots.length) {
+      if (this.empty) { this.empty(this.container); return; }
       const empty = document.createElement('div');
       empty.className = 'dt-empty';
       empty.textContent = 'Nothing loaded yet — use LOAD… above.';
       this.container.appendChild(empty);
       return;
     }
+    if (this.flat) { for (const item of roots[0].children) this.container.appendChild(this._renderNode(item, 0, 0)); return; }
     for (const item of roots) this.container.appendChild(this._renderNode(item, 0, item.isCategory ? 1 : 0));
   }
 

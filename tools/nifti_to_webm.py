@@ -101,7 +101,9 @@ def normalize_scalar_uint8(data, categorical=False):
         mn, mx = float(np.nanmin(flat)), float(np.nanmax(flat))
         rng = (mx - mn) if (mx - mn) != 0 else 1.0
         norm = np.clip((data.astype(np.float32) - mn) / rng, 0.0, 1.0)
-        return (norm*255.9999).astype(np.uint8), mn, mx
+        # round, not floor: G = round((v - mn) / (mx - mn) * 255), so the
+        # reader's v = mn + G / 255 * (mx - mn) is off by at most half a step
+        return np.round(norm * 255.0).astype(np.uint8), mn, mx
 
 
 def rgb_to_uint8(data_rgb):
@@ -159,7 +161,10 @@ def write_frame_pngs_scalar(data_u8, out_dir, ny):
     write_frame_pngs_rgb(rgb, out_dir, ny)
     
 
-def encode_webm(frame_dir, out_path, crf, fps, pix_fmt, lossless=False):
+PIX_FMT = "gbrp"  # planar G,B,R, full range: no YUV matrix (see encode_webm)
+
+
+def encode_webm(frame_dir, out_path, crf, fps, lossless=False):
     cmd = [
         "ffmpeg", "-y",
         "-framerate", str(fps),
@@ -176,7 +181,7 @@ def encode_webm(frame_dir, out_path, crf, fps, pix_fmt, lossless=False):
         # with better quality/QP than planes 1-2, even for GBR content
         # with no real luma/chroma relationship - confirmed empirically,
         # G was ~20% smaller than isolating into R or B.
-        "-pix_fmt", "gbrp",
+        "-pix_fmt", PIX_FMT,
         "-color_range", "2",
         "-color_primaries", "1",
         "-color_trc", "1",
@@ -199,7 +204,7 @@ def encode_webm(frame_dir, out_path, crf, fps, pix_fmt, lossless=False):
 
 
 def export_to_webm(input_path, output_webm, categorical=False, crf=CRF, fps=FPS,
-                    yuv444=False, lossless=False):
+                   lossless=False):
     if shutil.which("ffmpeg") is None:
         print("ffmpeg not found on PATH - install it first (e.g. via mamba: "
               "mamba install -c conda-forge ffmpeg)")
@@ -240,11 +245,9 @@ def export_to_webm(input_path, output_webm, categorical=False, crf=CRF, fps=FPS,
     Ab = flip_axis_in_affine(Ab, axis=1, n=ny)  # front-to-back frame order
     Ab = flip_axis_in_affine(Ab, axis=2, n=nz)  # row 0 = superior
 
-    pix_fmt = "yuv444p" if yuv444 else "yuv420p"
-
     with tempfile.TemporaryDirectory() as frame_dir:
         frame_writer(data_u8, frame_dir, ny)
-        encode_webm(frame_dir, output_webm, crf=crf, fps=fps, pix_fmt=pix_fmt, lossless=lossless)
+        encode_webm(frame_dir, output_webm, crf=crf, fps=fps, lossless=lossless)
 
     meta = {
         "shape": [nx, ny, nz],
@@ -257,7 +260,7 @@ def export_to_webm(input_path, output_webm, categorical=False, crf=CRF, fps=FPS,
         "mx": mx,
         "categorical": categorical,
         "codec": "vp9",
-        "pix_fmt": pix_fmt,
+        "pix_fmt": PIX_FMT,
         "lossless": lossless,
         "crf": None if lossless else crf,
     }
@@ -271,11 +274,10 @@ def export_to_webm(input_path, output_webm, categorical=False, crf=CRF, fps=FPS,
 
 if __name__ == "__main__":
     is_cat = "--categorical" in sys.argv
-    yuv444 = "--yuv444" in sys.argv
     lossless = "--lossless" in sys.argv
-    args = [a for a in sys.argv[1:] if a not in ("--categorical", "--yuv444", "--lossless")]
+    args = [a for a in sys.argv[1:] if a not in ("--categorical", "--lossless")]
     if len(args) < 2:
         print("Usage: python nifti_to_webm.py <input.nii.gz> <output.webm> "
-              "[--categorical] [--yuv444] [--lossless]")
+              "[--categorical] [--lossless]")
         sys.exit(1)
-    export_to_webm(args[0], args[1], categorical=is_cat, yuv444=yuv444, lossless=lossless)
+    export_to_webm(args[0], args[1], categorical=is_cat, lossless=lossless)
