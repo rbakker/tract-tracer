@@ -312,6 +312,14 @@ float sampleVol(vec3 p) {
   vec3 c = sampleRaw(p);
   return u_isColor > 0.5 ? length(c) : c.r;
 }
+// Paint of a colour volume, with the INTENSITY gain. All three channels are
+// scaled together and stop when the largest one reaches 1, so the hue is kept:
+// a high gain brightens towards the hue at full strength (grey -> white,
+// red stays red) rather than clipping each channel and fading to white.
+vec3 colourPaint(vec3 p) {
+  vec3 v = sampleRaw(p) * 1.6 * u_contrast;
+  return pow(v / max(1.0, max(v.r, max(v.g, v.b))), vec3(0.8));
+}
 // Reconstructs the original integer label index from the normalized
 // scalar texture value (texture stores (raw-min)/range — see
 // VolRenderer.upload), rounded to the nearest integer.
@@ -749,6 +757,20 @@ vec3 smoothedOccupancyNormal(vec3 p) {
   return g / u_voxMm;
 }
 
+// The face of the volume's box where tissue reaches it (SOLID, see
+// startAtBox in main): a checkerboard in the white-blue of inner surfaces,
+// squares 1/100 of the box's largest size. The coordinate across the face
+// (the axis whose box side p is on) is left out, so the pattern can't
+// flicker with rounding right on the face.
+vec3 boxFaceChecker(vec3 p) {
+  vec3 mm = p * u_voxMm, edgeDist = min(p, u_size - p) * u_voxMm;
+  float sq = max(max(u_size.x * u_voxMm.x, u_size.y * u_voxMm.y), u_size.z * u_voxMm.z) / 100.0;
+  vec2 uv = edgeDist.x <= min(edgeDist.y, edgeDist.z) ? mm.yz
+          : edgeDist.y <= edgeDist.z ? mm.xz : mm.xy;
+  float c = mod(floor(uv.x / sq) + floor(uv.y / sq), 2.0);
+  return vec3(0.8, 0.8, 1.0) * (c < 0.5 ? 0.9 : 0.62);
+}
+
 `;
 
 // Fully separate shaders for translucent vs solid rendering, swapped on
@@ -872,7 +894,7 @@ ${CLIP_SETUP_GLSL}
         // DEC colours are inherently dim (each channel is FA*|eigenvector|,
         // rarely above ~0.7) — boost and gamma-lift rather than applying the
         // grayscale intensity-based darkening below, which would compound.
-        ? pow(clamp(sampleRaw(p) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8))
+        ? colourPaint(p)
         : mix(vec3(0.25, 0.3, 0.35), vec3(0.75, 0.8, 0.85), scalarDisp);
     }
     float a   = clamp(rim * u_alpha * normStep * faWeight, 0.0, 1.0);
@@ -911,6 +933,15 @@ void main() {
 
 ${CLIP_SETUP_GLSL}
   bool startAtClip = tStart > tBoxStart + 1e-4;
+  // A ray entering through a FACE of the volume's box (camera outside the
+  // box) where the tissue reaches that face - a brain touching its grid at
+  // the ears. That's no real cut, so it isn't shown as one:
+  //  - GLASS: see-through, as if the camera were inside (the old path);
+  //  - SOLID: a flat face like a cut, but as a checkerboard in the
+  //    white-blue of inner surfaces instead of the tissue value.
+  bool startAtBox = hit.x > 0.0 && !startAtClip;
+  bool startAtCut = startAtClip || (startAtBox && u_shellMode < 0.5);
+  bool isBoxFace = false;
   float stepSize = (tEnd - tStart) / float(u_steps);
   bool labelMode = (u_applyLUT > 0.5) && (u_isColor < 0.5);
 
@@ -958,7 +989,7 @@ ${CLIP_SETUP_GLSL}
   float classifyThresh = labelMode ? 0.5 : (u_bgInvert > 0.5 ? 1.0 - u_background : u_background);
   bool startInside = occupancyAndGradient(ro + tStart * rd).w >= classifyThresh;
 
-  if (startInside && !startAtClip) {
+  if (startInside && !startAtCut) {
     // The CAMERA itself is inside tissue (zoomed into the brain), not a
     // clip plane cutting into it. Every ray then starts at the same point,
     // so treating it as a cut face (the branch below) painted one flat,
@@ -1001,7 +1032,7 @@ ${CLIP_SETUP_GLSL}
     bool onCutSide = isCutZone(capOcc, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0);
     bool hasCapData = u_fillIn > 0.5 && (labelMode || !onCutSide);
     if (hasCapData) {
-      hitP = ro + tStart * rd; isCap = true; haveHit = true;
+      hitP = ro + tStart * rd; isCap = true; haveHit = true; isBoxFace = startAtBox;
     } else if (!labelMode && onCutSide) {
       // Material right at the cut is on CUTOUT's hidden side. Two
       // genuinely separate stages, not a single forward pass with a
@@ -1079,9 +1110,10 @@ ${CLIP_SETUP_GLSL}
     // blend. The blend is what makes the isosurface itself look good -
     // but a cut face is a flat cross-section, exactly like the 2D slice
     // panels, which also read raw per-voxel labels with no blending.
-    baseColor = labelMode ? lutColor(sampleLabelIndex(hitP))
+    baseColor = isBoxFace ? boxFaceChecker(hitP)   // the volume's edge, not a cut
+              : labelMode ? lutColor(sampleLabelIndex(hitP))
               : (u_isColor > 0.5 && u_forceGray < 0.5
-                  ? pow(clamp(sampleRaw(hitP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8))
+                  ? colourPaint(hitP)
                   : vec3(gammaContrast(sampleVol(hitP), 1.0 / u_contrast)));
     shade = 1.0;
   } else {
@@ -1164,7 +1196,7 @@ ${CLIP_SETUP_GLSL}
     } else if (u_isColor > 0.5 && u_forceGray < 0.5) {
       // DEC/colour volume: the actual FA-weighted direction colour,
       // same boost as glass mode, at the same inward-nudged point.
-      baseColor = pow(clamp(sampleRaw(inwardP) * 1.6 * u_contrast, 0.0, 1.0), vec3(0.8));
+      baseColor = colourPaint(inwardP);
     } else {
       // Plain scan: shading alone defines the surface. startInside gets a
       // faint cool/blue tint (vs. neutral white outside), a cheap visual

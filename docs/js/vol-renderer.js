@@ -97,7 +97,11 @@ void main(){
       v = gammaContrast(v, 1.0 / u_contrast);
       col = vec3(v);
     } else {
-      col = clamp(lin * u_contrast, 0.0, 1.0);
+      // All three channels scaled together, stopping when the largest
+      // reaches 1: a high gain keeps the hue (grey -> white, red stays red)
+      // instead of clipping each channel and fading to white.
+      vec3 v = lin * u_contrast;
+      col = v / max(1.0, max(v.r, max(v.g, v.b)));
     }
   } else {
     float rawNorm = texture(u_vol, tc).r;

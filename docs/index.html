@@ -40,7 +40,7 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 .rail-edge{position:absolute;right:0;width:1px;background:rgba(155,187,255,0.55);pointer-events:none;z-index:2;
   box-shadow:0 0 6px 1px rgba(110,160,255,0.4);clip-path:inset(0 0 0 -12px);}
 .rail-tab{display:flex;align-items:center;justify-content:center;margin-left:4px;width:calc(100% - 4px);box-sizing:border-box;
-  background:#a3adbb;color:#0a0e14;border-radius:8px 0 0 8px;font-family:inherit;font-size:11px;font-weight:600;
+  background:#838d9b;color:#0a0e14;border-radius:8px 0 0 8px;font-family:inherit;font-size:11px;font-weight:600;
   letter-spacing:0.06em;padding:12px 0;cursor:pointer;user-select:none;position:relative;flex:none;}
 .rail-tab span{text-transform:uppercase;letter-spacing:0.18em;writing-mode:vertical-rl;transform:rotate(180deg);line-height:1.2;white-space:nowrap;padding:2px 0;}
 .rail-tab:hover{background:#c1c9d4;color:#000;}
@@ -566,7 +566,15 @@ input[type=file]{display:none;}
    on one line within the settings panel's width. */
 .clip-radio-row{display:flex;justify-content:flex-start;gap:5px;}
 .clip-radio-opt{position:relative;cursor:pointer;user-select:none;flex:none;}
-.ctl-row label.clip-radio-opt{min-width:0;flex:0 1 64px;}   /* 64 px apart (the .ctl-row label width) while there's room; closer in a narrow column */
+.ctl-row .clip-radio-row{flex:1;min-width:0;display:grid;grid-template-columns:repeat(3,1fr);column-gap:6px;justify-items:start;}
+/* ^ choice buttons keep their size and snap to three columns after the
+   row's label, the same columns as the radio rows below (.ctl-row >
+   .radio-opt) and the clip options (.clip-sub-row): rows line up */
+.ctl-row > .radio-opt{flex:1 1 0;min-width:0;}
+.ctl-row .clip-radio-row.view-dir-row{flex:none;display:flex;}  /* (plain buttons, followed by a text) */
+.clip-on{display:flex;align-items:center;gap:5px;cursor:pointer;}
+.clip-on input{margin:0;}
+.ctl-row label.clip-radio-opt{min-width:0;flex:none;}
 .clip-radio-opt input{position:absolute;opacity:0;width:0;height:0;}
 .clip-radio-opt > span{display:inline-block;font-size:9px;letter-spacing:0.05em;line-height:1;
   padding:4px 6px;border:1px solid var(--rc-color);border-radius:3px;
@@ -578,7 +586,7 @@ input[type=file]{display:none;}
 .cro-axi{--rc-color:var(--axi);}
 .cro-none{--rc-color:var(--dim);}
 .cro-qual{--rc-color:var(--accent);}
-.clip-sub-row{display:flex;gap:16px;margin:9px 0 3px 0;padding-left:70px;} /* indented under clip·plane: its options */
+.clip-sub-row{display:grid;grid-template-columns:repeat(3,1fr);column-gap:6px;justify-items:start;margin:9px 0 3px 0;padding-left:70px;} /* under clip: its options, on the same three columns */
 .clip-sub-row .ctl-toggle{gap:6px;}
 .inline-select{background:rgba(255,255,255,0.06);color:var(--text);
   border:1px solid rgba(255,255,255,0.18);border-radius:3px;
@@ -874,18 +882,17 @@ input[type=file]{display:none;}
       <input autocomplete="off" type="range" id="light-slider" min="-100" max="100" value="0" step="1">
       <span class="ctl-val" id="light-val">center</span>
     </div>
-    <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead.">
-      <label>clip·plane</label>
+    <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped): tick CLIP and pick the plane (picking one ticks it). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead.">
+      <label class="clip-on"><input type="checkbox" class="dt-check" autocomplete="off" id="clip-on">clip</label>
       <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-none"><input type="radio" autocomplete="off" name="clip-plane" value="none" checked><span>none</span></label>
         <label class="clip-radio-opt cro-sag"><input type="radio" autocomplete="off" name="clip-plane" value="sag"><span>sag</span></label>
-        <label class="clip-radio-opt cro-cor"><input type="radio" autocomplete="off" name="clip-plane" value="cor"><span>cor</span></label>
+        <label class="clip-radio-opt cro-cor"><input type="radio" autocomplete="off" name="clip-plane" value="cor" checked><span>cor</span></label>
         <label class="clip-radio-opt cro-axi"><input type="radio" autocomplete="off" name="clip-plane" value="axi"><span>axi</span></label>
       </div>
     </div>
     <div class="clip-sub-row">
       <label class="ctl-toggle">
-        <input type="checkbox" autocomplete="off" id="clip-slice">
+        <input type="checkbox" autocomplete="off" id="clip-slice" checked>
         <div class="pill"></div>
         <span class="tog-label">slice</span>
       </label>
@@ -907,7 +914,7 @@ input[type=file]{display:none;}
       <input autocomplete="off" type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
       <span class="ctl-val" id="slab-val">3.0×</span>
     </div>
-    <div class="ctl-row" data-tip="Logarithmic gain, neutral (1.0x) in the middle.\nFor a scan: a gamma curve — raise to brighten, lower to darken — that always keeps true black and true white fixed, so background stays dark at any setting.\nFor a colour (DEC/FA) volume: brightens colours, which are dim by nature.\nApplies to both the 2D slices and the 3D glass brain.">
+    <div class="ctl-row" data-tip="Logarithmic gain, neutral (1.0x) in the middle.\nFor a scan: a gamma curve — raise to brighten, lower to darken — that always keeps true black and true white fixed, so background stays dark at any setting.\nFor a colour volume: brightens colours while keeping their hue; turned up, grey goes to white and colours to full strength.\nApplies to both the 2D slices and the 3D glass brain.">
       <label>intensity</label>
       <input autocomplete="off" type="range" id="contrast-slider" min="0" max="100" value="50" step="1">
       <span class="ctl-val" id="contrast-val">1.00×</span>
@@ -933,7 +940,7 @@ input[type=file]{display:none;}
     <div class="cfg-section" data-tip="The 3D view: from where the brain is seen, the centre it turns around, and how large it is shown. Copy it to come back to it later, share it, or put it in a zip's index.json as its opening view.">VIEW</div>
     <div class="ctl-row" data-tip="Turn the brain to be seen from this side: Left, Right, Anterior, Posterior, Superior, Inferior.">
       <label>from</label>
-      <div class="clip-radio-row">
+      <div class="clip-radio-row view-dir-row">
         <button class="view-dir" data-dir="left">L</button><button class="view-dir" data-dir="right">R</button>
         <button class="view-dir" data-dir="anterior">A</button><button class="view-dir" data-dir="posterior">P</button>
         <button class="view-dir" data-dir="superior">S</button><button class="view-dir" data-dir="inferior">I</button>
@@ -3023,7 +3030,7 @@ let clipPlane = 'none';
 // SLICE: two parallel planes straddling the current plane position (a thin
 // slab, THICKNESS voxels wide) instead of a one-sided half-space cut.
 // FLIP has no effect while this is on (a symmetric slab has no side).
-let sliceMode = false;
+let sliceMode = true;   // SLICE on by default (the clip-slice box starts ticked)
 // Default clips away the positive (R/A/S) side; FLIP flips to negative (L/P/I).
 let clipFlip = false;
 // When on (default), the cut face is painted with the sampled anatomy, like
@@ -5114,12 +5121,22 @@ document.querySelectorAll('input[name="render-mode"]').forEach(r=>{
 });
 applyRenderModeUI(); // reflect the default MODE (glass) on load
 window.setRenderMode = mode => { setRenderMode(mode); return renderMode; }; // console: 'none' | 'glass' | 'solid' | 'translucent' (rim-lit)
+// CLIP: the box switches clipping on/off; the plane buttons pick the
+// plane (COR at start) and, picked while off, switch it on too.
+const clipOnEl = document.getElementById('clip-on');
+const chosenClipPlane = () => document.querySelector('input[name="clip-plane"]:checked').value;
+clipOnEl.addEventListener('change', () => {
+  clipPlane = clipOnEl.checked ? chosenClipPlane() : 'none';
+  updatePlaneMeshes();
+});
 document.querySelectorAll('input[name="clip-plane"]').forEach(r=>{
-  r.addEventListener('change', ()=>{
+  r.addEventListener('click', ()=>{   // (click, not change: also the plane already chosen switches clipping on)
+    clipOnEl.checked = true;
     clipPlane = r.value;
     updatePlaneMeshes();
   });
 });
+document.getElementById('clip-flip').disabled = sliceMode; // (FLIP: no effect on a symmetric slab)
 document.getElementById('clip-slice').addEventListener('change', e=>{
   sliceMode = e.target.checked;
   document.getElementById('clip-flip').disabled = sliceMode; // FLIP has no effect on a symmetric slab
@@ -8002,6 +8019,7 @@ function pickBrain(clientX, clientY, { labels: wantLabels = false } = {}) {
     t0 = Math.max(t0, Math.min(ta, tb)); t1 = Math.min(t1, Math.max(ta, tb));
   }
   if (t1 < t0 || t1 < 0) return null;
+  const tBox = t0 > 0 ? t0 : null;   // entry through a face of the box (camera outside it)
   t0 = Math.max(t0, 0);
   // the clip plane (same rules as CLIP_SETUP_GLSL); tClip = entry through it
   let tClip = null;
@@ -8025,6 +8043,9 @@ function pickBrain(clientX, clientY, { labels: wantLabels = false } = {}) {
     }
   }
   if (t1 <= t0) return null;
+  // tissue reaching the box face where the ray enters: in SOLID a face
+  // like a cut (as in the shader, see startAtBox there); in GLASS see-through
+  if (tClip === null && tBox !== null && renderMode !== 'glass') tClip = tBox;
   // the anatomy, as the shader reads it (trilinear, texel centres at i+0.5)
   const [nx, ny, nz] = anat.shape, data = vr.texData;
   const isColor = (anat.channels || 1) === 3;
