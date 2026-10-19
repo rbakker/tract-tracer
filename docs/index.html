@@ -426,6 +426,39 @@ button.dt-menu-btn:hover{color:var(--accent);}
 .dt-cmap-lbl{color:var(--dim);font-size:9px;letter-spacing:0.06em;}
 .dt-settings .dt-slider-row{flex-basis:100%;margin:0;}
 .dt-settings .dt-slider-row label{min-width:72px;}
+.dt-surface .dt-check{margin:0;}
+/* ANATOMY tab: the role sections */
+.dt-labels .dt-fold{cursor:pointer;gap:5px;}
+.dt-labels .dt-fold .dt-caret{width:10px;color:var(--dim);}
+.dt-labels .dt-scroll .dt-row{padding-left:16px;}
+.brick-btn{flex:none;background:none;border:none;padding:0;margin:0 2px 0 0;width:18px;height:18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
+.brick-btn.grey{opacity:0.35;}
+.brick-btn:hover{filter:brightness(1.15);}
+/* advanced settings: an opener, and open a box that stands out */
+.adv-open{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;padding:3px 0;flex-basis:100%;}
+.adv-open:hover{color:var(--bright);}
+.adv-chev{font-size:11px;letter-spacing:0;}
+.adv-panel{flex:1 1 100%;min-width:0;max-width:100%;box-sizing:border-box;margin:3px 0 2px;border:1px solid #838d9b;border-radius:4px;}
+.adv-head{display:flex;align-items:center;padding:4px 8px;background:#838d9b;color:#0a0e14;font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;user-select:none;border-radius:3px 3px 0 0;}
+.adv-head span:first-child{flex:1;}
+.adv-head:hover{background:#c1c9d4;}
+.adv-body{padding:6px 8px 4px;display:flex;flex-direction:column;gap:4px;}
+.adv-row{gap:6px;}
+.adv-row > label{min-width:62px;}
+.adv-row > label:empty{display:none;}   /* (the second foreground row: its choice under the first's) */
+.adv-row .inline-select{flex:none;}
+.adv-row .dt-scrub{flex:1;min-width:40px;}
+.an-sec{border-bottom:1px solid rgba(255,255,255,0.06);}
+.an-head{cursor:default;}
+.an-body{padding:5px 8px 8px;display:flex;flex-direction:column;gap:4px;}
+.an-select{width:100%;}
+.an-settings{padding:2px 0 0 12px;border:none;background:none;}
+.an-name{padding:2px 0;gap:6px;flex-basis:100%;}
+.an-check{cursor:pointer;color:var(--dim);font-size:9px;letter-spacing:0.06em;}
+.an-check .dt-check{margin:0;}
+
+.dt-surface-note{color:var(--dim);font-size:9px;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.dt-surface-note.warn{color:#e8a050;}
 .dt-settings .slider-val{min-width:58px;font-size:9px;color:var(--text);text-align:right;}
 /* scrub field: slider + editable value in one (see makeSliderRow) */
 .dt-scrub{position:relative;flex:1;min-width:0;height:17px;border:1px solid rgba(255,255,255,0.14);
@@ -821,38 +854,34 @@ input[type=file]{display:none;}
   <span class="slider-val" id="shadow-val">0%</span>
 </div>
 
-    <div class="cfg-section" data-tip="Glass brain silhouette rendered in the 3D panel.\nDrag to rotate · Right-drag to pan · Scroll to zoom.\nAll three sliders default to their centre (raw=50) position — the mathematically 'neutral' reference value for each.">VOLUME RENDERING</div>
-    <div class="ctl-row" data-tip="How to interpret and display this volume. ANAT: plain grayscale scan (for 3-channel data, shown as the vector-length magnitude — an FA-like scalar). R/A/S: colour-encoded fibre direction, only available for 3-channel data (auto-selected when such data loads). LABEL: each voxel's rounded value is a label index, colored via the loaded LUT — or, if none is loaded, an automatically generated one (maximally-distinct colors, named Label_N). Only available for single-channel data.">
-      <label>modality</label>
-      <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="anat" id="modality-anat" checked><span>anat</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="dec" id="modality-dec" disabled><span>
-          <span style="color:#e44">R</span><span style="color:#4c4">A</span><span style="color:#66e">S</span>
-        </span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="modality" value="seg" id="modality-seg" disabled><span>label</span></label>
-      </div>
+    <div class="cfg-section" data-tip="The glass of the rendered volume (the mortar-only brick in ANATOMY › VOLUME RENDER) and of regions drawn as glass: how thin its rim, how see-through.">GLASS MODE</div>
+    <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
+      <label>rim</label>
+      <input autocomplete="off" type="range" id="brain-rim-slider" min="0" max="100" value="33" step="1">
+      <span class="ctl-val" id="brain-rim-val">1.00</span>
     </div>
-    <div class="ctl-row" data-tip="How the anatomical volume is drawn in 3D. NONE: not drawn (OPACITY and RIM still set the glass of dimmed brain regions). GLASS: a real isosurface with a Fresnel rim (using RIM and OPACITY) — a thin, transparent shell; streamlines and other geometry show through it. SOLID: the same isosurface, fully opaque, with depth and lighting — FOREGROUND (below) replaces OPACITY here. Clip planes and COVER work the same way in SOLID and GLASS. (The original RIM-LIT shader, a glowing haze, is still in the code: setRenderMode('translucent') in the console.)">
-      <label>shader</label>
-      <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="none" id="render-mode-none"><span>none</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="glass" id="render-mode-glass" checked><span>glass</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="render-mode" value="solid" id="render-mode-solid"><span>solid</span></label>
-      </div>
+    <div class="ctl-row" id="row-opacity" data-tip="0-100%, shown at right. Only affects RIM-LIT mode — how much of the glowing boundary builds up along each ray. Applies to scans, colour (DEC/FA) volumes, and labelled volumes alike.">
+      <label>opacity</label>
+      <input autocomplete="off" type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
+      <span class="ctl-val" id="brain-alpha-val">50%</span>
     </div>
+    <div class="cfg-section" data-tip="The light on the brain, the regions and the streamlines.">LIGHT</div>
+    <div class="ctl-row" data-tip="Shading light direction. CENTER matches the old camera-aligned 'headlamp' light (flatter, but sometimes an easier fixed reference); LEFT/RIGHT nudges it off-axis, which reads as more three-dimensional on a static view.">
+      <label>direction</label>
+      <input autocomplete="off" type="range" id="light-slider" min="-100" max="100" value="0" step="1">
+      <span class="ctl-val" id="light-val">center</span>
+    </div>
+    <div class="cfg-section" data-tip="Cut the rendered volume open along a section plane.">CLIPPING PLANE</div>
+    <!-- per volume, shown in ANATOMY › VOLUME RENDER › SHADER SETTINGS (moved there while open) -->
+    <div id="shader-rows">
     <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from FOREGROUND below, so narrowing FOREGROUND to hide a tissue type can never also erode this outer surface.">
       <label>background</label>
       <select id="bg-invert-select" class="inline-select" autocomplete="off">
         <option value="below" selected>below</option>
         <option value="above">above</option>
       </select>
-      <input autocomplete="off" type="range" id="background-slider" min="0" max="100" value="10" step="1">
+      <input autocomplete="off" type="range" id="background-slider" min="1" max="100" value="10" step="1">
       <span class="ctl-val" id="background-val">0.10</span>
-    </div>
-    <div class="ctl-row" id="row-opacity" data-tip="0-100%, shown at right. Only affects RIM-LIT mode — how much of the glowing boundary builds up along each ray. Applies to scans, colour (DEC/FA) volumes, and labelled volumes alike.">
-      <label>opacity</label>
-      <input autocomplete="off" type="range" id="brain-alpha-slider" min="0" max="100" value="50" step="1">
-      <span class="ctl-val" id="brain-alpha-val">50%</span>
     </div>
     <div class="ctl-row" id="row-cutout" style="display:none;" data-tip="First half of FOREGROUND's combined rule (see the row below for how the two combine into one) — defines what part of the SOLID/GLASS surface stays visible once you're behind an active clip plane with COVER, e.g. isolating grey matter and hiding white matter to reveal what's inside. Everything that fails the combined rule (both rows together) is hidden. ABOVE (default): value must be >= this threshold to count as foreground. BELOW: value must be <= threshold instead. All comparisons inclusive.">
       <label>foreground</label>
@@ -872,15 +901,6 @@ input[type=file]{display:none;}
       <input autocomplete="off" type="range" id="brain-cutout-below-slider" min="0" max="100" value="100" step="1">
       <span class="ctl-val" id="brain-cutout-below-val">1.00</span>
     </div>
-    <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
-      <label>rim</label>
-      <input autocomplete="off" type="range" id="brain-rim-slider" min="0" max="100" value="33" step="1">
-      <span class="ctl-val" id="brain-rim-val">1.00</span>
-    </div>
-    <div class="ctl-row" data-tip="Shading light direction. CENTER matches the old camera-aligned 'headlamp' light (flatter, but sometimes an easier fixed reference); LEFT/RIGHT nudges it off-axis, which reads as more three-dimensional on a static view.">
-      <label>light</label>
-      <input autocomplete="off" type="range" id="light-slider" min="-100" max="100" value="0" step="1">
-      <span class="ctl-val" id="light-val">center</span>
     </div>
     <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped): tick CLIP and pick the plane (picking one ticks it). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead.">
       <label class="clip-on"><input type="checkbox" class="dt-check" autocomplete="off" id="clip-on">clip</label>
@@ -913,11 +933,6 @@ input[type=file]{display:none;}
       <label>thickness</label>
       <input autocomplete="off" type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
       <span class="ctl-val" id="slab-val">3.0×</span>
-    </div>
-    <div class="ctl-row" data-tip="Logarithmic gain, neutral (1.0x) in the middle.\nFor a scan: a gamma curve — raise to brighten, lower to darken — that always keeps true black and true white fixed, so background stays dark at any setting.\nFor a colour volume: brightens colours while keeping their hue; turned up, grey goes to white and colours to full strength.\nApplies to both the 2D slices and the 3D glass brain.">
-      <label>intensity</label>
-      <input autocomplete="off" type="range" id="contrast-slider" min="0" max="100" value="50" step="1">
-      <span class="ctl-val" id="contrast-val">1.00×</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the left-right axis.">
       <label>pitch</label>
@@ -1160,7 +1175,7 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
          parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
-import { MultiFileOpener } from './js/file-opener.js';
+import { MultiFileOpener, isJunkPath } from './js/file-opener.js';
 import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
 import { LabelItem, LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
 import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
@@ -1177,6 +1192,7 @@ import { ReactiveState } from './js/reactive-state.js';
 import { LineShadows } from './js/line-shadows.js';
 import { SectionOutlines } from './js/section-outlines.js';
 import { RegionMeshes } from './js/region-meshes.js';
+import { VolumeSurfaces } from './js/volume-surfaces.js';
 import { parseMarkers, resolveMarkerStyle, markerFilterMask, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
 import { makeMarkerGroup, setMarkerDisplay, setMarkerHover, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
 
@@ -1532,13 +1548,18 @@ console.info('GPU quality tier guess:', qualityTier);
 // flat-line renderer that used to be the LOW-tier default has been
 // retired, so LOW vs HIGH now only changes MAX_RENDER_POINTS (below).
 
-// Logarithmic gain, neutral (1.0x) at the slider's middle position — ranges
-// 0.25x..4x. Used for the 2D slice CONTRAST control (see settings panel):
-// a straight gain for colour/DEC volumes (their values sit near 0, not a
-// midtone), or a contrast stretch around mid-gray for scalar scans.
-function contrastGainFromSlider(raw) { return Math.pow(4, (raw-50)/50); }
-let contrastGain = contrastGainFromSlider(50);
+// INTENSITY: the shown volume's display gain, 0.25x..4x, neutral 1x — set
+// per volume in its ANATOMY settings (vol.gain) and applied when the volume
+// is shown. A straight gain for colour volumes (hue kept), a gamma curve
+// around mid-gray for scalar scans; 2D sections and the 3D brain alike.
+let contrastGain = 1;
 vr.setContrast(contrastGain);
+function setContrastGain(g) {
+  contrastGain = g;
+  vr.setContrast(g);
+  updateSlicesA(); updateSlicesB();
+  updateGlassBrainUniforms();
+}
 
 // Common shape shared by most sliders in Settings: read the raw 0-100
 // position, run it through a curve function, format it into the little
@@ -2432,17 +2453,6 @@ bundleTipEl.addEventListener('pointerenter', e => { if (e.pointerType === 'touch
 bundleTipEl.addEventListener('pointerleave', e => { if (e.pointerType === 'touch') return; _overBundleTip = false; clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500); });
 
 let _hoverDebounceTimer = null, _lastPointerEvent = null;
-function doBundleHoverHitTest() {
-  if (!_lastPointerEvent || _overBundleTip || (ctxMenu && ctxMenu.pinned)) return;
-  const h = collectHits(_lastPointerEvent.clientX, _lastPointerEvent.clientY);
-  if (hitsEmpty(h)) {
-    clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
-    return;
-  }
-  clearTimeout(_bundleTipTimer); // still on something: keep (or update) the menu
-  if (ctxMenu && ctxMenu.key === hitsKey(h)) return;
-  showCtxMenu(h);
-}
 
 // ── What is under the mouse in 3D (for the 3D menu, below) ───
 // Markers, bundle ends, the anatomy, the regions along the line of sight,
@@ -2625,6 +2635,7 @@ function pickRegions(clientX, clientY, wMax = Infinity) {
 // click (one is usually busy with streamlines, or with regions).
 const ctxOpenMemory = new Set();
 function showCtxMenu(h, { pinned = false } = {}) {
+  ctxHintDone();   // (the hint: until the menu first shows)
   clearTimeout(_bundleTipTimer);
   if (markerCard) closeMarkerCard();
   ctxMenu = { hits: h, key: hitsKey(h), sx: h.sx, sy: h.sy, pinned, open: new Set(pinned ? ctxOpenMemory : []) };
@@ -2759,16 +2770,14 @@ function renderCtxMenu() {
       cb.title = on ? 'drawn — click: switch off' : 'switched off — click: draw';
       cb.addEventListener('click', e => e.stopPropagation());
       cb.addEventListener('change', () => setRenderMode(cb.checked ? _shownRenderMode : 'none'));
-      const fb = makeFocusButton(solidish, () => {
-        const next = solidish ? 'glass' : 'solid';
-        if (on) setRenderMode(next); else { _shownRenderMode = next; renderCtxMenu(); }
-      }, solidish ? 'solid — click: glass' : 'glass — click: solid');
-      if (!on) fb.classList.add('grey');
-      row(multi ? 'volume' : null, [tag('Volume:'), cb, fb, Object.assign(text(activeVolume.file.name, 'ctx-text ctx-fname'), { title: activeVolume.file.name })]);
-      if (multi && open.has('volume')) {
+      const fb = makeBrickButton();
+      const gained = intensityApplies(activeVolume);
+      row(multi || gained ? 'volume' : null, [tag('Volume:'), cb, fb, Object.assign(text(activeVolume.file.name, 'ctx-text ctx-fname'), { title: activeVolume.file.name })]);
+      if ((multi || gained) && open.has('volume')) {
         const d = nest(1);
-        d.appendChild(makeChoiceRow('anatomy', volumes.map((v, i) => [String(i), v.label]), String(volumes.indexOf(activeVolume)),
+        if (multi) d.appendChild(makeChoiceRow('anatomy', volumes.map((v, i) => [String(i), v.label]), String(volumes.indexOf(activeVolume)),
           value => { const v = volumes[+value]; if (v) selectVolume(v).then(() => renderCtxMenu()); }, 'the volume shown'));
+        if (gained) buildIntensityRow(activeVolume, d, refreshTreeSoon);   // (the same per-volume setting as in ANATOMY)
       }
     },
     region: () => {
@@ -2917,41 +2926,48 @@ function regionRowControls(v) {
   if (!on) fb.classList.add('grey');
   return [cb, fb, ...regionNameEls(v)];
 }
-// SOLID ⇄ GLASS for the anatomy: a square, half solid, half checkerboard.
-let _modeIconId = 0;
-function renderModeToggle() {
+// SOLID ⇄ GLASS for the rendered volume: a piece of brick wall — bricks
+// in mortar for solid, the mortar alone (see-through) for glass. Greyed
+// while the volume isn't drawn in 3D ('---').
+function brickSvg(solid) {
+  const mortar = '#d4d6dc';
+  if (solid) return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">'
+    + '<rect x="0.5" y="0.5" width="15" height="15" rx="2" fill="' + mortar + '"/>'
+    + '<g fill="#a8383a"><rect x="1.5" y="1.5" width="6" height="3.5"/><rect x="8.5" y="1.5" width="6" height="3.5" fill="#7e2224"/>'
+    + '<rect x="1.5" y="6.2" width="2.5" height="3.6" fill="#7e2224"/><rect x="5" y="6.2" width="6" height="3.6"/><rect x="12" y="6.2" width="2.5" height="3.6" fill="#7e2224"/>'
+    + '<rect x="1.5" y="11" width="6" height="3.5" fill="#7e2224"/><rect x="8.5" y="11" width="6" height="3.5"/></g></svg>';
+  return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><g stroke="' + mortar + '" stroke-width="1" fill="none">'
+    + '<rect x="0.5" y="0.5" width="15" height="15" rx="2"/>'
+    + '<line x1="1" y1="5.6" x2="15" y2="5.6"/><line x1="1" y1="10.4" x2="15" y2="10.4"/>'
+    + '<line x1="8" y1="1" x2="8" y2="5.6"/><line x1="4.5" y1="5.6" x2="4.5" y2="10.4"/><line x1="11.5" y1="5.6" x2="11.5" y2="10.4"/><line x1="8" y1="10.4" x2="8" y2="15"/></g></svg>';
+}
+function makeBrickButton() {
   const b = document.createElement('button');
-  b.className = 'mode-btn';
-  // The transparency metaphor: a rounded square, solid on its left part,
-  // checkered on its right part, split by a slanted line; the current
-  // mode's part bright, the other dimmer. Clip ids are unique per icon (an id shared
-  // with a hidden icon would stop rendering).
-  const id = 'rmIc' + (++_modeIconId), solid = renderMode === 'solid';
-  let checks = '';
-  const c = 14 / 6;
-  for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++)
-    if ((i + j) % 2 === 0) checks += '<rect x="' + (1 + i * c).toFixed(2) + '" y="' + (1 + j * c).toFixed(2) + '" width="' + c.toFixed(2) + '" height="' + c.toFixed(2) + '"/>';
-  b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><defs>'
-    + '<clipPath id="' + id + 'r"><rect x="1" y="1" width="14" height="14" rx="2.6"/></clipPath>'
-    + '<clipPath id="' + id + 't"><polygon points="12,1 4,15 15,15 15,0"/></clipPath></defs>'
-    + '<g clip-path="url(#' + id + 'r)" fill="#fff">'
-    + '<polygon points="0,0 12,0 4,16, 0,16" opacity="' + (solid ? 0.85 : 0.6) + '"/>'
-    + '<g clip-path="url(#' + id + 't)" opacity="' + (solid ? 0.6 : 0.85) + '">' + checks + '</g></g>'
-    + '<rect x="1.4" y="1.4" width="13.2" height="13.2" rx="2.3" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.6"/>'
-    + '<polyline points="12,0 4,16" stroke="#fff" stroke-width="1.5"/>'
-    + '</svg>';
-  b.title = renderMode === 'solid' ? 'solid — click: glass' : 'glass — click: solid';
-  b.addEventListener('click', e => { e.stopPropagation(); setRenderMode(renderMode === 'solid' ? 'glass' : 'solid'); });
+  const on = renderMode !== 'none', solid = (on ? renderMode : _shownRenderMode) === 'solid';
+  b.className = 'brick-btn' + (on ? '' : ' grey');
+  b.innerHTML = brickSvg(solid);
+  b.dataset.tip = solid ? 'solid — click: glass' : 'glass — click: solid';
+  b.addEventListener('click', e => {
+    e.stopPropagation();
+    const next = solid ? 'glass' : 'solid';
+    if (on) setRenderMode(next); else _shownRenderMode = next;
+    if (activeVolume) activeVolume.shaderMode = next;
+    registerVolumeItems();
+  });
   return b;
 }
+// The shader of the rendered volume: 'none' | 'glass' | 'solid' (the
+// bricks and '---' in ANATOMY › VOLUME RENDER, the 3D menu), or
+// 'translucent' (RIM-LIT, a glowing haze: console only). The one place it
+// changes.
 function setRenderMode(mode) {
-  const r = document.querySelector('input[name="render-mode"][value="' + mode + '"]');
-  if (r) { r.checked = true; r.dispatchEvent(new Event('change')); }
-  else if (mode === 'translucent') { // RIM-LIT: no longer in SETTINGS, kept in the code
-    for (const x of document.querySelectorAll('input[name="render-mode"]')) x.checked = false;
-    renderMode = mode; applyRenderModeUI(); updateGlassBrainUniforms();
-  } else return;
-  if (ctxMenu) renderCtxMenu();
+  if (!['none', 'glass', 'solid', 'translucent'].includes(mode)) return;
+  renderMode = mode;
+  if (mode === 'glass' || mode === 'solid') _shownRenderMode = mode;
+  applyRenderModeUI();
+  updateGlassBrainUniforms();
+  if (ctxMenu) renderCtxMenu();      // the bricks there,
+  dataStore.refresh();               // and in ANATOMY
 }
 
 // The label volume in memory: '---' or one of the parcellations.
@@ -2971,7 +2987,7 @@ threeCanvas.addEventListener('mousemove', e => {
   if (ctxMenu && !ctxMenu.pinned && Math.hypot(e.offsetX - ctxMenu.sx, e.offsetY - ctxMenu.sy) > 16) {
     clearTimeout(_bundleTipTimer); _bundleTipTimer = setTimeout(hideBundleTooltip, 500);
   }
-  _hoverDebounceTimer = setTimeout(doBundleHoverHitTest, 250);
+  // (the 3D menu opens on a click only — see clickAt; the hint below says so)
 });
 threeCanvas.addEventListener('mouseleave', () => {
   if (recentTouch()) return;
@@ -3219,7 +3235,7 @@ function rimPowFromSlider(raw) {
 
 let glassBrainMesh = null;
 let currentAnat = null;
-// 'translucent' | 'solid' — the SHADER control (UI label; internal attribute name stays 'render-mode'). Two genuinely separate
+// 'translucent' | 'solid' — the shader, see setRenderMode. Two genuinely separate
 // shaders (see scene3d.js's buildGlassBrain), not a blend; OPACITY only
 // has any effect in translucent mode, which is why it gets disabled below
 // whenever MODE is switched to solid.
@@ -3283,7 +3299,7 @@ function updateGlassBrainUniforms() {
   if (!glassBrainMesh) return;
   // Three fully separate shaders (translucent/solid/glass, no blending
   // between them — see scene3d.js's buildGlassBrain), swapped on the mesh
-  // according to the SHADER control (labeled 'render-mode' internally). All three materials share the same
+  // according to the shader (renderMode, see setRenderMode). All three materials share the same
   // uniforms object, so this swap (and u_shellMode, GLASS-only) are the
   // only things that need to know which is active — every other uniform
   // write below works identically regardless of mode.
@@ -3308,6 +3324,7 @@ function updateGlassBrainUniforms() {
   u.u_rimPow.value = glassBrainRimPow;
   u.u_glassAlphaMult.value = glassOpacityMult;
   u.u_contrast.value = contrastGain;
+
   u.u_shellMode.value = renderMode === 'glass' ? 1 : 0;
   // OPACITY=0 in GLASS/RIM-LIT mode should be genuinely, completely off —
   // not just alpha-blended down to near-invisible (which, until the RIM
@@ -3315,7 +3332,7 @@ function updateGlassBrainUniforms() {
   // anyway — see rimPowFromSlider). Skipping the render outright is also
   // a small real perf win: one less full raymarch pass per frame for zero
   // visual contribution. SOLID mode ignores OPACITY entirely (its slider
-  // is disabled in that mode, see the render-mode radio's own listener),
+  // is disabled in that mode),
   // so this only applies outside it.
   glassBrainMesh.visible = renderMode !== 'none' && !(renderMode !== 'solid' && glassBrainAlpha <= 0);
   updateClipUniforms();
@@ -4020,10 +4037,29 @@ function collectState() {
       radius, probeOn, probeMode, probeContext, probeEndsOnly, slabMultiplier, endsPx, lineWidthPx, reflectance,
       lineStyle, srcStyle, tgtStyle,
       glassBrainAlpha, glassBrainRimPow,
-      cutoutT1, cutoutBelowThresh, cutoutRow1Above, cutoutRow2AndBelow,
-      contrastGain,
       pitch, yaw, roll,
       renderMode, qualityTier, clipPlane, clipFlip, cover, framesVisible, cursorAxesOn,
+    },
+    // the ANATOMY tab: which volume plays which role, and each volume's own settings
+    anatomy: {
+      render: activeVolume ? activeVolume.file.name : null,
+      overlay: overlayVol ? overlayVol.file.name : null,
+      parcellation: wantedLabelVol() ? wantedLabelVol().file.name : null,
+      segmentation: segVol ? segVol.file.name : null,
+      volumes: volumes.map(v => {
+        const sh = v === activeVolume ? captureShader() : v.shader;
+        return {
+          file: v.file.name, kind: v.isColor ? 'colour' : v.category === 'parcellation' ? 'labels' : 'scan',
+          ...(v.lut ? { lut: v.lut.name } : {}),
+          ...(v.gain && v.gain !== 1 ? { intensity: +v.gain.toFixed(3) } : {}),
+          ...(v.maskSrc ? { mask: v.maskSrc.file.name } : {}),
+          ...(v.shaderMode || v === activeVolume ? { shader: v === activeVolume ? (renderMode !== 'none' ? renderMode : _shownRenderMode) : v.shaderMode } : {}),
+          ...(sh ? { background: { [sh.bgInvert ? "above" : "below"]: +sh.backgroundThresh.toPrecision(3) },
+                     foreground: { [sh.cutoutRow1Above ? 'above' : 'below']: +sh.cutoutT1.toFixed(3),
+                                   [sh.cutoutRow2AndBelow ? 'and_below' : 'or_above']: +sh.cutoutBelowThresh.toFixed(3) } } : {}),
+          ...(v.surface && v.surface.level != null ? { surface: { level: v.surface.level, color: v.surface.color } } : {}),
+        };
+      }),
     },
     probe: {
       cursor: state.get('src.cursor')
@@ -4235,6 +4271,7 @@ function addVolumes(newVols) {
       if (old.lut) { old.lut.volume = null; old.lut = null; }
       volumes = volumes.filter(o => o !== old);
       if (activeVolume === old) activeVolume = null;
+      if (volumeSurfaces) volumeSurfaces.drop(old);
     }
     volumes.push(v);
   }
@@ -4312,7 +4349,7 @@ function looksLikeParcellation({ data, shape, channels }) {
     if (distinct.size > 5000) return false;
     if (data[i + 1 < n ? i + 1 : i - 1] === v) same++;
   }
-  return distinct.size >= 2 && nonzero >= 50 && same >= 0.75 * nonzero;
+  return distinct.size >= 1 && nonzero >= 50 && same >= 0.75 * nonzero;   // (one value: a mask, a label volume of one region)
 }
 
 // ── Cropping empty borders ──────────────────────────────────
@@ -4425,8 +4462,8 @@ async function classifyPendingVolumes() {
         const a = cropToContent(await parseVolumeFile(vol.file), { noisy: isWebmName(vol.file.name) });
         vol.box = volumeWorldBox(a.shape, a.Ab); // for the scene's reference (recomputeView)
         recomputeView();
+        vol.isColor = (a.channels || 1) === 3;
         if (vol.category == null) { // may have been set meanwhile (LUT attached, "show as")
-          vol.isColor = (a.channels || 1) === 3;
           vol.category = !vol.isColor && looksLikeParcellation(a) ? 'parcellation' : 'anatomy';
           vol.categorySource = 'sniff';
         }
@@ -4491,7 +4528,12 @@ async function loadAnat(f){
     vol.categorySource = 'sniff';
   }
   resolveAutoLut(); // (its table, if it gets one, is used just below)
+  if (activeVolume && activeVolume !== vol) { activeVolume.shader = captureShader(); activeVolume.shaderMode = renderMode !== 'none' ? renderMode : _shownRenderMode; }
+  if (activeVolume !== vol) { restoreShader(vol); shaderPanelOpen = false; }
   activeVolume = vol;
+  freeUnused();
+  contrastGain = vol.gain || 1; vr.setContrast(contrastGain);   // (the 3D brain gets it when built below)
+  syncVolumeSurfacesHidden();
   // The lookup table belongs to the volume: this one's own, or an
   // automatic one (made below if needed).
   useVolumeLut(vol);
@@ -4500,9 +4542,7 @@ async function loadAnat(f){
   // rest in plain ANAT. The MODALITY control stays a manual override.
   activeAsAnatomy = _showAsAnatomy; _showAsAnatomy = false;
   modality = isColorData ? 'dec' : vol.category === 'parcellation' && !activeAsAnatomy ? 'seg' : 'anat';
-  document.getElementById('modality-' + modality).checked = true;
-  document.getElementById('modality-dec').disabled = !isColorData;
-  document.getElementById('modality-seg').disabled = isColorData;
+  // (MODALITY: chosen per volume in the ANATOMY tab — label colors / grayscale)
   if (modality === 'seg') ensureLutForSegmentation(anat);
   vr.setApplyLUT(modality === 'seg');
   vr.setForceGray(modality === 'anat' && isColorData);
@@ -4533,8 +4573,12 @@ async function loadAnat(f){
 	state.set('tgt.view.'+k,probeCenter)
   }
   setProgress('uploading 3D texture…'); await tick();
+  activeMaskData = null;
   vr.upload(anat);
+  _texUnmasked = vr.texData;       // (APPLY MASK: the volume's own values, to mask or unmask)
   buildGlassBrainLocal(anat);
+  applyActiveMask();               // this volume's mask, if it has one
+  _ov2dKey = null; updateOverlay2D();   // (the overlay in the sections: on this grid)
   // The view: only re-framed when the scene's reference changes (a new
   // volume may become it; switching to an already-listed one doesn't).
   recomputeView();
@@ -5094,7 +5138,6 @@ document.querySelectorAll('input[name="quality-tier"]').forEach(r=>{
   r.addEventListener('change', ()=> setQualityTier(r.value));
 });
 function applyRenderModeUI() {
-  document.getElementById('brain-alpha-slider').disabled = (renderMode === 'solid'); // OPACITY has real effect in both GLASS and RIM-LIT now
   // FOREGROUND (its two rows) replaces
   // OPACITY's row AND extends into RIM's row in SOLID mode - RIM has no
   // effect on an opaque surface, same reasoning as OPACITY. GLASS and
@@ -5102,24 +5145,40 @@ function applyRenderModeUI() {
   // OPACITY only actually does anything in RIM-LIT (kept visible-but-
   // disabled in GLASS, same as before).
   const isSolid = renderMode === 'solid';
-  document.getElementById('row-opacity').style.display = isSolid ? 'none' : '';
+  // (OPACITY and RIM: SETTINGS › GLASS MODE, always shown — they also set glass regions)
   document.getElementById('row-cutout').style.display  = isSolid ? '' : 'none';
   document.getElementById('row-cutout-below').style.display = isSolid ? '' : 'none';
-  document.getElementById('row-rim').style.display = isSolid ? 'none' : '';
 }
 // The shader to come back to when the volume is switched on again (3D menu).
 let _shownRenderMode = 'glass';
-document.querySelectorAll('input[name="render-mode"]').forEach(r=>{
-  r.addEventListener('change', ()=>{
-    renderMode = r.value;
-    if (renderMode === 'glass' || renderMode === 'solid') _shownRenderMode = renderMode;
-    applyRenderModeUI();
-    updateGlassBrainUniforms();
-    // the solid/glass icon in the 3D menu follows
-    if (ctxMenu) renderCtxMenu();
-  });
-});
+// ── Per-volume shader settings (ANATOMY › VOLUME RENDER › SHADER SETTINGS) ──
+// background and foreground thresholds, and solid or glass, are kept per
+// volume (vol.shader / vol.shaderMode): stored when another volume is
+// rendered, restored when it is rendered again; a volume rendered for the
+// first time gets the defaults (and the current solid/glass).
+const captureShader = () => ({ backgroundThresh, bgInvert, cutoutT1, cutoutRow1Above, cutoutBelowThresh, cutoutRow2AndBelow });
+let SHADER_DEFAULTS = null;   // (set once the controls exist, below)
+function restoreShader(vol) {
+  const sh = (vol && vol.shader) || SHADER_DEFAULTS;
+  ({ backgroundThresh, bgInvert, cutoutT1, cutoutRow1Above, cutoutBelowThresh, cutoutRow2AndBelow } = sh);
+  restoreShaderControls();
+  const mode = vol && vol.shaderMode;
+  if (mode && renderMode !== 'none' && mode !== renderMode) setRenderMode(mode);
+  else if (mode) _shownRenderMode = mode;
+}
+// (the hidden SETTINGS controls for these values, kept in step)
+function restoreShaderControls() {
+  const set = (id, raw, valId, text) => { const el = document.getElementById(id); if (el) el.value = raw; const v = document.getElementById(valId); if (v) v.textContent = text; };
+  set('background-slider', Math.round(backgroundThresh * 100), 'background-val', backgroundThresh.toFixed(2));
+  set('brain-thresh-slider', Math.round(cutoutT1 * 100), 'brain-thresh-val', cutoutT1.toFixed(2));
+  set('brain-cutout-below-slider', Math.round(cutoutBelowThresh * 100), 'brain-cutout-below-val', cutoutBelowThresh.toFixed(2));
+  document.getElementById('bg-invert-select').value = bgInvert ? 'above' : 'below';
+  document.getElementById('cutout-row1-select').value = cutoutRow1Above ? 'above' : 'below';
+  document.getElementById('cutout-row2-select').value = cutoutRow2AndBelow ? 'and-below' : 'or-above';
+}
 applyRenderModeUI(); // reflect the default MODE (glass) on load
+SHADER_DEFAULTS = captureShader();
+parkShaderRows();   // (shown in ANATOMY › VOLUME RENDER › SHADER SETTINGS, not in SETTINGS)
 window.setRenderMode = mode => { setRenderMode(mode); return renderMode; }; // console: 'none' | 'glass' | 'solid' | 'translucent' (rim-lit)
 // CLIP: the box switches clipping on/off; the plane buttons pick the
 // plane (COR at start) and, picked while off, switch it on too.
@@ -5587,29 +5646,30 @@ function showHeaderPanel(title, text) {
 // registerTrckItem below) — a stand-in for the real per-type hamburger
 // menu design, which is still TBD.
 let anatHeaderReady = false, trckHeaderReady = false;
-function showAnatHeaderPanel() {
-  if (!anatHeaderReady || !state.get('anat.file')) return;
-  const shape = state.get('anat.shape')
-  const vox_mm = state.get('anat.vox_mm')
-  const mn = state.get('anat.mn');
-  const mx = state.get('anat.mx');
-  const Ab0 = state.get('anat.Ab'), off = state.get('anat.cropOffset') || [0, 0, 0];
-  const orig = state.get('anat.origShape') || shape;
+// The header panel's contents from a loaded volume's fields.
+function volumeHeaderJson({ shape, vox_mm, mn, mx, Ab: Ab0, cropOffset, origShape, cropThreshold }) {
+  const off = cropOffset || [0, 0, 0], orig = origShape || shape;
   const cropped = off.some(v => v) || orig.some((v, i) => v !== shape[i]);
   // the file's own affine (the crop only moved b)
   const Ab = [Ab0[0], Ab0[1], Ab0[2], [0, 1, 2].map(r => Ab0[3][r] - Ab0[r][0] * off[0] - Ab0[r][1] * off[1] - Ab0[r][2] * off[2])];
-  showHeaderPanel('NIFTI HEADER', JSON.stringify({
+  return {
     dimensions: [ orig[0], orig[1], orig[2] ],
     ...(cropped ? { cropped_to: { from: off.slice(), dimensions: [shape[0], shape[1], shape[2]],
-                                  ...(state.get('anat.cropThreshold') > 0 ? { background_below: +state.get('anat.cropThreshold').toPrecision(3) } : {}),
+                                  ...(cropThreshold > 0 ? { background_below: +cropThreshold.toPrecision(3) } : {}),
                                   note: 'empty borders are not loaded; voxel indices shown refer to the original file' } } : {}),
     voxel_size: vox_mm.slice(0,3).map(v => +v.toFixed(6)),
     data_range: { min: +mn?.toFixed(4), max: +mx?.toFixed(4) },
-    affine: { 
-		A: [Ab[0],Ab[1],Ab[2]].map(r => r.map(v => +v.toFixed(6))),
-        b: Ab[3].map(v => +v.toFixed(6))
+    affine: {
+      A: [Ab[0],Ab[1],Ab[2]].map(r => r.map(v => +v.toFixed(6))),
+      b: Ab[3].map(v => +v.toFixed(6))
     }
-  }, null, 2));
+  };
+}
+function showAnatHeaderPanel() {
+  if (!anatHeaderReady || !state.get('anat.file')) return;
+  const g = k => state.get('anat.' + k);
+  showHeaderPanel('NIFTI HEADER', JSON.stringify(volumeHeaderJson({ shape: g('shape'), vox_mm: g('vox_mm'), mn: g('mn'), mx: g('mx'),
+    Ab: g('Ab'), cropOffset: g('cropOffset'), origShape: g('origShape'), cropThreshold: g('cropThreshold') }), null, 2));
 }
 function showTrckHeaderPanel() {
   if (!trckHeaderReady || !trckHeader) return;
@@ -5741,12 +5801,6 @@ document.getElementById('cutout-row2-select').addEventListener('change', e => {
 // kind of mismatch worth avoiding, and reciprocating only the label
 // fixes it without touching the underlying (already correct) curve.
 wireSlider('brain-rim-slider','brain-rim-val', rimPowFromSlider, v=>(1/v).toFixed(2), v=>{glassBrainRimPow=v; updateGlassBrainUniforms();});
-wireSlider('contrast-slider','contrast-val', contrastGainFromSlider, v=>v.toFixed(2)+'×', v=>{
-  contrastGain=v;
-  vr.setContrast(contrastGain);
-  updateSlicesA(); updateSlicesB();
-  updateGlassBrainUniforms();
-});
 document.querySelectorAll('input[name="modality"]').forEach(r=>{
   r.addEventListener('change', ()=> setModality(r.value));
 });
@@ -6253,7 +6307,7 @@ const LABEL_DISTINCT_MAX = 5000; // more distinct values: not a label volume
 function labelInfoOf(vol) {
   if (!vol) return null;
   if (vol.labelInfo) return vol.labelInfo;
-  const d = vol === activeVolume && loadedAnatRaw ? loadedAnatRaw : endLabelSrc && endLabelSrc.vol === vol ? endLabelSrc.raw : null;
+  const d = vol === activeVolume && loadedAnatRaw ? loadedAnatRaw : endLabelSrc && endLabelSrc.vol === vol ? endLabelSrc.raw : segRef && segRef.vol === vol ? segRef.raw : null;
   if (!d || vol.isColor) return null;
   const seen = new Set();
   for (let i = 0; i < d.length; i++) {
@@ -6272,7 +6326,7 @@ const hiddenLabelsOf = () => NO_HIDDEN;
 const labelVol = () => endLabelSrc ? endLabelSrc.vol : null;
 function labelEntry(v, vol = labelVol() || activeVolume) { // [name, '#rrggbb'] from the lookup table
   const map = labelMapOf(vol), e = map && map.get(v);
-  const hex = e ? '#' + [e.r, e.g, e.b].map(c => Math.round(255 * Math.min(1, Math.max(0, c))).toString(16).padStart(2, '0')).join('') : '#888888';
+  const hex = e ? '#' + [e.r, e.g, e.b].map(c => Math.round(255 * Math.min(1, Math.max(0, c))).toString(16).padStart(2, '0')).join('') : map ? '#888888' : paletteHex(v);
   return [e ? e.name : 'label ' + v, hex];
 }
 // ── Label colors ──
@@ -6362,7 +6416,8 @@ window.setLabelBlur = sigma => {
 function updateLabelOccupancy(u) {
   if (!labelsShown() || !loadedAnatRaw || !loadedAnatShape || !(OCC_SIGMA > 0)) { u.u_useOcc.value = 0; return; }
   const vol = activeVolume, hidden = hiddenLabelsOf(vol);
-  const key = [loadedAnatShape.join('x'), vol.file.name, OCC_SIGMA, [...hidden].sort((a, b) => a - b).join(',')].join('|');
+  const mk = activeMaskFor(...loadedAnatShape);   // (APPLY MASK: in the occupancy)
+  const key = [loadedAnatShape.join('x'), vol.file.name, OCC_SIGMA, [...hidden].sort((a, b) => a - b).join(','), mk ? vol.maskSrc.file.name : ''].join('|');
   if (key === _occKey && _occTex && _occTex._raw === loadedAnatRaw) { u.u_occ.value = _occTex; u.u_useOcc.value = 1; return; }
   const t0 = performance.now();
   const [nx, ny, nz] = loadedAnatShape, n = nx * ny * nz, d = loadedAnatRaw;
@@ -6371,7 +6426,7 @@ function updateLabelOccupancy(u) {
   if (hidden.size) { vis = new Uint8Array(Math.max(...hidden) + 2).fill(1); for (const h of hidden) if (h >= 0) vis[h] = 0; }
   for (let i = 0; i < n; i++) {
     const v = d[i];
-    if (v > 0) { const r = Math.round(v); a[i] = vis && r < vis.length && !vis[r] ? 0 : 1; }
+    if (v > 0 && !(mk && mk[i] < 128)) { const r = Math.round(v); a[i] = vis && r < vis.length && !vis[r] ? 0 : 1; }
   }
   // separable Gaussian, taps −R…R (R = ⌈3σ⌉), zero outside the volume
   const R = Math.max(1, Math.ceil(3 * OCC_SIGMA));
@@ -6438,13 +6493,14 @@ function labelUiChanged() {
   updateLabelHud('src'); updateLabelHud('tgt');
   if (sectionOutlines) sectionOutlines.refresh();
   if (ctxMenu && !colorPickerIn(bundleTipEl)) renderCtxMenu();
+  if (segMeshes) segMeshes.refreshColors();
   dataStore.refresh();
 }
 // DATA: the shown parcellation's label list, in its settings area (»):
 // an "all N labels" row (all/some/none checkbox, the header as an info
 // icon), then one row per label in a scrolling box — at most
 // LABEL_LIST_MAX, the rest as one "… N more" line.
-function buildLabelList(vol, el) {
+function buildLabelList(vol, el, rm = regionMeshes) {
   const info = labelInfoOf(vol);
   if (!info) return false;
   const box = document.createElement('div');
@@ -6457,25 +6513,41 @@ function buildLabelList(vol, el) {
     el.appendChild(box);
     return false;
   }
-  // the label volume in memory: a checkmark per region — its mesh in 3D
-  const vals = info.values, meshes = regionMeshes && endLabelSrc && endLabelSrc.vol === vol;
+  // one tree node: ▸ [x] ☀ all N regions — the regions below it, folded
+  // at first; the checkmark puts all of them in 3D (or none), the sun
+  // draws all solid (or glass)
+  const vals = info.values, meshes = rm && rm.ref && rm.ref.vol === vol;
+  const open = !!vol._regionsOpen;
   const head = document.createElement('div');
-  head.className = 'dt-row dt-toolbar';
+  head.className = 'dt-row dt-toolbar dt-fold';
+  const caret = document.createElement('span');
+  caret.className = 'dt-caret'; caret.textContent = open ? '▾' : '▸';
+  head.appendChild(caret);
+  head.addEventListener('click', e => {
+    if (e.target.closest('input, button')) return;
+    vol._regionsOpen = !open; dataStore.refresh();
+  });
   if (meshes) {
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.className = 'dt-check';
-    const on = vals.filter(x => regionMeshes.has(x)).length;
+    const on = vals.filter(x => rm.has(x)).length;
     cb.checked = on === vals.length; cb.indeterminate = on > 0 && on < vals.length;
-    cb.title = 'all regions in 3D (all in: none)';
+    cb.title = on === vals.length ? 'all regions in 3D — click: none' : 'click: all regions in 3D';
     cb.addEventListener('click', e => e.stopPropagation());
-    cb.addEventListener('change', () => { for (const x of vals) regionMeshes.setMember(x, on < vals.length); });
+    cb.addEventListener('change', () => { for (const x of vals) rm.setMember(x, on < vals.length); });
     head.appendChild(cb);
+    if (rm.size) {
+      const all = rm.allFocused;
+      const fb = makeFocusButton(all, () => rm.setAllFocus(!all), all ? 'all regions solid — click: all glass' : 'click: all regions solid');
+      if (!all && rm.anyFocused) fb.classList.add('mixed');
+      head.appendChild(fb);
+    }
   }
-  const t = document.createElement('span'); t.className = 'dt-toolbar-lbl'; t.textContent = 'all ' + vals.length.toLocaleString() + ' labels';
-  const sp = document.createElement('span'); sp.style.flex = '1';
-  head.append(t, sp);
-  if (vol === activeVolume) head.appendChild(makeInfoButton(() => showAnatHeaderPanel(), 'header of ' + vol.file.name));
+  const t = document.createElement('span'); t.className = 'dt-toolbar-lbl';
+  t.textContent = 'all ' + vals.length.toLocaleString() + ' region' + (vals.length === 1 ? '' : 's');
+  head.appendChild(t);
   box.appendChild(head);
+  if (!open) { el.appendChild(box); return true; }
   const list = document.createElement('div');
   list.className = 'dt-scroll';
   for (const v of vals.slice(0, LABEL_LIST_MAX)) {
@@ -6484,10 +6556,10 @@ function buildLabelList(vol, el) {
     row.className = 'dt-row dt-sub';
     if (meshes) {
       const c = document.createElement('input');
-      c.type = 'checkbox'; c.className = 'dt-check'; c.checked = regionMeshes.has(v);
+      c.type = 'checkbox'; c.className = 'dt-check'; c.checked = rm.has(v);
       c.title = c.checked ? 'in 3D — click: remove' : 'click: show in 3D';
       c.addEventListener('click', e => e.stopPropagation());
-      c.addEventListener('change', () => regionMeshes.setMember(v, c.checked));
+      c.addEventListener('change', () => rm.setMember(v, c.checked));
       row.appendChild(c);
     }
     const sw = labelSwatch(v, hex, vol);
@@ -6510,161 +6582,614 @@ function buildLabelList(vol, el) {
   return true;
 }
 
+// ── The ANATOMY tab: one section per role ──────────────────
+// Each loaded volume can play these roles; each section is one select
+// (which volume) and, below it, that volume's settings for the role:
+//   VOLUME RENDER  the volume raymarched in 3D and shown in the sections
+//                  ('---': none in 3D) — intensity, apply mask, label colors
+//   ISOSURFACE OVERLAY  another scalar volume as a surface at a level of its
+//                  own values (a vessel map, a lesion) — one at a time
+//   PARCELLATION   a label volume: names at the cursor, outlines in the
+//                  sections, end-dot colors, its regions as meshes in 3D
+//   SEGMENTATION   a second label volume, its regions as meshes only
+// A volume is listed in every section it can play; nothing is listed twice
+// within one. The tab is drawn by renderAnatomyPane (on every data change).
 function registerVolumeItems() {
-  setTimeout(() => { syncEndLabelRadios(); ensureLabelRef(); }, 0); // a label volume in memory (2D badges, Label end colors)
-  const multi = volumes.length > 1;
-  // ANATOMY: every volume (label volumes too), its radio the volume shown
-  const volumeItem = vol => {
-    const item = new AnatomyItem(vol.label);
-    const isActive = vol === activeVolume;
-    item.tooltip = vol.label === vol.file.name ? vol.file.name : vol.label + '\n' + vol.file.name;
-    if (multi) {
-      item.selectorType = 'radio';
-      item.radioGroup = 'volume';
-      item.selected = isActive;
-      item.onSelect = () => selectVolume(vol);
-    } else if (isActive) {
-      item.onVisibilityChange = (_, visible) => {
-        // Best-effort: hides the 3D glass brain. The 2D SAG/COR/AXI
-        // anatomy slices (vol-renderer.js) aren't wired to a
-        // visibility flag at all yet.
-        if (glassBrainMesh) glassBrainMesh.visible = visible;
-        render3D();
+  setTimeout(() => { syncEndLabelRadios(); ensureLabelRef(); ensureSegRef(); }, 0);
+  dataStore.setVolumes(volumes.slice(), []);   // (counted for the tab choice; drawn by renderAnatomyPane)
+}
+
+// the regions toolbar: all on/off in 3D, all solid/glass, how many
+function fillLabelToolbar(bar, rm) {
+  const n = rm ? rm.size : 0;
+  if (n) {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'dt-check';
+    cb.checked = rm.visible;
+    cb.title = rm.visible ? 'regions shown in 3D — click: hide all' : 'regions hidden in 3D — click: show';
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => rm.setVisible(cb.checked));
+    const all = rm.allFocused;
+    const fb = makeFocusButton(all, () => rm.setAllFocus(!all),
+      all ? 'all regions solid — click: all glass' : 'all regions solid');
+    if (!all && rm.anyFocused) fb.classList.add('mixed');
+    bar.append(cb, fb);
+  }
+  const lbl = document.createElement('span');
+  lbl.className = 'dt-toolbar-lbl';
+  lbl.textContent = n ? n + ' region' + (n > 1 ? 's' : '') + ' in 3D' : 'no regions in 3D yet';
+  lbl.title = n ? '' : 'tick regions in the list below' + (rm === regionMeshes ? ', or from the 3D view and the section badges' : '');
+  bar.appendChild(lbl);
+}
+
+// which loaded lookup table names and colors a label volume (one that
+// belongs to another volume moves here)
+function buildLutChoice(vol, el) {
+  const options = [['', 'auto colors'], ...luts.map((l, i) => [String(i),
+    l.name + (l.volume && l.volume !== vol ? '  (now on ' + l.volume.label + ')' : '')])];
+  el.appendChild(makeChoiceRow('lookup table', options, vol.lut ? String(luts.indexOf(vol.lut)) : '', value => {
+    const prevOwner = value === '' ? null : luts[+value].volume;
+    if (value === '') { if (vol.lut) detachLut(vol.lut); }
+    else attachLut(luts[+value], vol);
+    if (vol === activeVolume || prevOwner === activeVolume) applyActiveVolumeDisplay();
+    if (regionMeshes) regionMeshes.refreshColors();
+    if (segMeshes) segMeshes.refreshColors();
+    ensureLabelRef();
+    registerVolumeItems();
+  }, 'the lookup table that names and colors this volume\'s labels'));
+}
+
+// The selected volume's row in a section: its name, a tag and the header (i).
+// (No remove: memory is freed when a volume leaves its role, see freeUnused.)
+function volumeNameRow(vol, tag) {
+  const row = document.createElement('div');
+  row.className = 'dt-row an-name';
+  const nm = document.createElement('span');
+  nm.className = 'dt-label'; nm.textContent = vol.label;
+  nm.dataset.tip = vol.label === vol.file.name ? vol.file.name : vol.label + '\n' + vol.file.name;
+  row.appendChild(nm);
+  if (tag) { const t = document.createElement('span'); t.className = 'dt-tag'; t.textContent = tag; row.appendChild(t); }
+  row.appendChild(makeInfoButton(() => showVolumeHeader(vol), 'header of ' + vol.file.name));
+  return row;
+}
+// Frees what a volume holds once it plays no role: its surface field (also
+// in the worker) and its mask on its own grid. The file stays listed, and
+// is read again when chosen again.
+function freeUnused() {
+  for (const v of volumes) {
+    if (v === activeVolume || v === overlayVol) continue;
+    if (v.surface && v.surface.loaded) { volumeSurfaces.drop(v); v.surface.loaded = false; v.surface.field = null; v.surface.on = false; }
+    v.maskCache = null;
+  }
+}
+
+// a section: heading, the select, and the chosen volume's settings
+function anatomySection(el, title, help, options, current, onChange, fill) {
+  const sec = document.createElement('div');
+  sec.className = 'an-sec';
+  const head = document.createElement('div');
+  head.className = 'dt-row dt-cat an-head';
+  const t = document.createElement('span'); t.className = 'dt-label'; t.textContent = title;
+  head.appendChild(t);
+  if (help) head.dataset.tip = help;
+  sec.appendChild(head);
+  const body = document.createElement('div');
+  body.className = 'an-body';
+  const sel = document.createElement('select');
+  sel.className = 'inline-select an-select';
+  for (const [v, text] of options) { const o = document.createElement('option'); o.value = v; o.textContent = text; sel.appendChild(o); }
+  sel.value = current;
+  sel.disabled = options.length < 2;
+  sel.addEventListener('change', () => onChange(sel.value));
+  body.appendChild(sel);
+  if (fill) { const d = document.createElement('div'); d.className = 'dt-settings an-settings'; fill(d); if (d.childNodes.length) body.appendChild(d); }
+  sec.appendChild(body);
+  el.appendChild(sec);
+}
+
+function renderAnatomyPane(el) {
+  el.innerHTML = '';
+  const idx = (list, v) => v && list.includes(v) ? String(list.indexOf(v)) : '';
+  const opts = list => [['', '---'], ...list.map((v, i) => [String(i), v.label])];
+  const kind = v => v.category == null ? 'checking…' : v.isColor ? 'colour' : v.category === 'parcellation' ? 'labels' : 'scan';
+
+  // VOLUME RENDER
+  const shown = renderMode !== 'none' ? activeVolume : null;
+  anatomySection(el, 'Volume render', 'The volume raymarched in 3D and shown in the 2D sections.',
+    opts(volumes), idx(volumes, shown), value => {
+      if (value === '') { setRenderMode('none'); registerVolumeItems(); return; }
+      const v = volumes[+value];
+      if (v === activeVolume) { setRenderMode(_shownRenderMode || 'solid'); registerVolumeItems(); }
+      else selectVolume(v).then(() => { if (renderMode === 'none') setRenderMode(_shownRenderMode || 'solid'); });
+    }, d => {
+      const vol = activeVolume;
+      if (!vol) return;
+      const nameRow = volumeNameRow(vol, kind(vol) + (renderMode === 'none' ? ' · sections only' : ''));
+      nameRow.insertBefore(makeBrickButton(), nameRow.firstChild);
+      d.appendChild(nameRow);
+      // how it is drawn (formerly SETTINGS › MODALITY): a label volume in
+      // its label colors or as a grey scan; a colour volume in colour or as
+      // grayscale (the colour's length, FA-like)
+      const modeCheck = (text, checked, tip, onChange) => {
+        const row = document.createElement('label');
+        row.className = 'dt-choice an-check';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = checked;
+        cb.addEventListener('change', () => onChange(cb.checked));
+        const sp = document.createElement('span'); sp.textContent = text;
+        row.append(cb, sp);
+        row.dataset.tip = tip;
+        d.appendChild(row);
       };
-    } else {
-      item.checkboxDisabled = true;
-    }
-    if (vol.category == null) item.tag = 'checking…';
-    else if (vol.category === 'parcellation') {
-      item.tag = vol.lut ? 'LUT' : 'auto colors';
-      if (vol.lut) item.tooltip += '\nlookup table: ' + vol.lut.name;
-    }
-    // (a label volume's settings are under Parcellations)
-    if (vol.category !== 'parcellation') {
-      item.buildSettings = (_, el) => buildVolumeSettings(vol, el);
-      proxySettingsOpen(item, vol);
-    }
-    return item;
-  };
-  // PARCELLATIONS: the label volumes, their own radio the label volume in
-  // memory (its regions in 3D, the outlines and names in the sections);
-  // clicking the chosen one again: none
-  const labelItem = vol => {
-    const item = new AnatomyItem(vol.label);
-    item.tooltip = (vol.label === vol.file.name ? vol.file.name : vol.label + '\n' + vol.file.name)
-                 + (vol.lut ? '\nlookup table: ' + vol.lut.name : '');
-    item.selectorType = 'radio';
-    item.radioGroup = 'labelvol';
-    item.radioDeselectable = true;
-    Object.defineProperty(item, 'selected', { get: () => wantedLabelVol() === vol, set() {}, configurable: true });
-    item.onSelect = () => chooseLabelVolume(wantedLabelVol() === vol ? null : vol);
-    item.tag = vol.lut ? 'LUT' : 'auto colors';
-    item.buildSettings = (_, el) => buildVolumeSettings(vol, el);
-    proxySettingsOpen(item, vol);
-    return item;
-  };
-  const anatomy = volumes.map(volumeItem);
-  const parcellations = volumes.filter(v => v.category === 'parcellation').map(labelItem);
-  for (const l of luts) if (!l.volume) parcellations.push(lutItem(l));
-  dataStore.parcellationToolbar = makeLabelToolbar();
-  dataStore.setVolumes(anatomy, parcellations);
+      if (vol.isColor) modeCheck('grayscale', modality === 'anat',
+        'draw the colour volume as a grey scan: the length of its colour (for direction-encoded colour: FA)',
+        on => { setModality(on ? 'anat' : 'dec'); registerVolumeItems(); });
+      else if (vol.category === 'parcellation') {
+        modeCheck('label colors', modality === 'seg', 'draw the labels in their lookup table colors (off: as a grey scan)',
+          on => { activeAsAnatomy = !on; applyActiveVolumeDisplay(); registerVolumeItems(); });
+        if (modality === 'seg') buildLutChoice(vol, d);
+      }
+      if (intensityApplies(vol)) buildIntensityRow(vol, d);
+      if (!vol.isColor) buildMaskRow(vol, d);
+      buildShaderPanel(d);
+    });
+
+  // ISOSURFACE OVERLAY
+  const ov = volumes.filter(surfaceCapable);
+  anatomySection(el, 'Isosurface overlay', 'Another scalar volume (a vessel map, a lesion, a cluster) as a solid surface at a level of its own values (an isosurface), in 3D, and filled in the 2D sections.',
+    opts(ov), idx(ov, overlayVol), value => setOverlay(value === '' ? null : ov[+value]),
+    d => {
+      if (!overlayVol) return;
+      d.appendChild(volumeNameRow(overlayVol, kind(overlayVol)));
+      buildSurfaceRows(overlayVol, d);
+      buildMaskRow(overlayVol, d);
+    });
+
+  // PARCELLATION
+  const lv = labelVolCandidates(), pv = wantedLabelVol();
+  anatomySection(el, 'Parcellation', 'A label volume: region names at the cursor, outlines in the sections, Label end colors, and its regions as meshes in 3D.',
+    opts(lv), idx(lv, pv), value => chooseLabelVolume(value === '' ? null : lv[+value]),
+    d => {
+      if (!pv) return;
+      d.appendChild(volumeNameRow(pv, pv.lut ? 'LUT' : 'auto colors'));
+      buildLutChoice(pv, d);
+      buildLabelList(pv, d, regionMeshes);
+    });
+
+  // SEGMENTATION
+  const sv = segVol && lv.includes(segVol) ? segVol : null;
+  anatomySection(el, 'Segmentation', 'A second label volume (a tumour, a lesion), its regions as meshes in 3D only (no names or outlines in the sections).',
+    opts(lv), idx(lv, sv), value => setSegmentation(value === '' ? null : lv[+value]),
+    d => {
+      if (!sv) return;
+      d.appendChild(volumeNameRow(sv, sv.lut ? 'LUT' : 'auto colors'));
+      buildLutChoice(sv, d);
+      buildLabelList(sv, d, segMeshes);
+    });
 }
 
-// First row under Parcellations (whose radios choose the label volume in
-// memory): as for bundles, a checkbox showing or hiding all its regions
-// in 3D and the sun: all regions solid (or, when all are, all glass).
-function makeLabelToolbar() {
-  return new ToolbarItem((_, bar) => {
-    const n = regionMeshes ? regionMeshes.size : 0;
-    if (n) {
-      const cb = document.createElement('input');
-      cb.type = 'checkbox'; cb.className = 'dt-check';
-      cb.checked = regionMeshes.visible;
-      cb.title = regionMeshes.visible ? 'regions shown in 3D — click: hide all' : 'regions hidden in 3D — click: show';
-      cb.addEventListener('click', e => e.stopPropagation());
-      cb.addEventListener('change', () => regionMeshes.setVisible(cb.checked));
-      const all = regionMeshes.allFocused;
-      const fb = makeFocusButton(all, () => regionMeshes.setAllFocus(!all),
-        all ? 'all regions solid — click: all glass' : 'all regions solid');
-      if (!all && regionMeshes.anyFocused) fb.classList.add('mixed');
-      bar.append(cb, fb);
+// SHADER SETTINGS: the advanced settings of the rendered volume, behind an
+// opener; open, a box that stands out (its title bar as the tabs), closed
+// by a click anywhere on its title bar, or by rendering another volume.
+// Its values are the rendered volume's (see restoreShader); the old
+// SETTINGS controls for them (#shader-rows) stay hidden.
+let shaderPanelOpen = false;
+function parkShaderRows() {
+  const rows = document.getElementById('shader-rows');
+  let park = document.getElementById('shader-rows-park');
+  if (!park) { park = document.createElement('div'); park.id = 'shader-rows-park'; park.style.display = 'none'; document.body.appendChild(park); }
+  if (rows && rows.parentNode !== park) park.appendChild(rows);
+}
+function buildShaderPanel(d) {
+  const toggle = () => { shaderPanelOpen = !shaderPanelOpen; registerVolumeItems(); };
+  if (!shaderPanelOpen) {
+    const o = document.createElement('div');
+    o.className = 'adv-open';
+    o.innerHTML = '<span>shader settings</span><span class="adv-chev">»</span>';
+    o.dataset.tip = 'background and foreground: what the surface is made of — kept for this volume';
+    o.addEventListener('click', toggle);
+    d.appendChild(o);
+    return;
+  }
+  const p = document.createElement('div');
+  p.className = 'adv-panel';
+  const h = document.createElement('div');
+  h.className = 'adv-head';
+  h.innerHTML = '<span>shader settings</span><span class="adv-chev">«</span>';
+  h.addEventListener('click', toggle);
+  const body = document.createElement('div');
+  body.className = 'adv-body';
+  const changed = () => { restoreShaderControls(); updateGlassBrainUniforms(); };
+  // a row: label, a choice, and a slider with an editable number (0–1)
+  const row = (label, options, value, onChoice, num, onNum, tip, min = 0) => {
+    const r = document.createElement('div');
+    r.className = 'dt-choice adv-row';
+    const l = document.createElement('label'); l.textContent = label;
+    const sel = document.createElement('select');
+    sel.className = 'inline-select';
+    for (const [v, t] of options) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
+    sel.value = value;
+    sel.addEventListener('click', e => e.stopPropagation());
+    sel.addEventListener('change', () => { onChoice(sel.value); changed(); });
+    // (a value below the step shows all its digits: the background's 0.0001)
+    const field = makeSliderRow('', { min, max: 1, step: 0.01, value: Math.max(min, num), format: v => v > 0 && v < 0.005 ? String(+v.toPrecision(2)) : v.toFixed(2),
+      onInput: v => { onNum(v); changed(); } }).querySelector('.dt-scrub');
+    r.append(l, sel, field);
+    if (tip) r.dataset.tip = tip;
+    body.appendChild(r);
+  };
+  row('background', [['below', 'below'], ['above', 'above']], bgInvert ? 'above' : 'below', v => { bgInvert = v === 'above'; },
+    backgroundThresh, v => { backgroundThresh = v; },
+    'What is background, around the volume\'s outer surface: values below (or above) this level, 0–1 of the volume\'s range (at least 0.0001: at 0 the whole box would count).', 1e-4);
+  {   // (shown in glass mode too: it takes effect in solid)
+    row('foreground', [['above', 'above'], ['below', 'below']], cutoutRow1Above ? 'above' : 'below', v => { cutoutRow1Above = v === 'above'; },
+      cutoutT1, v => { cutoutT1 = v; },
+      'What stays visible behind a clip plane with cover, in solid mode: values above (or below) this level…');
+    row('', [['and-below', 'and below'], ['or-above', 'or above']], cutoutRow2AndBelow ? 'and-below' : 'or-above', v => { cutoutRow2AndBelow = v === 'and-below'; },
+      cutoutBelowThresh, v => { cutoutBelowThresh = v; },
+      '…and also below (or else above) this level.');
+  }
+  p.append(h, body);
+  d.appendChild(p);
+}
+
+// ── SEGMENTATION: a second label volume as region meshes ──
+let segVol = null, segRef = null, segMeshes = null, _segLoading = null;
+function setSegmentation(vol) {
+  segVol = vol || null;
+  ensureSegRef();
+  registerVolumeItems();
+}
+async function ensureSegRef() {
+  const vol = segVol && volumes.includes(segVol) ? segVol : null;
+  if (segRef && segRef.vol === vol) return;
+  if (!vol) { segRef = null; if (segMeshes) segMeshes.setRef(null); return; }
+  if (_segLoading === vol) return;
+  _segLoading = vol;
+  try {
+    let raw, shape, invAb;
+    if (endLabelSrc && endLabelSrc.vol === vol) ({ raw, shape, invAb } = endLabelSrc);
+    else {
+      const a = cropToContent(await parseVolumeFile(vol.file), { noisy: false });
+      raw = new Int32Array(a.data.length);
+      for (let i = 0; i < raw.length; i++) raw[i] = Math.round(a.data[i]);
+      shape = a.shape.slice(); invAb = a.invAb;
     }
-    const lbl = document.createElement('span');
-    lbl.className = 'dt-toolbar-lbl';
-    lbl.textContent = n ? 'all ' + n + ' region' + (n > 1 ? 's' : '') + ' in 3D' : 'no regions in 3D yet';
-    lbl.title = n ? '' : 'switch regions on from the 3D view, the section badges or the label list';
-    bar.appendChild(lbl);
+    if (segVol !== vol) return;
+    segRef = { vol, raw, shape, invAb };
+    if (segMeshes) segMeshes.setRef(segRef);
+  } catch (e) { console.warn('could not read ' + vol.file.name + ' for its labels', e); }
+  finally { if (_segLoading === vol) _segLoading = null; }
+  dataStore.refresh();
+}
+// colors for a label without a table entry: spread around the hue circle
+function paletteHex(v) {
+  const h = (v * 137.508) % 360, s = 0.65, l = 0.55;
+  const f = n => { const k = (n + h / 30) % 12, a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return '#' + [f(0), f(8), f(4)].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
+// ── ISOSURFACE OVERLAY: one volume as a surface ──
+let overlayVol = null;
+function setOverlay(vol) {
+  if (overlayVol && overlayVol !== vol) setVolumeSurface(overlayVol, false);
+  overlayVol = vol || null;
+  freeUnused();
+  if (overlayVol) setVolumeSurface(overlayVol, true);
+  else registerVolumeItems();
+  updateOverlay2D();
+}
+
+// The header of any listed volume (the shown one: as loaded; others: read now).
+async function showVolumeHeader(vol) {
+  if (vol === activeVolume) { showAnatHeaderPanel(); return; }
+  try {
+    const a = cropToContent(await parseVolumeFile(vol.file), { noisy: isWebmName(vol.file.name) });
+    showHeaderPanel('NIFTI HEADER · ' + vol.file.name, JSON.stringify(volumeHeaderJson(a), null, 2));
+  } catch (e) { alert('Could not read ' + vol.file.name + ': ' + ((e && e.message) || e)); }
+}
+
+// ── Per-volume intensity and surface (ANATOMY settings) ──
+const LOG4 = Math.log(4);
+// (not for a label volume shown with its region colors: no gain there)
+const intensityApplies = vol => vol.category !== 'parcellation' || (vol === activeVolume && modality !== 'seg');
+let _treeRefreshTimer = 0;
+const refreshTreeSoon = () => { clearTimeout(_treeRefreshTimer); _treeRefreshTimer = setTimeout(() => dataStore.refresh(), 250); };
+function buildIntensityRow(vol, el, after = null) {
+  const row = makeSliderRow('intensity', {
+    min: -1, max: 1, step: 0.01, value: Math.log(vol.gain || 1) / LOG4,
+    format: p => Math.pow(4, p).toFixed(2) + '×',
+    editText: p => Math.pow(4, p).toFixed(2),
+    parse: t => { const v = parseFloat(String(t).replace(',', '.')); return v > 0 ? Math.log(v) / LOG4 : NaN; },
+    onInput: p => { vol.gain = Math.pow(4, p); if (vol === activeVolume) setContrastGain(vol.gain); if (after) after(); },
   });
+  row.title = 'Display gain of this volume, neutral (1.00×) in the middle; used while it is the volume shown.\n'
+            + 'A scan: a gamma curve (true black and white stay fixed), to brighten or darken.\n'
+            + 'A colour volume: brightens colours while keeping their hue; turned up, grey goes to white.';
+  el.appendChild(row);
 }
 
-// A row for a lookup table that isn't attached to any volume (an attached
-// one is chosen in its parcellation's settings instead).
-function lutItem(lut) {
-  const item = new LutItem(lut.name);
-  item.tag = 'not attached';
-  item.selectorType = 'none';
-  item.dimmed = true;
-  item.tooltip = lut.name + ' · ' + lut.map.size.toLocaleString() + ' labels'
-               + '\nnot attached to a volume: open its settings (») to choose one';
-  item.buildSettings = (_, el) => buildLutSettings(lut, el);
-  proxySettingsOpen(item, lut);
-  return item;
+// A volume other than the shown one, as a solid surface at a level of its
+// own values (js/volume-surfaces.js): scalar volumes that are not label
+// volumes (those have their region meshes).
+let volumeSurfaces = null;   // set up with the 3D scene (below)
+const surfaceCapable = vol => !vol.isColor && vol.category !== 'parcellation';   // (the rendered volume too)
+const SURFACE_TRIS_WARN = 3e6;
+function syncVolumeSurfacesHidden() {
+  if (!volumeSurfaces) return;
+  for (const v of volumes) if (v.surface) volumeSurfaces.setHidden(v, !v.surface.on);
 }
-
-function buildVolumeSettings(vol, el) {
-  if (vol.category === 'parcellation') {
-    // Which loaded lookup table names and colors this volume's labels.
-    // Picking one that belongs to another volume moves it here.
-    const options = [['', 'auto colors'], ...luts.map((l, i) => [String(i),
-      l.name + (l.volume && l.volume !== vol ? '  (now on ' + l.volume.label + ')' : '')])];
-    el.appendChild(makeChoiceRow('lookup table', options, vol.lut ? String(luts.indexOf(vol.lut)) : '', value => {
-      const prevOwner = value === '' ? null : luts[+value].volume;
-      if (value === '') { if (vol.lut) detachLut(vol.lut); }
-      else attachLut(luts[+value], vol);
-      if (vol === activeVolume || prevOwner === activeVolume) applyActiveVolumeDisplay();
-      registerVolumeItems();
-    }, 'the lookup table that names and colors this volume\'s labels'));
+// Reads the volume (once) for its surface: its value range and a default
+// level, half its 99th percentile of the values above zero.
+async function loadSurfaceField(vol) {
+  const s = vol.surface;
+  if (s.loaded || s.loading) return s.loading;
+  s.loading = (async () => {
+    const a = cropToContent(await parseVolumeFile(vol.file), { noisy: isWebmName(vol.file.name) });
+    if ((a.channels || 1) !== 1) { vol.isColor = true; throw new Error('a colour volume has no surface'); }
+    const d = a.data;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < d.length; i++) { const v = d[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    const pos = [], stride = Math.max(1, Math.floor(d.length / 200000));
+    for (let i = 0; i < d.length; i += stride) if (d[i] > 0) pos.push(d[i]);
+    pos.sort((x, y) => x - y);
+    const p99 = pos.length ? pos[Math.min(pos.length - 1, Math.floor(0.99 * pos.length))] : hi;
+    s.lo = lo; s.hi = hi;
+    if (s.level == null) s.level = +(p99 / 2).toPrecision(3);
+    s.field = { data: d, shape: a.shape, Ab: a.Ab, invAb: a.invAb };   // (unmasked: the mask may change)
+    await sendSurfaceField(vol);
+    s.loaded = true;
+  })();
+  try { await s.loading; } finally { s.loading = null; }
+}
+// the field to the mesher, multiplied by the volume's mask (APPLY MASK)
+async function sendSurfaceField(vol) {
+  const f = vol.surface.field;
+  const mask = await maskOnGrid(vol, { shape: f.shape, Ab: f.Ab });
+  let data = f.data;
+  if (mask) {
+    let lo = Infinity; for (let i = 0; i < data.length; i++) if (data[i] < lo) lo = data[i];
+    const below = Math.min(lo, 0);
+    data = Float32Array.from(data, (v, i) => mask[i] >= 128 ? v : below);
   }
-  if (!vol.isColor) {
-    el.appendChild(makeChoiceRow('show as', [['anatomy', 'anatomy'], ['parcellation', 'parcellation']],
-      vol.category || 'anatomy', value => {
-        vol.category = value; vol.categorySource = 'user';
-        if (value === 'anatomy' && vol.lut) detachLut(vol.lut); // a lookup table makes it a parcellation
-        if (vol === activeVolume) applyActiveVolumeDisplay();
-        registerVolumeItems();
-      }, 'which category this volume is listed and shown as'));
-  }
-  // the shown parcellation: its label list (with the header as an info icon)
-  // its label list: the shown parcellation in LABEL mode (colors), the label volume in memory (colors, 3D regions)
-  const listed = vol.category === 'parcellation' && ((vol === activeVolume && labelsShown()) || vol === labelVol()) && buildLabelList(vol, el);
-  if (vol === activeVolume) { if (!listed) el.appendChild(makeSettingsButton('show header', () => showAnatHeaderPanel())); }
-  else el.appendChild(makeSettingsButton('remove', () => {
-    if (vol.lut) detachLut(vol.lut);
-    volumes = volumes.filter(v => v !== vol);
-    recomputeView({ reframe: false });
-    registerVolumeItems();
-  }, 'remove this volume from the list'));
+  vol.surface.sent = { data, shape: f.shape, invAb: f.invAb };   // (also the 2D overlay's source)
+  volumeSurfaces.setField(vol, { data, shape: f.shape, invAb: f.invAb });
 }
 
-function buildLutSettings(lut, el) {
-  const candidates = volumes.filter(v => !v.isColor);
-  const options = [['', '— none —'], ...candidates.map((v, i) => [String(i), v.label])];
-  const current = lut.volume ? String(candidates.indexOf(lut.volume)) : '';
-  el.appendChild(makeChoiceRow('attach to', options, current, value => {
-    const before = lut.volume;
-    const target = value === '' ? null : candidates[+value];
-    if (target) attachLut(lut, target); else detachLut(lut);
-    if (before === activeVolume || target === activeVolume) applyActiveVolumeDisplay();
-    registerVolumeItems();
-  }, 'the volume whose labels this lookup table names and colors'));
-  el.appendChild(makeSettingsButton('remove', () => {
-    const v = lut.volume;
-    detachLut(lut);
-    luts = luts.filter(l => l !== lut);
-    if (v && v === activeVolume) applyActiveVolumeDisplay();
-    registerVolumeItems();
-  }, 'remove this lookup table'));
+// ISOSURFACE OVERLAY in the 2D sections: where the overlay volume is at or above
+// its level, painted in its colour over the sections — the inside of the
+// same surface the 3D view shows. Sampled (trilinear) at each voxel of the
+// rendered volume's grid, as 0/255; the sections blend it softly. Computed
+// again when the level, the mask or the rendered volume changes.
+function computeOverlay2D(grid, f, level) {
+  const [nx, ny, nz] = grid.shape, [mx, my, mz] = f.shape, d = f.data;
+  const toF = p => mat3mulVec(f.invAb, mat3mulVec(grid.Ab, p));
+  const o0 = toF([0, 0, 0]), dx = toF([1, 0, 0]), dy = toF([0, 1, 0]), dz = toF([0, 0, 1]);
+  for (let c = 0; c < 3; c++) { dx[c] -= o0[c]; dy[c] -= o0[c]; dz[c] -= o0[c]; }
+  const out = new Uint8Array(nx * ny * nz), mxy = mx * my;
+  let o = 0;
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) {
+    let x = o0[0] + j * dy[0] + k * dz[0], y = o0[1] + j * dy[1] + k * dz[1], z = o0[2] + j * dy[2] + k * dz[2];
+    for (let i = 0; i < nx; i++, o++, x += dx[0], y += dx[1], z += dx[2]) {
+      if (x < 0 || y < 0 || z < 0 || x > mx - 1 || y > my - 1 || z > mz - 1) continue;
+      const a = Math.min(mx - 2, Math.floor(x)), b = Math.min(my - 2, Math.floor(y)), c = Math.min(mz - 2, Math.floor(z));
+      const fx = x - a, fy = y - b, fz = z - c, q = a + mx * b + mxy * c;
+      const v = ((d[q] * (1 - fx) + d[q + 1] * fx) * (1 - fy) + (d[q + mx] * (1 - fx) + d[q + mx + 1] * fx) * fy) * (1 - fz)
+              + ((d[q + mxy] * (1 - fx) + d[q + mxy + 1] * fx) * (1 - fy) + (d[q + mxy + mx] * (1 - fx) + d[q + mxy + mx + 1] * fx) * fy) * fz;
+      if (v >= level) out[o] = 255;
+    }
+  }
+  return out;
 }
+let _ov2dKey = null;
+function updateOverlay2D() {
+  const vol = overlayVol, s = vol && vol.surface, anat = state.get('anat');
+  if (!s || !s.on || !s.sent || !anat || !anat.shape) {
+    if (_ov2dKey !== null) { _ov2dKey = null; vr.setOverlay(null); updateSlicesA(); updateSlicesB(); }
+    return;
+  }
+  const key = [vol.file.name, s.level, anat.shape.join(), s.sent.data.length, vol.maskSrc ? vol.maskSrc.file.name : ''].join('|');
+  vr.setOverlay(undefined, hexToRgb01(s.color || '#ff3030'));
+  if (key !== _ov2dKey || !vr._ovTex) {
+    _ov2dKey = key;
+    vr.setOverlay(computeOverlay2D({ shape: anat.shape, Ab: anat.Ab }, s.sent, s.level));
+  }
+  updateSlicesA(); updateSlicesB();
+}
+const hexToRgb01 = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+async function refreshSurfaceField(vol) {
+  const s = vol.surface;
+  await sendSurfaceField(vol);
+  if (s.on) { volumeSurfaces.hide(vol); volumeSurfaces.show(vol, { level: s.level, color: s.color }); volumeSurfaces.setHidden(vol, false); }
+  writeSurfaceNote(vol);
+}
+async function setVolumeSurface(vol, on) {
+  if (!volumeSurfaces) return;
+  vol.surface = vol.surface || { on: false, level: null, color: '#ff3030' };
+  const s = vol.surface;
+  s.on = on; s.error = null;
+  if (!on) { volumeSurfaces.hide(vol); registerVolumeItems(); return; }
+  registerVolumeItems();
+  try { await loadSurfaceField(vol); }
+  catch (e) { s.on = false; s.error = (e && e.message) || String(e); console.warn('surface of ' + vol.file.name, e); registerVolumeItems(); return; }
+  if (!s.on) return;   // switched off meanwhile
+  volumeSurfaces.show(vol, { level: s.level, color: s.color });
+  volumeSurfaces.setHidden(vol, false);
+  registerVolumeItems();
+}
+function buildSurfaceRows(vol, el) {
+  const s = vol.surface || {};
+  const row = document.createElement('div');
+  row.className = 'dt-choice dt-surface';
+  const lab = document.createElement('label');
+  lab.textContent = 'color';
+  const pick = document.createElement('input');
+  pick.type = 'color'; pick.className = 'dt-color'; pick.value = s.color || '#ff3030';
+  pick.addEventListener('click', e => e.stopPropagation());
+  pick.addEventListener('input', () => {
+    vol.surface = vol.surface || { on: false, level: null };
+    vol.surface.color = pick.value;
+    if (volumeSurfaces) volumeSurfaces.setColor(vol, pick.value);
+    if (vol === overlayVol) updateOverlay2D();
+  });
+  const note = document.createElement('span');
+  note.className = 'dt-surface-note';
+  vol._surfaceNote = note;
+  writeSurfaceNote(vol);
+  row.title = 'Show this volume as a solid surface at a level of its own values, together with the volume shown (no blurring: the map\'s own edges place the surface). For a vessel or probability map, a lesion, a cluster.';
+  row.append(lab, pick, note);
+  el.appendChild(row);
+  if (s.on && s.loaded) {
+    const range = s.hi - s.lo || 1;
+    const lv = makeSliderRow('level', {
+      min: s.lo, max: s.hi, step: range / 1000, value: s.level,
+      format: v => (+v.toPrecision(3)).toString(),
+      onInput: v => { s.level = v; volumeSurfaces.setLevel(vol, v); writeSurfaceNote(vol); },
+    });
+    lv.title = 'The value the surface is drawn at (this volume\'s own units): voxels at or above it are inside.';
+    el.appendChild(lv);
+  }
+}
+// The note after the switch: building…, the triangle count, or what went wrong.
+// Updated in place (a rebuild of the tree would break a level drag).
+function writeSurfaceNote(vol) {
+  const note = vol._surfaceNote, s = vol.surface || {};
+  if (!note) return;
+  const it = volumeSurfaces && volumeSurfaces.info(vol);
+  let text = '', warn = false;
+  if (s.error) text = s.error;
+  else if (s.on && (!s.loaded || (it && (it.busy || it.want !== null)))) text = 'building…';
+  else if (s.on && it) {
+    text = it.tris ? (it.tris >= 1e6 ? (it.tris / 1e6).toFixed(1) + 'M' : Math.max(1, Math.round(it.tris / 1e3)) + 'k') + ' triangles' : 'nothing at this level';
+    warn = it.tris > SURFACE_TRIS_WARN;
+  }
+  note.textContent = text;
+  note.classList.toggle('warn', warn);
+  note.title = warn ? 'a large mesh: raise the level, or make this the volume shown (the raymarcher)' : '';
+}
+function surfaceChanged(vol) { if (vol) writeSurfaceNote(vol); if (vol && vol === overlayVol) updateOverlay2D(); }
+
+// ── APPLY MASK ──
+// A volume can be masked by a label volume: voxels where that volume is 0
+// count as 0 ("is not 0" is the mask), in the raymarcher, the sections,
+// picking and the volume's surface. The two only need to share world
+// space: the mask is read at each voxel's world position,
+// once per (volume, mask) — trilinear, so its edge is smooth — and kept
+// as 0–255 bytes on the volume's own
+// grid (vol.maskCache). For the shown volume the texture's values are
+// multiplied by it (a copy; the unmasked values are kept), and uploaded
+// again — no extra work for the shaders, and the file is not read again.
+// Choosing another mask computes it again.
+let activeMaskData = null, _texUnmasked = null;
+// texData × mask, in texture units: a scalar volume's normalized values
+// go towards the value of 0 (not to texture 0), a label volume's stay or
+// go (in or out), a colour volume's channels scale (sqrt-encoded: × √m).
+function maskTexData(tex, mask, anat, labels) {
+  const n = mask.length;
+  if ((anat.channels || 1) === 3) {
+    const out = new Uint8Array(tex.length);
+    for (let i = 0; i < n; i++) {
+      const f = Math.sqrt(mask[i] / 255);
+      out[4*i] = tex[4*i] * f; out[4*i+1] = tex[4*i+1] * f; out[4*i+2] = tex[4*i+2] * f; out[4*i+3] = tex[4*i+3];
+    }
+    return out;
+  }
+  const zn = Math.min(1, Math.max(0, (0 - anat.mn) / ((anat.mx - anat.mn) || 1)));
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const m = mask[i];
+    out[i] = m === 255 ? tex[i] : labels ? (m >= 128 ? tex[i] : zn) : zn + (tex[i] - zn) * (m / 255);
+  }
+  return out;
+}
+const maskCandidates = vol => volumes.filter(v => v !== vol && v.category === 'parcellation' && !v.isColor);
+// the label data of a mask volume: { raw, shape, invAb }
+async function maskSourceData(src) {
+  if (endLabelSrc && endLabelSrc.vol === src) return { raw: endLabelSrc.raw, shape: endLabelSrc.shape, invAb: endLabelSrc.invAb };
+  if (src === activeVolume && loadedAnatRaw) return { raw: loadedAnatRaw, shape: loadedAnatShape, invAb: state.get('anat.invAb') };
+  const a = cropToContent(await parseVolumeFile(src.file), { noisy: false });
+  return { raw: a.data, shape: a.shape, invAb: a.invAb };
+}
+// 0–255 on the grid { shape, Ab } (voxel → world), from the mask data
+function computeMask(grid, m) {
+  const [nx, ny, nz] = grid.shape, [mx, my, mz] = m.shape, raw = m.raw;
+  const toMask = p => mat3mulVec(m.invAb, mat3mulVec(grid.Ab, p));   // grid voxel → mask voxel
+  const o0 = toMask([0, 0, 0]), dx = toMask([1, 0, 0]), dy = toMask([0, 1, 0]), dz = toMask([0, 0, 1]);
+  for (let c = 0; c < 3; c++) { dx[c] -= o0[c]; dy[c] -= o0[c]; dz[c] -= o0[c]; }
+  const out = new Uint8Array(nx * ny * nz);
+  let o = 0;
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) {
+    let x = o0[0] + j * dy[0] + k * dz[0], y = o0[1] + j * dy[1] + k * dz[1], z = o0[2] + j * dy[2] + k * dz[2];
+    for (let i = 0; i < nx; i++, o++, x += dx[0], y += dx[1], z += dx[2]) {
+      // trilinear in the mask's grid of "is not 0": a coarser mask gets a
+      // smooth edge too, not its own voxel steps
+      const a = Math.floor(x), b = Math.floor(y), c = Math.floor(z);
+      if (a < -1 || b < -1 || c < -1 || a >= mx || b >= my || c >= mz) continue;
+      const fx = x - a, fy = y - b, fz = z - c;
+      let sum = 0;
+      for (let q = 0; q < 8; q++) {
+        const ia = a + (q & 1), ib = b + ((q >> 1) & 1), ic = c + (q >> 2);
+        if (ia < 0 || ib < 0 || ic < 0 || ia >= mx || ib >= my || ic >= mz) continue;
+        const v = raw[ia + mx * (ib + my * ic)];
+        if (v === 0 || v !== v) continue;
+        sum += (q & 1 ? fx : 1 - fx) * ((q >> 1) & 1 ? fy : 1 - fy) * (q >> 2 ? fz : 1 - fz);
+      }
+      out[o] = Math.round(255 * sum);
+    }
+  }
+  return out;
+}
+// The mask of vol on the grid { shape, Ab } (cached), or null without one.
+async function maskOnGrid(vol, grid) {
+  const src = vol.maskSrc;
+  if (!src || !volumes.includes(src)) return null;
+  const c = vol.maskCache;
+  if (c && c.src === src && c.shape.join() === grid.shape.join()) return c.data;
+  const data = computeMask(grid, await maskSourceData(src));
+  if (vol.maskSrc !== src) return null;            // changed meanwhile
+  let n = 0; for (let i = 0; i < data.length; i++) if (data[i]) n++;
+  if (!n) console.warn('mask ' + src.label + ' does not overlap ' + vol.label + ' (in world space)');
+  vol.maskCache = { src, shape: grid.shape.slice(), data };
+  return data;
+}
+// the active volume's mask (bytes) when it matches this grid size
+const activeMaskFor = (nx, ny, nz) => activeMaskData && activeMaskData.length === nx * ny * nz ? activeMaskData : null;
+async function applyActiveMask() {
+  const vol = activeVolume, anat = state.get('anat');
+  let data = null;
+  if (vol && anat && vol.maskSrc) {
+    try { data = await maskOnGrid(vol, { shape: anat.shape, Ab: anat.Ab }); }
+    catch (e) { console.warn('mask:', e); }
+    if (vol !== activeVolume) return;              // another volume meanwhile
+  }
+  if (!_texUnmasked || (!data && !activeMaskData)) return;   // nothing to change
+  activeMaskData = data;
+  const tex = data ? maskTexData(_texUnmasked, data, currentAnat || anat, modality === 'seg') : _texUnmasked;
+  vr.replaceTexData(tex);
+  if (glassBrainMesh) {
+    const t = glassBrainMesh.material.uniforms.u_vol.value;
+    t.image.data = tex; t.needsUpdate = true;
+    if (glassBrainMesh.material.uniforms.u_occ) updateLabelOccupancy(glassBrainMesh.material.uniforms);
+  }
+  updateSlicesA(); updateSlicesB();
+  render3D();
+}
+async function setVolumeMask(vol, src) {
+  vol.maskSrc = src || null;
+  if (vol === activeVolume) await applyActiveMask();
+  if (vol.surface && vol.surface.loaded) refreshSurfaceField(vol);
+  registerVolumeItems();
+}
+function buildMaskRow(vol, el) {
+  const cands = maskCandidates(vol);
+  if (!cands.length && !vol.maskSrc) return;
+  const options = [['', '---'], ...cands.map((v, i) => [String(i), v.label])];
+  const cur = vol.maskSrc && cands.includes(vol.maskSrc) ? String(cands.indexOf(vol.maskSrc)) : '';
+  el.appendChild(makeChoiceRow('apply mask', options, cur,
+    value => setVolumeMask(vol, value === '' ? null : cands[+value]),
+    'a label volume as mask: where it is 0, this volume counts as 0 (they only need to share world space)'));
+}
+
 
 // First row under "Streamline bundles": the same on/off checkbox and focus
 // icon as the bundle rows, applying to all bundles — each shows on, off or
@@ -7971,7 +8496,19 @@ threeCanvas.addEventListener('pointerup', e => {
 // empty space or on the same thing again closes it. Dragging orbits, pinching zooms
 // (never a tap); on touch the menu opens above the finger, and pick radii
 // are larger (pickPx).
+// Until the first click in the 3D view, a hint follows the mouse there.
+threeCanvas.dataset.tip = 'click a 3D location to list its properties';
+function ctxHintDone() { if (threeCanvas.dataset.tip) { delete threeCanvas.dataset.tip; hideTip(); } }
+// (shown again after a drag — rotating the view isn't the click it waits for)
+threeCanvas.addEventListener('mousemove', e => {
+  const hint = threeCanvas.dataset.tip;
+  if (!hint || recentTouch()) return;
+  if (e.buttons) { if (_tipOwner === threeCanvas) hideTip(); return; }
+  if (_tipOwner !== threeCanvas) { _tipOwner = threeCanvas; tipEl.textContent = hint; tipEl.style.display = 'block'; }
+  placeTipAt(e);
+});
 function clickAt(clientX, clientY) {
+  ctxHintDone();
   const h = collectHits(clientX, clientY), had = ctxMenu && ctxMenu.pinned ? ctxMenu.key : null;
   if (ctxMenu) hideBundleTooltip(true);
   if (had && (hitsEmpty(h) || had === hitsKey(h))) { setMarkerHoverState(null); return; } // a click elsewhere / again: closed
@@ -7980,6 +8517,7 @@ function clickAt(clientX, clientY) {
   showCtxMenu(h, { pinned: true });
 }
 function handleTap(clientX, clientY) {
+  ctxHintDone();
   _touchPick = true;
   try { clickAt(clientX, clientY); }
   finally { _touchPick = false; }
@@ -8285,9 +8823,32 @@ function showMarkersHeaderPanel(rec) {
 }
 
 document.body.addEventListener('dragover',e=>e.preventDefault());
+// A dropped folder (sub-X, as unpacked from a zip) loads like the files in
+// it: its files are collected, also from folders inside it, and handled as
+// one drop. (dataTransfer.files lists a folder as an unreadable entry.)
+async function filesFromDrop(dt) {
+  const entries = Array.from(dt.items || []).map(it => it.kind === 'file' && it.webkitGetAsEntry ? it.webkitGetAsEntry() : null);
+  if (!entries.some(en => en && en.isDirectory)) return Array.from(dt.files || []);
+  const out = [];
+  const fileOf = en => new Promise((res, rej) => en.file(res, rej));
+  const readAll = dir => new Promise((res, rej) => {   // (readEntries gives the entries in batches)
+    const r = dir.createReader(), all = [];
+    const next = () => r.readEntries(batch => { if (!batch.length) res(all); else { all.push(...batch); next(); } }, rej);
+    next();
+  });
+  const walk = async en => {
+    if (!en || isJunkPath(en.fullPath || en.name)) return;
+    if (en.isFile) out.push(await fileOf(en));
+    else if (en.isDirectory) for (const c of await readAll(en)) await walk(c);
+  };
+  for (const en of entries) await walk(en);
+  return out;
+}
 document.body.addEventListener('drop',async e=>{
   e.preventDefault();
-  const files = Array.from(e.dataTransfer.files || []);
+  let files;
+  try { files = await filesFromDrop(e.dataTransfer); }
+  catch (err) { files = Array.from(e.dataTransfer.files || []); }
   if (!files.length) { console.log('File drop failed.'); return; }
   cancelDownloads();
   try { await dispatchOpenedFiles(files); }
@@ -8317,7 +8878,6 @@ document.body.addEventListener('drop',async e=>{
   set('brain-thresh-slider', 0,                 ['brain-thresh-val', cutoutT1.toFixed(2)]);
   set('brain-cutout-below-slider', 100,          ['brain-cutout-below-val', cutoutBelowThresh.toFixed(2)]);
   set('brain-rim-slider',    33,               ['brain-rim-val',   (1/glassBrainRimPow).toFixed(2)]);
-  set('contrast-slider',     50,               ['contrast-val',    contrastGain.toFixed(2)+'×']);
   set('background-slider',   Math.round(backgroundThresh * 100), ['background-val', backgroundThresh.toFixed(2)]);
   set('light-slider',        Math.round(lightBias * 100), ['light-val', lightBias === 0 ? 'CENTER' : lightBias < 0 ? 'LEFT' : 'RIGHT']);
   set('mov-len',             6,                ['mov-len-val',     '6 s']);
@@ -8371,9 +8931,21 @@ regionMeshes = new RegionMeshes({
   }),
 });
 const _rmLightCam = new THREE.Vector3();
+// SEGMENTATION: a second label volume's regions as meshes (lit the same)
+segMeshes = new RegionMeshes({
+  THREE, scene, render: () => render3D(),
+  colorOf: v => labelEntry(v, segVol)[1],
+  onChange: () => labelUiChanged(),
+  getLight: regionMeshes.getLight,
+});
 // Console: how dimmed regions are drawn — 'glass' (default) or 'inside'.
 window.setRegionDimMode = mode => regionMeshes.setDimMode(mode);
 if (endLabelSrc) regionMeshes.setRef(endLabelSrc);
+// Other volumes as surfaces at a level (js/volume-surfaces.js), lit as the region meshes.
+volumeSurfaces = new VolumeSurfaces({
+  THREE, scene, render: () => render3D(), onChange: vol => surfaceChanged(vol),
+  uniforms: regionMeshes.uniforms, syncLight: cam => regionMeshes._sync(cam),
+});
 resizeAll();
 
 // ═══════════════════════════════════════════════════════════
@@ -8558,9 +9130,18 @@ resizeAll();
     new DataTreeView(body, dataStore, opts);
     panes[key] = body;
   };
-  listPane('anatomy', { categories: ['anatomy', 'parcellations'], empty: emptyFill(
-    '<p><b>Load a volume</b> to get started. Supported formats are .nii and .nii.gz, and <a href="doc.html?webm-format" target="_blank" rel="noopener">.webm</a> (a compact video-compressed volume).</p>' +
-    '<p>For a <b>parcellation</b>, load the label volume together with its lookup table: a FreeSurfer or ITK-SNAP LUT file.</p>') });
+  { // ANATOMY: the role sections (renderAnatomyPane), or how to start
+    const body = document.createElement('div');
+    body.className = 'lp-body an-pane';
+    page.appendChild(body);
+    const empty = emptyFill(
+      '<p><b>Load a volume</b> to get started. Supported formats are .nii and .nii.gz, and <a href="doc.html?webm-format" target="_blank" rel="noopener">.webm</a> (a compact video-compressed volume).</p>' +
+      '<p>For a <b>parcellation</b>, load the label volume together with its lookup table: a FreeSurfer or ITK-SNAP LUT file.</p>');
+    const draw = () => { if (volumes.length) renderAnatomyPane(body); else { body.innerHTML = ''; empty(body); } };
+    dataStore.listen(draw);
+    draw();
+    panes.anatomy = body;
+  }
   listPane('streamlines', { categories: ['streamlines'], flat: true, empty: emptyFill(
     '<p><b>Load a streamlines file</b> to get started. Supported formats are .tck (MRtrix), .trk (TrackVis) and <a href="doc.html?dqz-format" target="_blank" rel="noopener">.dqz</a> (a compressed .tck).</p>') });
   listPane('markers', { categories: ['markers'], flat: true, empty: emptyFill(

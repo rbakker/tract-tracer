@@ -25,7 +25,7 @@
 
 import { LIGHT_FALLOFF_GLSL } from './scene3d.js';
 
-const VS = `
+export const VS = `
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 void main() {
@@ -35,7 +35,7 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 
-const FS = `
+export const FS = `
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 uniform vec3  u_color;
@@ -77,7 +77,34 @@ function invert3(m) {
           [B / det, (a * i - c * g) / det, -(a * f - c * d) / det],
           [C / det, -(a * h - b * g) / det, (a * e - b * d) / det]];
 }
-const hexToRaw = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+export const hexToRaw = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+
+// voxel index coordinates → world mm (the label volume's affine);
+// normals (from the field's gradient) with the inverse transpose
+export function voxelGeometry(THREE, invAb, pos, nrm, idx) {
+  const A = invAb;
+  const Ab = invert3(A.slice(0, 3)), t = A.length === 4 ? A[3] : [0, 0, 0];
+  const det = Ab[0][0] * (Ab[1][1] * Ab[2][2] - Ab[1][2] * Ab[2][1]) - Ab[0][1] * (Ab[1][0] * Ab[2][2] - Ab[1][2] * Ab[2][0]) + Ab[0][2] * (Ab[1][0] * Ab[2][1] - Ab[1][1] * Ab[2][0]);
+  const out = new Float32Array(pos.length);
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i] - t[0], y = pos[i + 1] - t[1], z = pos[i + 2] - t[2];
+    for (let r = 0; r < 3; r++) out[i + r] = Ab[r][0] * x + Ab[r][1] * y + Ab[r][2] * z;
+  }
+  const N = new Float32Array(nrm.length);
+  for (let i = 0; i < nrm.length; i += 3) {
+    let x = 0, y = 0, z = 0;
+    for (let r = 0; r < 3; r++) { x += A[r][0] * nrm[i + r]; y += A[r][1] * nrm[i + r]; z += A[r][2] * nrm[i + r]; }
+    const l = Math.hypot(x, y, z) || 1;
+    N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
+  }
+  if (det < 0) for (let i = 0; i < idx.length; i += 3) { const s = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = s; } // mirrored: keep front faces outward
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+  g.computeBoundingSphere();
+  return g;
+}
 
 export class RegionMeshes {
   // THREE; scene: where the meshes go; render(): redraw the 3D view;
@@ -214,32 +241,7 @@ export class RegionMeshes {
     this._changed();
   }
 
-  // voxel index coordinates → world mm (the label volume's affine);
-  // normals (from the field's gradient) with the inverse transpose
-  _geometry(pos, nrm, idx) {
-    const THREE = this.THREE, A = this.ref.invAb;
-    const Ab = invert3(A.slice(0, 3)), t = A.length === 4 ? A[3] : [0, 0, 0];
-    const det = Ab[0][0] * (Ab[1][1] * Ab[2][2] - Ab[1][2] * Ab[2][1]) - Ab[0][1] * (Ab[1][0] * Ab[2][2] - Ab[1][2] * Ab[2][0]) + Ab[0][2] * (Ab[1][0] * Ab[2][1] - Ab[1][1] * Ab[2][0]);
-    const out = new Float32Array(pos.length);
-    for (let i = 0; i < pos.length; i += 3) {
-      const x = pos[i] - t[0], y = pos[i + 1] - t[1], z = pos[i + 2] - t[2];
-      for (let r = 0; r < 3; r++) out[i + r] = Ab[r][0] * x + Ab[r][1] * y + Ab[r][2] * z;
-    }
-    const N = new Float32Array(nrm.length);
-    for (let i = 0; i < nrm.length; i += 3) {
-      let x = 0, y = 0, z = 0;
-      for (let r = 0; r < 3; r++) { x += A[r][0] * nrm[i + r]; y += A[r][1] * nrm[i + r]; z += A[r][2] * nrm[i + r]; }
-      const l = Math.hypot(x, y, z) || 1;
-      N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
-    }
-    if (det < 0) for (let i = 0; i < idx.length; i += 3) { const s = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = s; } // mirrored: keep front faces outward
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(out, 3));
-    g.setIndex(new THREE.BufferAttribute(idx, 1));
-    g.setAttribute('normal', new THREE.BufferAttribute(N, 3));
-    g.computeBoundingSphere();
-    return g;
-  }
+  _geometry(pos, nrm, idx) { return voxelGeometry(this.THREE, this.ref.invAb, pos, nrm, idx); }
 
   _drop(e) {
     if (!e.mesh) return;

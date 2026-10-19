@@ -19,6 +19,13 @@
 //          { type: 'mesh', gen, label }
 // Reply    { gen, label, positions, normals: Float32Array, indices: Uint32Array }
 //          { gen, label, empty: true }  or  { gen, label, error }
+//
+// Volume surfaces (js/volume-surfaces.js): a scalar volume's own values,
+// meshed at a level, no blur.
+// Request  { type: 'field', id, data: Float32Array, shape }   (kept until 'unfield')
+//          { type: 'surface', id, seq, level }
+//          { type: 'unfield', id }
+// Reply    { id, seq, level, positions, normals, indices }, { id, seq, level, empty: true } or { id, seq, error }
 
 const SIGMA = 0.8, ISO = 0.5;
 const R = Math.ceil(3 * SIGMA), PAD = R + 1;
@@ -79,6 +86,41 @@ function meshOf(label) {
   let iso = ISO;
   { let mx = 0; for (let i = 0; i < f.length; i++) if (f[i] > mx) mx = f[i];
     if (mx < ISO) { f = m; iso = 0.5; } }                 // too thin to survive the blur: the voxels themselves
+  return surfaceNets(f, X, Y, Z, iso, ox, oy, oz);
+}
+
+// A volume's own values as the field (a probability or vessel map): its
+// level surface, no blur. Over the box of the voxels at or above the
+// level, padded by one voxel below it, so the surface closes at the
+// volume's edge too. NaN counts as below.
+function fieldMeshOf(fv, level) {
+  const [nx, ny, nz] = fv.shape, d = fv.data;
+  let x0 = nx, y0 = ny, z0 = nz, x1 = -1, y1 = -1, z1 = -1, lo = Infinity, o = 0;
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, o++) {
+    const v = d[o];
+    if (v < lo) lo = v;
+    if (!(v >= level)) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+    if (z < z0) z0 = z; if (z > z1) z1 = z;
+  }
+  if (x1 < 0) return null;
+  const below = Math.min(lo, level - 1e-6 * (Math.abs(level) + 1));
+  const ox = x0 - 1, oy = y0 - 1, oz = z0 - 1;
+  const X = x1 - x0 + 3, Y = y1 - y0 + 3, Z = z1 - z0 + 3, XY = X * Y;
+  const f = new Float32Array(X * Y * Z).fill(below);
+  for (let k = 1; k < Z - 1; k++) for (let j = 1; j < Y - 1; j++) {
+    let s = x0 + nx * ((oy + j) + ny * (oz + k)), t = 1 + X * j + XY * k;
+    for (let i = 1; i < X - 1; i++, s++, t++) { const v = d[s]; f[t] = v === v ? v : below; }
+  }
+  return surfaceNets(f, X, Y, Z, level, ox, oy, oz);
+}
+
+// Surface nets on the level iso of the field f (X×Y×Z grid points, grid
+// point (i,j,k) = voxel (ox+i, oy+j, oz+k)); the field must be below iso
+// on its outer layer.
+function surfaceNets(f, X, Y, Z, iso, ox, oy, oz) {
+  const XY = X * Y;
   // cells: (i,j,k) spans grid points i..i+1 etc.; a vertex per mixed cell
   const CX = X - 1, CY = Y - 1, CZ = Z - 1, CXY = CX * CY;
   const vid = new Int32Array(CX * CY * CZ).fill(-1);
@@ -136,6 +178,14 @@ function meshOf(label) {
   return { positions: Float32Array.from(pos), normals: Float32Array.from(nrm), indices: Uint32Array.from(idx) };
 }
 
+const fields = new Map(); // id → { data: Float32Array, shape } (volume surfaces)
+
+const reply = (base, r) => {
+  if (!r) self.postMessage({ ...base, empty: true });
+  else self.postMessage({ ...base, positions: r.positions, normals: r.normals, indices: r.indices },
+                        [r.positions.buffer, r.normals.buffer, r.indices.buffer]);
+};
+
 self.onmessage = e => {
   const msg = e.data;
   if (msg.type === 'volume') {
@@ -145,10 +195,16 @@ self.onmessage = e => {
   if (msg.type === 'mesh') {
     const { gen, label } = msg;
     if (!vol || vol.gen !== gen) { self.postMessage({ gen, label, error: 'volume not loaded' }); return; }
-    try {
-      const r = meshOf(label);
-      if (!r) self.postMessage({ gen, label, empty: true });
-      else self.postMessage({ gen, label, positions: r.positions, normals: r.normals, indices: r.indices }, [r.positions.buffer, r.normals.buffer, r.indices.buffer]);
-    } catch (err) { self.postMessage({ gen, label, error: String(err && err.message || err) }); }
+    try { reply({ gen, label }, meshOf(label)); }
+    catch (err) { self.postMessage({ gen, label, error: String(err && err.message || err) }); }
+    return;
+  }
+  if (msg.type === 'field') { fields.set(msg.id, { data: msg.data, shape: msg.shape }); return; }
+  if (msg.type === 'unfield') { fields.delete(msg.id); return; }
+  if (msg.type === 'surface') {
+    const { id, seq, level } = msg, fv = fields.get(id);
+    if (!fv) { self.postMessage({ id, seq, error: 'volume not loaded' }); return; }
+    try { reply({ id, seq, level }, fieldMeshOf(fv, level)); }
+    catch (err) { self.postMessage({ id, seq, error: String(err && err.message || err) }); }
   }
 };

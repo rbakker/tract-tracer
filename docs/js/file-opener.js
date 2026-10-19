@@ -33,6 +33,16 @@ const LUT_EXTS    = ['.txt', '.lut'];
 // formats.
 const DOUBLE_EXTS = ['.nii.gz', '.mif.gz'];
 
+// Files that operating systems and mail/share services add to folders and
+// zips, never data: macOS resource forks (__MACOSX/…, ._name), Finder and
+// Explorer metadata. Skipped wherever files come in (zip, folder, loose).
+export function isJunkPath(path) {
+  const parts = String(path).split('/');
+  const base = parts[parts.length - 1];
+  return parts.includes('__MACOSX') || base.startsWith('._')
+      || base === '.DS_Store' || base === 'Thumbs.db' || base === 'desktop.ini' || base === 'Icon\r';
+}
+
 function extOf(name) {
   const i = name.toLowerCase().lastIndexOf('.');
   return i === -1 ? '' : name.toLowerCase().slice(i);
@@ -134,8 +144,11 @@ export class MultiFileOpener {
     const entries = unzipSync(buf);
     const files = [];
     for (const [name, bytes] of Object.entries(entries)) {
-      const base = name.split('/').pop(); // drop any folder prefix from a zipped-up folder
-      if (!base) continue; // directory entry
+      // A zipped-up folder (or one a mail/share service re-packed: sub-X/…
+      // next to __MACOSX/…) gives paths with folders: the folders are
+      // dropped, the macOS extras skipped.
+      const base = name.split('/').pop();
+      if (!base || isJunkPath(name)) continue; // directory entry, or not data
       files.push(new File([bytes], base));
     }
     return files;
@@ -202,7 +215,7 @@ export class MultiFileOpener {
   // At most one of tract/bundle is ever set.
   static async open(rawFiles) {
     const isSingleZip = rawFiles.length === 1 && extOf(rawFiles[0].name) === '.zip';
-    const files = isSingleZip ? await MultiFileOpener.filesFromZip(rawFiles[0]) : Array.from(rawFiles);
+    const files = isSingleZip ? await MultiFileOpener.filesFromZip(rawFiles[0]) : Array.from(rawFiles).filter(f => !isJunkPath(f.name));
     const entries = MultiFileOpener.classify(files);
     await MultiFileOpener.separateDqzChildren(entries);
 

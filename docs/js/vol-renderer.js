@@ -16,6 +16,11 @@ const FS_SLICE = `#version 300 es
 precision highp float;
 precision highp sampler3D;
 uniform sampler3D u_vol;
+// MESH OVERLAY in the sections: 0–1 per voxel on the volume's grid (inside
+// the overlay's surface), LINEAR (a soft edge), painted in u_ovColor
+uniform sampler3D u_ov;
+uniform float u_ovOn;
+uniform vec3  u_ovColor;
 uniform vec3  u_origin;
 uniform vec3  u_axisU;
 uniform vec3  u_axisV;
@@ -130,6 +135,7 @@ void main(){
     }
   }
 
+  if (inVol && u_ovOn > 0.5) col = mix(col, u_ovColor, smoothstep(0.3, 0.7, texture(u_ov, tc).r) * 0.85);
   col = mix(col, u_chColorH, clamp(chH + capH, 0.0, 1.0) * 0.9);
   col = mix(col, u_chColorV, clamp(chV + capV, 0.0, 1.0) * 0.9);
 
@@ -190,6 +196,7 @@ export class VolRenderer {
     if (shape[0]>maxSz||shape[1]>maxSz||shape[2]>maxSz)
       throw `Volume exceeds MAX_3D_TEXTURE_SIZE=${maxSz}`;
 
+    if (this._ovTex) { gl.deleteTexture(this._ovTex); this._ovTex = null; }   // (another grid: set again)
     if (this._texture) gl.deleteTexture(this._texture);
     this._texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_3D, this._texture);
@@ -282,6 +289,41 @@ export class VolRenderer {
     gl.bindTexture(gl.TEXTURE_2D, null);
     this._lutSize = size;
     console.log('LUT texture', size, 'entries (~'+(size*4/1024).toFixed(0)+' KB)');
+  }
+
+  // Replaces the texture's voxel values (same size and format as upload
+  // made them, e.g. a masked copy of texData — APPLY MASK in index.html);
+  // the volume is not read again.
+  replaceTexData(texData) {
+    const gl = this.gl;
+    if (!this._texture || !this._anat || texData.length !== this.texData.length) return;
+    const [nx, ny, nz] = this._anat.shape;
+    const color = this._channels === 3;
+    gl.bindTexture(gl.TEXTURE_3D, this._texture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, color ? gl.RGBA : gl.RED, color ? gl.UNSIGNED_BYTE : gl.FLOAT, texData);
+    gl.bindTexture(gl.TEXTURE_3D, null);
+    this.texData = texData;
+  }
+
+  // MESH OVERLAY in the sections: a Uint8Array (0–255 per voxel, on the
+  // uploaded volume's grid, x fastest) or null, and its colour [r,g,b] 0–1.
+  setOverlay(data, color) {
+    const gl = this.gl;
+    if (color) this._ovColor = color;
+    if (data === undefined) return;            // (colour only)
+    if (this._ovTex) { gl.deleteTexture(this._ovTex); this._ovTex = null; }
+    if (!data || !this._anat) return;
+    const [nx, ny, nz] = this._anat.shape;
+    if (data.length !== nx * ny * nz) return;
+    this._ovTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_3D, this._ovTex);
+    for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T, gl.TEXTURE_WRAP_R]) gl.texParameteri(gl.TEXTURE_3D, p, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, nx, ny, nz, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+    gl.bindTexture(gl.TEXTURE_3D, null);
   }
 
   setApplyLUT(on) { this._applyLUT = !!on; this._applyVolFilter(); }
@@ -402,6 +444,12 @@ export class VolRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this._lutTex); // binding null is valid — unsampled while u_applyLUT is 0
     gl.uniform1i(gl.getUniformLocation(this._prog,'u_lut'), 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_3D, this._ovTex || null);   // (null is valid: unsampled while u_ovOn is 0)
+    gl.uniform1i(gl.getUniformLocation(this._prog,'u_ov'), 2);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_ovOn'), this._ovTex ? 1 : 0);
+    gl.uniform3fv(gl.getUniformLocation(this._prog,'u_ovColor'), this._ovColor || [1, 0.2, 0.2]);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorH'),chColorH);
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorV'),chColorV);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_wH'), wH);
