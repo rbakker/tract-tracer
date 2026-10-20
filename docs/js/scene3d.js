@@ -137,6 +137,35 @@ void main() {
 // the camera is outside the data (zoom does not change the look — a
 // zoom-invariant stand-in for a point light's 1/d²), moving along with the
 // camera once it is inside. Shared by the line shader and the brain's.
+// CLIPPING of the scene's other parts (region meshes, isosurface,
+// streamlines, end dots) by the one clipping plane, in world mm: u_clipN
+// the plane's unit normal, u_clipQ a point on it (the cursor), u_clipDir
+// the kept side (+1: d >= 0, -1: d <= 0), u_clipSlab 1: a slab of half
+// width u_clipHalfT instead; u_clipExt how far this part may reach past
+// the cut (its 'extend'). u_clipOn 0: not clipped.
+export const CLIP3D_GLSL = `
+uniform float u_clipOn;
+uniform vec3  u_clipN;
+uniform vec3  u_clipQ;
+uniform float u_clipDir;
+uniform float u_clipSlab;
+uniform float u_clipHalfT;
+uniform float u_clipExt;
+bool clipped3d(vec3 p) {
+  if (u_clipOn < 0.5) return false;
+  float d = dot(p - u_clipQ, u_clipN);
+  return u_clipSlab > 0.5 ? abs(d) > u_clipHalfT + u_clipExt : d * u_clipDir < -u_clipExt;
+}
+`;
+// The uniforms for CLIP3D_GLSL (one set per part of the scene; materials
+// share the set by reference, so index.html updates it in one place).
+export function makeClipUniforms() {
+  return {
+    u_clipOn: { value: 0 }, u_clipN: { value: new THREE.Vector3(1, 0, 0) }, u_clipQ: { value: new THREE.Vector3() },
+    u_clipDir: { value: -1 }, u_clipSlab: { value: 0 }, u_clipHalfT: { value: 1 }, u_clipExt: { value: 0 },
+  };
+}
+
 export const LIGHT_FALLOFF_GLSL = `
 uniform float u_falloff;
 float lightFalloff(vec3 worldPos, vec3 camPos, vec3 target, vec3 fwd, float radius) {
@@ -191,7 +220,8 @@ uniform float u_bgInvert;
 // its usage in main()'s clip-plane loop, duplicated identically in both
 // GLASS_ONLY_FS and SOLID_ONLY_FS.
 uniform float u_sliceMode;
-uniform float u_sliceThickness; // full thickness, in voxel-index-space units (1 unit = 1 voxel along the relevant axis)
+uniform float u_sliceThickness; // full thickness, in mm: u_clipNormal is the world normal through the
+                                // transposed affine, not normalized, so dot(p - q, n) along it is world mm
 uniform float u_glassAlphaMult; // OPACITY's multiplier on GLASS mode's Fresnel alpha — see its usage near fragAlpha
 uniform float u_rimPow;
 uniform float u_volDiagMm;
@@ -576,7 +606,9 @@ vec4 occupancyAndGradient(vec3 p) {
     // not just the usual dark-background case, with zero changes needed
     // anywhere else - including the CUTOUT threshold's own comparisons,
     // which read this same (now-corrected) field.
-    if (u_bgInvert > 0.5) val = 1.0 - val;
+    // (negative: masked out — APPLY MASK, index.html maskTexData — stays
+    // background in both directions)
+    if (u_bgInvert > 0.5) val = val < 0.0 ? val : 1.0 - val;
     return vec4(0.0, 0.0, 0.0, val); // gradient unused outside label mode
   }
 
@@ -1634,7 +1666,7 @@ export function makePlaneMesh(planeKey, vr, viewCentre) {
 // vSegPos = position.y, vFieldRow = instanceField.z, vStyle = file style.
 export const FIELD_COLOR_GLSL = `
 varying float vDensity;
-// SETTINGS › dimming: the opacity of every dimmed part — streamlines the
+// 3D › dimming: the opacity of every dimmed part — streamlines the
 // highlight probe doesn't hit, those outside the focused bundles, and the
 // parts of a data-colored streamline outside its color window.
 uniform float u_dimming;
@@ -1729,7 +1761,7 @@ varying float vSegPos;
 varying float vFieldRow;
 varying vec4  vStyle;
 uniform sampler2D u_colormap;
-` + FIELD_COLOR_GLSL + `
+` + FIELD_COLOR_GLSL + CLIP3D_GLSL + `
 varying vec3  vTangent;
 varying vec3  vWorldPos;
 uniform vec3  u_lightDir;
@@ -1770,6 +1802,9 @@ float lineShadow() {
   return texture(u_shadowTex, (vWorldPos - u_shadowMin) / u_shadowSize).r;
 }
 void main() {
+#ifdef CLIP3D
+  if (clipped3d(vWorldPos)) discard;
+#endif
   vec3 base = (u_autoColor == 1) ? vColor : ((u_autoColor == 2) ? vBundleColor : u_lineColor);
   vec4 shade = fieldShade(base);
   base = shade.rgb;
@@ -2451,6 +2486,7 @@ export function makeRibbonLines(tracts, widthNearPx = 3.0, widthFarPx = 1.0, bun
 export const DOTS_VS = `
 varying vec3  vColor;
 varying float vSignedDist;
+varying vec3  vDotWorld;
 uniform vec3  u_sliceNormal;
 uniform vec3  u_slicePt;
 uniform float u_pointSize;
@@ -2458,6 +2494,7 @@ attribute vec3 color;
 void main() {
   vColor = color;
   vSignedDist = dot(position - u_slicePt, u_sliceNormal);
+  vDotWorld = (modelMatrix * vec4(position, 1.0)).xyz;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = u_pointSize;
 }`;
@@ -2466,6 +2503,8 @@ export const DOTS_FS = `
 precision highp float;
 varying vec3  vColor;
 varying float vSignedDist;
+varying vec3  vDotWorld;
+` + CLIP3D_GLSL + `
 uniform float u_slabHalf;
 uniform int   u_autoColor;
 uniform vec3  u_dotColor;
@@ -2484,6 +2523,7 @@ void main() {
     gl_FragColor = vec4(col * 0.7, alpha);
   #endif
   #ifdef FULL_PASS
+    if (clipped3d(vDotWorld)) discard;   // (the 3D view: the streamlines' clipping)
     gl_FragColor = vec4(col, alpha);
   #endif
 }`;
@@ -2500,6 +2540,7 @@ export function makeDotsMaterial3d(endsPx = 6) {
       u_autoColor:   { value: 1 },
       u_dotColor:    { value: new THREE.Vector3(1, 1, 0.8) },
       u_pointSize:   { value: endsPx },
+      ...makeClipUniforms(),   // (index.html swaps in the streamlines' shared set)
     },
     defines:     { FULL_PASS: 1 },
     depthWrite:  false,

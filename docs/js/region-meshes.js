@@ -20,10 +20,18 @@
 //
 // Shading follows the scene's light (point light or direction, ambient,
 // depth falloff). Glass uses the glass brain's RIM and OPACITY settings:
-// alpha = (1 − |N·V|)^rim × opacity, front faces only. Clip planes do not
-// apply to the meshes.
+// alpha = (1 − |N·V|)^rim × opacity, front faces only. The clipping plane
+// cuts them (clipUniforms, kept up to date by index.html).
+//
+// CAPS: where the plane cuts the solid regions, a flat face closes them.
+// One quad per cut face (two in slice mode), drawn in the plane; its
+// shader looks up the label volume at each pixel (a 3D texture of compact
+// region numbers) and colors the pixel by a small table of the solid
+// regions, or lets it through. The lookup is a trilinear vote over the 8
+// voxels around the point (a region wins where its share reaches 0.5),
+// so the cap's edge is smooth like the mesh's, not voxel steps.
 
-import { LIGHT_FALLOFF_GLSL } from './scene3d.js';
+import { LIGHT_FALLOFF_GLSL, CLIP3D_GLSL, makeClipUniforms } from './scene3d.js';
 
 export const VS = `
 varying vec3 vWorldPos;
@@ -49,8 +57,12 @@ uniform float u_ambient;
 uniform vec3  u_camFwd;
 uniform vec3  u_depthTarget;
 uniform float u_depthRadius;
-` + LIGHT_FALLOFF_GLSL + `
+` + LIGHT_FALLOFF_GLSL + CLIP3D_GLSL + `
 void main() {
+  if (clipped3d(vWorldPos)) discard;
+  // clipped open, solid: its inside (back faces) in its own color, flat —
+  // the cut reads as filled (a cheap stand-in for a cap in the plane)
+  if (u_clipOn > 0.5 && u_glass < 0.5 && !gl_FrontFacing) { gl_FragColor = vec4(u_color * 0.72, 1.0); return; }
   vec3 N = normalize(vNormal);
   // the inner wall faces inward (three.js draws BackSide with the winding
   // flipped, so gl_FrontFacing can't tell); otherwise toward the viewer
@@ -67,6 +79,53 @@ void main() {
   if (u_glass > 2.5) col *= 0.75;                       // the inner wall: a little darker
   else if (u_glass > 0.5) alpha = clamp(pow(1.0 - abs(dot(N, V)), u_rimPow) * u_alphaMult, 0.0, 1.0);
   gl_FragColor = vec4(col, alpha);
+}`;
+
+// the cap: world → voxel (u_w2v), the label volume as compact numbers
+// (u_lab, two bytes per voxel), per number its color and alpha = solid
+// region (u_tab, 256 wide)
+const CAP_VS = `
+varying vec3 vWorld;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorld = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const CAP_FS = `
+precision highp float;
+precision highp int;
+precision highp sampler3D;
+uniform sampler3D u_lab;
+uniform sampler2D u_tab;
+uniform mat4 u_w2v;
+uniform vec3 u_dims;
+varying vec3 vWorld;
+int idAt(ivec3 i) {
+  if (any(lessThan(i, ivec3(0))) || any(greaterThanEqual(i, ivec3(u_dims)))) return 0;
+  vec2 rg = texelFetch(u_lab, i, 0).rg;
+  return int(rg.r * 255.0 + 0.5) + 256 * int(rg.g * 255.0 + 0.5);
+}
+void main() {
+  vec3 v = (u_w2v * vec4(vWorld, 1.0)).xyz;     // voxel coordinates (centres at integers)
+  vec3 b = floor(v), f = v - b;
+  ivec3 ib = ivec3(b);
+  int ids[8]; float ws[8];
+  for (int c = 0; c < 8; c++) {
+    ivec3 o = ivec3(c & 1, (c >> 1) & 1, (c >> 2) & 1);
+    ids[c] = idAt(ib + o);
+    vec3 t = mix(1.0 - f, f, vec3(o));
+    ws[c] = t.x * t.y * t.z;
+  }
+  for (int a = 0; a < 8; a++) {
+    int id = ids[a];
+    if (id == 0) continue;
+    vec4 e = texelFetch(u_tab, ivec2(id - (id / 256) * 256, id / 256), 0);
+    if (e.a < 0.5) continue;                     // not a solid region in 3D
+    float share = 0.0;
+    for (int c = 0; c < 8; c++) if (ids[c] == id) share += ws[c];
+    if (share >= 0.5) { gl_FragColor = vec4(e.rgb * 0.72, 1.0); return; }
+  }
+  discard;
 }`;
 
 function invert3(m) {
@@ -131,6 +190,9 @@ export class RegionMeshes {
     // How a dimmed region is drawn: 'glass' (rim) or 'inside' (glass
     // front, its inner walls solid). setDimMode().
     this.dimMode = 'glass';
+    // CLIPPING: this set's clip uniforms (index.html updates their values)
+    this.clipUniforms = makeClipUniforms();
+    this._cap = null;            // the caps (built when first needed, per label volume)
     this._r = new THREE.Vector3(); this._u = new THREE.Vector3();
     try {
       this.worker = new Worker(new URL('./region-mesh-worker.js', import.meta.url), { type: 'module' });
@@ -144,6 +206,7 @@ export class RegionMeshes {
   setRef(ref) {
     if (ref && this.vol === ref.vol) { this.ref = ref; return; }
     this.clear(false);
+    this._dropCaps();
     this.ref = ref; this.vol = ref ? ref.vol : null; this.gen++;
     this.pending.clear();
     if (ref && this.worker) {
@@ -191,13 +254,52 @@ export class RegionMeshes {
     for (const [w, x] of this.set) { x.focus = on; this._style(w); }
     this._changed();
   }
-  // The nearest solid region surface on a ray (THREE.Raycaster): { label, point: [x,y,z], distance } or null.
+  // The nearest solid region surface on a ray (THREE.Raycaster): { label,
+  // point: [x,y,z], distance } or null — as drawn: what the clipping plane
+  // cut away doesn't count, and a region entered through its cut is hit
+  // at its cap.
   pickSolid(raycaster) {
     if (!this.group.visible) return null;
     const solid = [...this.set.values()].filter(e => e.mesh && e.focus).map(e => e.mesh);
     if (!solid.length) return null;
-    const hit = raycaster.intersectObjects(solid, false)[0];
-    return hit ? { label: hit.object.userData.region, point: hit.point.toArray(), distance: hit.distance } : null;
+    const ray = raycaster.ray, tIn = this.clipEntry(ray.origin, ray.direction);
+    for (const hit of raycaster.intersectObjects(solid, false)) {
+      if (this.clipped(hit.point)) continue;
+      // a back face first: the ray was inside the region already — it came in through the cap
+      const back = hit.face && hit.face.normal.clone().transformDirection(hit.object.matrixWorld).dot(ray.direction) > 0;
+      if (back && tIn !== null && tIn < hit.distance) {
+        const p = ray.origin.clone().addScaledVector(ray.direction, tIn);
+        return { label: hit.object.userData.region, point: p.toArray(), distance: tIn };
+      }
+      return { label: hit.object.userData.region, point: hit.point.toArray(), distance: hit.distance };
+    }
+    return null;
+  }
+  // CLIPPING on the CPU (the test of CLIP3D_GLSL, this set's uniforms):
+  // clipped(p) — p (world, {x,y,z} or [x,y,z]) is cut away;
+  // clipEntry(o, d) — where a ray (unit d) enters the part that is kept,
+  // or null (not cut, or it starts inside).
+  clipped(p) {
+    const u = this.clipUniforms;
+    if (u.u_clipOn.value < 0.5) return false;
+    const n = u.u_clipN.value, q = u.u_clipQ.value, x = p.x ?? p[0], y = p.y ?? p[1], z = p.z ?? p[2];
+    const d = (x - q.x) * n.x + (y - q.y) * n.y + (z - q.z) * n.z, ext = u.u_clipExt.value;
+    return u.u_clipSlab.value > 0.5 ? Math.abs(d) > u.u_clipHalfT.value + ext : d * u.u_clipDir.value < -ext;
+  }
+  clipEntry(o, dir) {
+    const u = this.clipUniforms;
+    if (u.u_clipOn.value < 0.5) return null;
+    const n = u.u_clipN.value, q = u.u_clipQ.value, ext = u.u_clipExt.value;
+    const d0 = (o.x - q.x) * n.x + (o.y - q.y) * n.y + (o.z - q.z) * n.z, dn = dir.x * n.x + dir.y * n.y + dir.z * n.z;
+    if (Math.abs(dn) < 1e-9) return null;
+    if (u.u_clipSlab.value > 0.5) {
+      const H = u.u_clipHalfT.value + ext;
+      if (Math.abs(d0) <= H || Math.sign(dn) === Math.sign(d0)) return null;
+      return (Math.sign(d0) * H - d0) / dn;
+    }
+    const s = u.u_clipDir.value;               // kept: d·s ≥ −ext
+    if (d0 * s >= -ext || dn * s <= 0) return null;
+    return (-ext - d0 * s) / (dn * s);
   }
   setDimMode(mode) {
     if (!['glass', 'inside'].includes(mode)) return this.dimMode;
@@ -217,10 +319,108 @@ export class RegionMeshes {
   // region colors changed (lookup table edits)
   refreshColors() {
     for (const [v, e] of this.set) if (e.mesh) e.mesh.material.uniforms.u_color.value.set(...hexToRaw(this.colorOf(v) || '#ffffff'));
+    if (this._cap) this._cap.dirty = true;
+    this.updateCaps();
     this.render();
   }
 
-  _changed() { this.onChange(); this.render(); }
+  _changed() { if (this._cap) this._cap.dirty = true; this.updateCaps(); this.onChange(); this.render(); }
+
+  // ── CAPS ──
+  // Places (or hides) the caps after the clip uniforms or the set changed.
+  updateCaps() {
+    const u = this.clipUniforms;
+    let solid = false;
+    for (const e of this.set.values()) if (e.focus && e.mesh) { solid = true; break; }
+    const on = u.u_clipOn.value > 0.5 && !!this.ref && solid;
+    if (!on) { if (this._cap) for (const m of this._cap.meshes) m.visible = false; return; }
+    if (!this._cap) this._buildCaps();
+    const C = this._cap;
+    if (!C) return;
+    if (C.dirty) this._fillTable();
+    const THREE = this.THREE, n = u.u_clipN.value.clone().normalize(), q = u.u_clipQ.value;
+    const ext = u.u_clipExt.value, dir = u.u_clipDir.value, slab = u.u_clipSlab.value > 0.5, half = u.u_clipHalfT.value;
+    // kept: d·dir ≥ −ext (half space), |d| ≤ half + ext (slab); d = (p − q)·n
+    const offs = slab ? [half + ext, -(half + ext)] : [-ext * dir];
+    const a = Math.abs(n.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    const e1 = new THREE.Vector3().crossVectors(n, a).normalize(), e2 = new THREE.Vector3().crossVectors(n, e1);
+    C.meshes.forEach((m, k) => {
+      if (k >= offs.length) { m.visible = false; return; }
+      const c = q.clone().addScaledVector(n, offs[k]);
+      const pc = C.centre.clone().addScaledVector(n, -C.centre.clone().sub(c).dot(n));   // the volume's centre, onto the plane
+      m.matrix.makeBasis(e1, e2, n).scale(new THREE.Vector3(C.size, C.size, 1)).setPosition(pc);
+      m.matrixWorldNeedsUpdate = true;
+      m.visible = true;
+    });
+  }
+
+  _buildCaps() {
+    const THREE = this.THREE, ref = this.ref, raw = ref.raw, [nx, ny, nz] = ref.shape;
+    // compact numbers: 0 = background, 1… the label values present
+    const compact = new Map([[0, 0]]), lab = new Uint8Array(raw.length * 2);
+    for (let i = 0; i < raw.length; i++) {
+      const v = raw[i];
+      let c = compact.get(v);
+      if (c === undefined) {
+        c = compact.size;
+        if (c > 65535) { console.warn('region caps: too many labels'); return; }
+        compact.set(v, c);
+      }
+      lab[2 * i] = c & 255; lab[2 * i + 1] = c >> 8;
+    }
+    const labTex = new THREE.Data3DTexture(lab, nx, ny, nz);
+    labTex.format = THREE.RGFormat; labTex.type = THREE.UnsignedByteType;
+    labTex.minFilter = labTex.magFilter = THREE.NearestFilter;
+    labTex.unpackAlignment = 1; labTex.needsUpdate = true;
+    const rows = Math.ceil(compact.size / 256), tab = new Uint8Array(256 * rows * 4);
+    const tabTex = new THREE.DataTexture(tab, 256, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
+    tabTex.minFilter = tabTex.magFilter = THREE.NearestFilter; tabTex.needsUpdate = true;
+    // world ↔ voxel (invAb: rows 0–2 the linear part, row 3 the translation)
+    const M = ref.invAb, t = M.length === 4 ? M[3] : [0, 0, 0];
+    const w2v = new THREE.Matrix4().set(M[0][0], M[0][1], M[0][2], t[0], M[1][0], M[1][1], M[1][2], t[1], M[2][0], M[2][1], M[2][2], t[2], 0, 0, 0, 1);
+    const v2w = w2v.clone().invert();
+    const box = new THREE.Box3();
+    for (const x of [-0.5, nx - 0.5]) for (const y of [-0.5, ny - 0.5]) for (const z of [-0.5, nz - 0.5])
+      box.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(v2w));
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: CAP_VS, fragmentShader: CAP_FS, side: THREE.DoubleSide,
+      // in front of what lies in the same plane (the volume's own cut face, at extend 0)
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+      uniforms: { u_lab: { value: labTex }, u_tab: { value: tabTex }, u_w2v: { value: w2v }, u_dims: { value: new THREE.Vector3(nx, ny, nz) } },
+    });
+    const geo = new THREE.PlaneGeometry(1, 1);
+    const meshes = [0, 1].map(k => {
+      const m = new THREE.Mesh(geo, mat);
+      m.name = 'region cap ' + k; m.matrixAutoUpdate = false; m.frustumCulled = false; m.visible = false;
+      this.group.add(m);
+      return m;
+    });
+    this._cap = { compact, labTex, tabTex, tab, mat, geo, meshes, dirty: true,
+      centre: box.getCenter(new THREE.Vector3()), size: box.getSize(new THREE.Vector3()).length() };
+  }
+
+  // the table: per compact number its color, alpha 255 = a solid region in the set
+  _fillTable() {
+    const C = this._cap;
+    C.tab.fill(0);
+    for (const [v, e] of this.set) {
+      if (!e.focus || !e.mesh) continue;
+      const c = C.compact.get(v);
+      if (c === undefined || c === 0) continue;
+      const rgb = hexToRaw(this.colorOf(v) || '#ffffff');
+      C.tab.set([Math.round(rgb[0] * 255), Math.round(rgb[1] * 255), Math.round(rgb[2] * 255), 255], 4 * c);
+    }
+    C.tabTex.needsUpdate = true;
+    C.dirty = false;
+  }
+
+  _dropCaps() {
+    const C = this._cap;
+    if (!C) return;
+    for (const m of C.meshes) this.group.remove(m);
+    C.labTex.dispose(); C.tabTex.dispose(); C.mat.dispose(); C.geo.dispose();
+    this._cap = null;
+  }
 
   _add(v, focus) {
     this.set.set(v, { focus, mesh: null });
@@ -255,7 +455,7 @@ export class RegionMeshes {
     const THREE = this.THREE;
     const mat = new THREE.ShaderMaterial({
       vertexShader: VS, fragmentShader: FS,
-      uniforms: { ...this.uniforms, u_color: { value: new THREE.Vector3(...hexToRaw(this.colorOf(v) || '#ffffff')) }, u_glass: { value: 0 } },
+      uniforms: { ...this.uniforms, ...this.clipUniforms, u_color: { value: new THREE.Vector3(...hexToRaw(this.colorOf(v) || '#ffffff')) }, u_glass: { value: 0 } },
     });
     const m = new THREE.Mesh(geo, mat);
     m.userData.region = v;
@@ -264,7 +464,7 @@ export class RegionMeshes {
     // the inner walls ('inside' dim mode): the same surface, back faces, solid
     const back = new THREE.Mesh(geo, new THREE.ShaderMaterial({
       vertexShader: VS, fragmentShader: FS, side: THREE.BackSide,
-      uniforms: { ...this.uniforms, u_color: mat.uniforms.u_color, u_glass: { value: 3 } },
+      uniforms: { ...this.uniforms, ...this.clipUniforms, u_color: mat.uniforms.u_color, u_glass: { value: 3 } },
     }));
     back.onBeforeRender = m.onBeforeRender;
     back.visible = false;

@@ -305,7 +305,7 @@ export class SlabRenderer {
     this._cachedTgtMesh = tgtMesh;
   }
 
-  // opts: { selMesh, lineMeshes, srcMesh, tgtMesh, slabMultiplier, lineColor, srcColor, tgtColor, endsPx }
+  // opts: { selMesh, lineMeshes, srcMesh, tgtMesh, slabMm, lineColor, srcColor, tgtColor, endsPx }
   // lineMeshes (optional): the ribbon meshes to draw, e.g. a thinner
   // context sample plus the probe's highlighted lines (probe highlight
   // mode); default [selMesh]. They must share selMesh's materials
@@ -329,8 +329,7 @@ export class SlabRenderer {
     const uDir = vr._rot_dirs[uAx];
     const vDir = vr._rot_dirs[vAx];
 
-    const oopIdx = { sag: 0, cor: 1, axi: 2 };
-    const halfThickMm = opts.slabMultiplier * vox_mm[oopIdx[planeKey]] / 2;
+    const halfThickMm = opts.slabMm / 2;   // (THICKNESS is in mm)
     const camDist = halfThickMm * 4 + 1;
 
     const pp    = vr._planeParams[planeKey + tag];

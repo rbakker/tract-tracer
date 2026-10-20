@@ -43,6 +43,8 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
   background:#838d9b;color:#0a0e14;border-radius:8px 0 0 8px;font-family:inherit;font-size:11px;font-weight:600;
   letter-spacing:0.06em;padding:12px 0;cursor:pointer;user-select:none;position:relative;flex:none;}
 .rail-tab span{text-transform:uppercase;letter-spacing:0.18em;writing-mode:vertical-rl;transform:rotate(180deg);line-height:1.2;white-space:nowrap;padding:2px 0;}
+.rail-tab.short span{padding:8px 0;}
+.rail-tab.empty{background:#59616d;}   /* a data tab with nothing loaded yet */
 .rail-tab:hover{background:#c1c9d4;color:#000;}
 .rail-tab.on{background:var(--panel);color:var(--bright);font-weight:500;z-index:1;
   box-shadow:0 0 0 1px rgba(155,187,255,0.55),0 0 10px 2px rgba(110,160,255,0.45);
@@ -143,6 +145,30 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
 .top-btn.icon-only{padding:5px 8px;}
 .top-btn.icon-only svg{display:block;width:14px;height:14px;}
 .top-btn .icon{font-size:16px;letter-spacing:0;margin-right:4px;vertical-align:-1px;}
+#menu-btn{box-sizing:border-box;width:33.3px;padding-left:0;padding-right:0;text-align:center;}   /* square, as the fullscreen button (×1.2 zoom: 40 px) */
+#menu-btn .icon{margin-right:0;}
+/* CLIPPING: the button pair and its panel */
+.clip-btns{display:flex;}
+/* CLIPPING PLANE: a section of the 3D tab (buildClipPanel) */
+#clip-panel{margin-bottom:4px;}
+#clip-panel .clip-grid{display:grid;grid-template-columns:120px 26px 1fr;align-items:center;gap:4px 6px;margin:2px 0 8px;}
+#clip-panel .clip-grid .nm{display:flex;align-items:center;gap:6px;}
+#clip-panel .clip-grid .brick-btn{width:18px;height:18px;flex:none;}
+#clip-panel .clip-row > .lbl{color:var(--dim);font-size:9px;letter-spacing:0.08em;min-width:64px;}
+#clip-panel .clip-grid .hd{color:var(--dim);font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;}
+#clip-panel .clip-grid .nm{color:var(--text);font-size:10px;}
+#clip-panel .clip-grid .dt-check{margin:0;}
+#clip-panel .clip-row{display:flex;align-items:center;gap:6px;margin:2px 0 4px;}
+#clip-panel .clip-plane-btn{background:transparent;border:1px solid var(--border);color:var(--dim);font:inherit;font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;}
+#clip-panel .clip-plane-btn.sag{--pc:var(--sag);} #clip-panel .clip-plane-btn.cor{--pc:var(--cor);} #clip-panel .clip-plane-btn.axi{--pc:var(--axi);}
+#clip-panel .clip-plane-btn{border-color:var(--pc);color:var(--pc);}
+#clip-panel .clip-plane-btn.on{background:var(--pc);color:#04070a;}
+#clip-panel .clip-plane-btn.on.idle{background:transparent;color:var(--pc);border-style:dashed;}
+#clip-panel .clip-mode-btn{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid var(--border);color:var(--dim);
+  font:inherit;font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;}
+#clip-panel .clip-mode-btn.on{border-color:var(--accent);color:var(--bright);background:rgba(155,187,255,0.12);}
+#clip-panel .dt-scrub{flex:1;min-width:0;}
+#clip-panel label.chk{display:flex;align-items:center;gap:5px;color:var(--text);font-size:10px;cursor:pointer;}
 
 /* ── FLOATING PANELS (FILE / SETTINGS / ABOUT) ──
    Each is now its own independent .app-panel div (see
@@ -445,9 +471,11 @@ button.dt-menu-btn:hover{color:var(--accent);}
 .adv-body{padding:6px 8px 4px;display:flex;flex-direction:column;gap:4px;}
 .adv-row{gap:6px;}
 .adv-row > label{min-width:62px;}
+.adv-body .chan-red > label{color:#e66;} .adv-body .chan-green > label{color:#6c6;} .adv-body .chan-blue > label{color:#79f;}
 .adv-row > label:empty{display:none;}   /* (the second foreground row: its choice under the first's) */
 .adv-row .inline-select{flex:none;}
 .adv-row .dt-scrub{flex:1;min-width:40px;}
+.ctl-row > .dt-scrub{flex:1;min-width:0;}
 .an-sec{border-bottom:1px solid rgba(255,255,255,0.06);}
 .an-head{cursor:default;}
 .an-body{padding:5px 8px 8px;display:flex;flex-direction:column;gap:4px;}
@@ -564,6 +592,7 @@ input[type=file]{display:none;}
   white-space:nowrap;min-width:64px;}
 .ctl-row input[type=range]{flex:1;accent-color:var(--accent2);min-width:0;}
 .ctl-val{color:var(--text);font-size:9px;min-width:42px;text-align:right;}
+.ctl-row.sub > label:first-child{padding-left:10px;}   /* (a row under the row above: probed under ends·color) */
 .view-dir{background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:3px;cursor:pointer;
   font-family:'JetBrains Mono',monospace;font-size:9px;line-height:1;padding:4px 6px;}
 .view-dir:hover{background:var(--accent);color:#090909;}
@@ -701,7 +730,8 @@ input[type=file]{display:none;}
   <div class="rail-tab" role="button" tabindex="0" data-page="streamlines"><span>Tracts</span></div>
   <div class="rail-tab on" role="button" tabindex="0" data-page="probe"><span>Probe</span></div>
   <div class="rail-tab" role="button" tabindex="0" data-page="markers"><span>Markers</span></div>
-  <div class="rail-tab" role="button" tabindex="0" data-page="settings"><span>Settings</span></div>
+  <div class="rail-tab short" role="button" tabindex="0" data-page="3d"><span>3D</span></div>
+  <div class="rail-tab short" role="button" tabindex="0" data-page="2d"><span>2D</span></div>
   <div class="rail-tab" role="button" tabindex="0" data-page="tools"><span>Tools</span></div>
   <button class="rail-fold" title="fold the column (back via ☰)">‹</button>
 </div>
@@ -750,7 +780,7 @@ input[type=file]{display:none;}
   <canvas id="three-canvas"></canvas>
   <!-- Top-left buttons -->
   <div id="top-btns">
-    <button class="top-btn icon-only" id="menu-btn" title="menu" aria-haspopup="true"><span class="icon">☰</span></button>
+    <button class="top-btn" id="menu-btn" title="menu" aria-haspopup="true"><span class="icon">☰</span></button>
     <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
     <!-- the ☰ menu: Load…, the left column's tabs (see section 11b), About… -->
     <div id="main-menu" role="menu">
@@ -759,7 +789,8 @@ input[type=file]{display:none;}
       <button data-page="streamlines">Tracts</button>
       <button data-page="probe">Probe</button>
       <button data-page="markers">Markers</button>
-      <button data-page="settings">Settings</button>
+      <button data-page="3d">3D</button>
+      <button data-page="2d">2D</button>
       <button data-page="tools">Tools</button>
       <button class="mm-about" data-act="about">About…</button>
     </div>
@@ -769,23 +800,16 @@ input[type=file]{display:none;}
   <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.txt,.lut,.json,.zip" style="display:none">
 
 
-  <!-- SETTINGS and TOOLS: pages of the left column, moved there at start
+  <!-- PROBE (top of TRACTS), 3D, 2D and TOOLS: pages of the left column, moved there at start
      (section 11b); parked here, hidden, until then -->
   <div id="left-stash" style="display:none">
 
-    <div id="panel-content-settings" class="panel-content">
-    <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
-      <label>GPU·tier</label>
-      <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>low</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>high</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="ultra" id="quality-ultra"><span>ultra</span></label>
-      </div>
-    </div>
-    <div class="cfg-section" data-tip="Which streamlines are shown, and how.\nThe probe: left-click or drag to move it, scroll to step through slices, Ctrl+Scroll to zoom, right-drag to pan.\nFocus a bundle with the sun icon next to its color (DATA panel, or hover its ends in 3D).">STREAMLINE SELECTION</div>
+    <!-- TRACTS: the probe, above the list of streamline files -->
+    <div id="panel-content-probe" class="panel-content" style="border-bottom:1px solid var(--border);margin-bottom:6px;">
+    <div class="cfg-section" data-tip="Which streamlines are shown, and how.\nThe probe: left-click or drag to move it, scroll to step through slices, Ctrl+Scroll to zoom, right-drag to pan.\nFocus a bundle with the sun icon next to its color (DATA panel, or hover its ends in 3D).">PROBE</div>
     <div class="ctl-row" data-tip="The probe.\noff: no probe, all streamlines shown (the probe panel is hidden).\nselect: show only the streamlines the probe hits.\nhighlight: show all streamlines, the hit ones solid and the rest dimmed (see dimming).">
       <label>probe</label>
-      <div class="clip-radio-row">
+      <div class="clip-radio-row" style="grid-template-columns:repeat(3,auto);justify-content:start;">
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="off" id="probe-mode-off"><span>off</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="select" id="probe-mode-select" checked><span>select</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="highlight" id="probe-mode-highlight"><span>highlight</span></label>
@@ -803,19 +827,20 @@ input[type=file]{display:none;}
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-select" value="ends" id="probe-select-ends"><span>ends</span></label>
       </div>
     </div>
-<div class="ctl-row probe-setting" data-tip="Color of the streamline ends inside the probe sphere (also the color of the probe sphere and ring). None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
-  <label>inner·ends</label>
-  <label class="radio-opt" data-tip="the color of the brain region each end lies in (the label volume shown, or the last one shown)"><input type="radio" autocomplete="off" name="src-color" value="label"> Label</label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="bundle"> Bundle</label>
-  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat" checked><input type="color" autocomplete="off" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
-</div>
-    <div class="ctl-row" data-tip="Opacity of the dimmed streamlines — those the highlight probe doesn't hit, and those outside the focused bundles — times their bundle's own opacity. Lower is dimmer.">
-      <label>dimming</label>
-      <input autocomplete="off" type="range" id="context-slider" min="0" max="100" value="15" step="1">
-      <span class="ctl-val" id="context-val">15%</span>
     </div>
-
-    <div class="cfg-section" data-tip="Streamlines selected by the probe are shown in both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">STREAMLINE RENDERING</div>
+    <!-- 3D: the 3D view -->
+    <div id="panel-content-3d" class="panel-content">
+    <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
+      <label>GPU·tier</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>low</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>high</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="ultra" id="quality-ultra"><span>ultra</span></label>
+      </div>
+    </div>
+    <div class="cfg-section" data-tip="The clipping plane: which parts of the scene it cuts (and the volume solid or glass), along which plane, as a slice or one side.">CLIPPING PLANE</div>
+    <div id="clip-panel"></div>
+    <div class="cfg-section" data-tip="Streamlines selected by the probe are shown in both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">STREAMLINE APPEARANCE</div>
 
 <div class="ctl-row" data-tip="Streamline width in screen pixels. 0 switches lines off entirely (replaces the old None color option). In the 3D view this is the width at the NEAR end of the depth fade (the far end is fixed at 0.5px, always thinner). In the 2D slab panels width is a constant half this value (minimum 1px) — no depth fade there, since an orthographic slice has no meaningful camera depth.">
   <label>line·width</label>
@@ -837,6 +862,12 @@ input[type=file]{display:none;}
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="bundle"> Bundle</label>
   <label class="radio-opt"><input type="radio" autocomplete="off" name="tgt-color" value="flat" checked><input type="color" autocomplete="off" id="tgt-color-picker" value="#40ff00" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
 </div>
+<div class="ctl-row probe-setting sub" data-tip="Color of the streamline ends inside the probe sphere (also the color of the probe sphere and ring). None=off, Bundle=each file's fixed color from a bundle load (falls back to the custom color otherwise), or a custom uniform color.">
+  <label>probed</label>
+  <label class="radio-opt" data-tip="the color of the brain region each end lies in (the label volume shown, or the last one shown)"><input type="radio" autocomplete="off" name="src-color" value="label"> Label</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="bundle"> Bundle</label>
+  <label class="radio-opt"><input type="radio" autocomplete="off" name="src-color" value="flat" checked><input type="color" autocomplete="off" id="src-color-picker" value="#ffffff" style="width:38px;height:20px;border:none;background:none;cursor:pointer;padding-left:1ex;"></label>
+</div>
 <div class="ctl-row" data-tip="Size of the end dots (ends and inner ends) in screen pixels. 0: no end dots.">
   <label>ends·size</label>
   <input autocomplete="off" type="range" id="ends-size" min="0" max="16" step="0.5" value="6">
@@ -853,8 +884,14 @@ input[type=file]{display:none;}
   <input autocomplete="off" type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
   <span class="slider-val" id="shadow-val">0%</span>
 </div>
+    <div class="ctl-row" data-tip="Opacity of the dimmed streamlines — those the highlight probe doesn't hit, and those outside the focused bundles — times their bundle's own opacity. Lower is dimmer.">
+      <label>dimming</label>
+      <input autocomplete="off" type="range" id="context-slider" min="0" max="100" value="15" step="1">
+      <span class="ctl-val" id="context-val">15%</span>
+    </div>
 
-    <div class="cfg-section" data-tip="The glass of the rendered volume (the mortar-only brick in ANATOMY › VOLUME RENDER) and of regions drawn as glass: how thin its rim, how see-through.">GLASS MODE</div>
+
+    <div class="cfg-section" data-tip="The glass of the rendered volume (the mortar-only brick in ANATOMY › IMAGE VOLUME) and of regions drawn as glass: how thin its rim, how see-through.">GLASS MODE</div>
     <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
       <label>rim</label>
       <input autocomplete="off" type="range" id="brain-rim-slider" min="0" max="100" value="33" step="1">
@@ -871,8 +908,7 @@ input[type=file]{display:none;}
       <input autocomplete="off" type="range" id="light-slider" min="-100" max="100" value="0" step="1">
       <span class="ctl-val" id="light-val">center</span>
     </div>
-    <div class="cfg-section" data-tip="Cut the rendered volume open along a section plane.">CLIPPING PLANE</div>
-    <!-- per volume, shown in ANATOMY › VOLUME RENDER › SHADER SETTINGS (moved there while open) -->
+    <!-- per volume, shown in ANATOMY › IMAGE VOLUME › SHADER SETTINGS (moved there while open) -->
     <div id="shader-rows">
     <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from FOREGROUND below, so narrowing FOREGROUND to hide a tissue type can never also erode this outer surface.">
       <label>background</label>
@@ -880,7 +916,7 @@ input[type=file]{display:none;}
         <option value="below" selected>below</option>
         <option value="above">above</option>
       </select>
-      <input autocomplete="off" type="range" id="background-slider" min="1" max="100" value="10" step="1">
+      <input autocomplete="off" type="range" id="background-slider" min="0" max="100" value="10" step="1">
       <span class="ctl-val" id="background-val">0.10</span>
     </div>
     <div class="ctl-row" id="row-cutout" style="display:none;" data-tip="First half of FOREGROUND's combined rule (see the row below for how the two combine into one) — defines what part of the SOLID/GLASS surface stays visible once you're behind an active clip plane with COVER, e.g. isolating grey matter and hiding white matter to reveal what's inside. Everything that fails the combined rule (both rows together) is hidden. ABOVE (default): value must be >= this threshold to count as foreground. BELOW: value must be <= threshold instead. All comparisons inclusive.">
@@ -902,37 +938,15 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="brain-cutout-below-val">1.00</span>
     </div>
     </div>
-    <div class="ctl-row" data-tip="Clip the anatomy against one section plane (streamlines are never clipped): tick CLIP and pick the plane (picking one ticks it). SLICE cuts a thin slab instead — two parallel planes straddling the current plane position, THICKNESS voxels apart — and disables FLIP (a symmetric slab has no side to flip). Otherwise, default clips away the positive (R/A/S) side of the chosen plane; FLIP clips the negative (L/P/I) side instead. COVER paints the cut face with the sampled anatomy, like a 2D slice; turn it off to look past the cut into whatever real tissue lies behind it instead.">
-      <label class="clip-on"><input type="checkbox" class="dt-check" autocomplete="off" id="clip-on">clip</label>
-      <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-sag"><input type="radio" autocomplete="off" name="clip-plane" value="sag"><span>sag</span></label>
-        <label class="clip-radio-opt cro-cor"><input type="radio" autocomplete="off" name="clip-plane" value="cor" checked><span>cor</span></label>
-        <label class="clip-radio-opt cro-axi"><input type="radio" autocomplete="off" name="clip-plane" value="axi"><span>axi</span></label>
-      </div>
-    </div>
-    <div class="clip-sub-row">
-      <label class="ctl-toggle">
-        <input type="checkbox" autocomplete="off" id="clip-slice" checked>
-        <div class="pill"></div>
-        <span class="tog-label">slice</span>
-      </label>
-      <label class="ctl-toggle">
-        <input type="checkbox" autocomplete="off" id="clip-flip">
-        <div class="pill"></div>
-        <span class="tog-label">flip</span>
-      </label>
-      <label class="ctl-toggle">
-        <input type="checkbox" autocomplete="off" id="clip-cover" checked>
-        <div class="pill"></div>
-        <span class="tog-label">cover</span>
-      </label>
-    </div>
 
-    <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.\nPitch = left-right axis · Yaw = up-down · Roll = front-back.\nUse Reset Planes to return to standard orientation.">SLICE PLANES</div>
-    <div class="ctl-row" data-tip="Show streamline segments within a slab of this thickness (× voxel size) around each slice plane.">
+    </div><!-- /panel-content-3d -->
+    <!-- 2D: the sections -->
+    <div id="panel-content-2d" class="panel-content">
+    <div class="cfg-section" data-tip="Rotate the cutting planes used for all slice views.\nPitch = left-right axis · Yaw = up-down · Roll = front-back.\nUse Reset Planes to return to standard orientation.\nThe 3D view's clipping plane follows the sections: rotating them tilts the cut too.">SLICE PLANES</div>
+    <div class="ctl-row" data-tip="Show streamline segments within a slab of this thickness (mm) around each slice plane.\nAlso the thickness of the 3D view's slice cut (3D › CLIPPING PLANE).">
       <label>thickness</label>
       <input autocomplete="off" type="range" id="slab-slider" min="0.5" max="20" value="3" step="0.5">
-      <span class="ctl-val" id="slab-val">3.0×</span>
+      <span class="ctl-val" id="slab-val">3.0 mm</span>
     </div>
     <div class="ctl-row" data-tip="Rotate all section planes around the left-right axis.">
       <label>pitch</label>
@@ -950,7 +964,7 @@ input[type=file]{display:none;}
       <span class="ctl-val" id="roll-val">0°</span>
     </div>
     <button id="rot-reset">reset planes</button>
-    </div><!-- /panel-content-settings -->
+    </div><!-- /panel-content-2d -->
     <div id="panel-content-tools" class="panel-content">
     <div class="cfg-section" data-tip="The 3D view: from where the brain is seen, the centre it turns around, and how large it is shown. Copy it to come back to it later, share it, or put it in a zip's index.json as its opening view.">VIEW</div>
     <div class="ctl-row" data-tip="Turn the brain to be seen from this side: Left, Right, Anterior, Posterior, Superior, Inferior.">
@@ -1184,7 +1198,7 @@ import { VolRenderer }  from './js/vol-renderer.js';
 import { mat3mulVec, eulerToMat3 } from './js/affine.js';
 import { SlabRenderer } from './js/slab-renderer.js';
 import { TrackballControls, buildGlassBrain, makePlaneMesh,
-         makeRibbonLines, makeEndpointDots, computeRibbonDensity, sortRibbonByDepth, setRibbonHighlight, hexToRgbRaw, makeColormapTexture,
+         makeRibbonLines, makeEndpointDots, makeClipUniforms, computeRibbonDensity, sortRibbonByDepth, setRibbonHighlight, hexToRgbRaw, makeColormapTexture,
          setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE,
          BUILTIN_COLORMAPS, writeColormapRow, colormapCSSGradient, sampleStops,
          makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo, dimDensity, lightPosition, DEFAULT_LIGHT_FALLOFF, DEFAULT_AMBIENT } from './js/scene3d.js';
@@ -1324,7 +1338,7 @@ function syncViewOOP(views, cursor) {
     views[key] = [vc[0]+d*n[0], vc[1]+d*n[1], vc[2]+d*n[2]];
   }
 }
-let radius=2, probeOn=true, probeMode='select', probeContext=0.15, probeEndsOnly=false, slabMultiplier=3, endsPx=6;
+let radius=2, probeOn=true, probeMode='select', probeContext=0.15, probeEndsOnly=false, slabMm=3, endsPx=6;
 // RADIUS slider scaling. The slider's numeric max — reaching it (or a
 // value >= it) means "Show All", handled specially in updateProbe rather
 // than relying on radius happening to be numerically huge. Both get
@@ -1624,7 +1638,7 @@ function drawSlice(planeKey, tag) {
   // SAG arm (V on SAG, V on COR, V on AXI) uses SAG voxel size (vox_mm[1]).
   // COR arm uses pixdim[2], AXI arm uses pixdim[3].
   // Which arm is H and which is V depends on the plane — matches the colour mapping.
-  const slabH = (mm, mpp) => mpp ? slabMultiplier * mm / 2 / mpp : 1.0;
+  const slabH = (mm, mpp) => mpp ? slabMm / 2 / mpp : 1.0;   // (the slab: THICKNESS, in mm)
 
   const armWidths = {
     sag: { wH: slabH(vox_mm[1], mpp), wV: slabH(vox_mm[2], mpp) }, // H=COR, V=AXI
@@ -1658,7 +1672,7 @@ function drawSlice(planeKey, tag) {
 	  lineMeshes: lineMeshes2D(),
 	  srcMesh: srcDots,
 	  tgtMesh: tgtDots,
-	  slabMultiplier,
+	  slabMm,   // (THICKNESS, mm)
 	  lineStyle,
 	  srcStyle: endsPx > 0 ? effDotStyle(srcStyle) : { mode: 'hide' },
 	  tgtStyle: endsPx > 0 ? effDotStyle(tgtStyle) : { mode: 'hide' },
@@ -2007,7 +2021,14 @@ function buildShadowsNow() {
   _brainShadowKey = brainShadowKey(); // the occluder goes with the build
   _brainBoxKey = brainBoxKey();
   lineShadows.occluderFn = brainOccluder();
-  lineShadows.build(selMesh, densityVoxelMm(), faintSegments(selMesh), _brainBoxKey === 'none' ? null : brainWorldBox());
+  // segments cut away by the clipping plane cast no shadow either
+  const faint = faintSegments(selMesh), cut = streamlineClipTest();
+  let skip = faint;
+  if (cut) {
+    const g = selMesh.geometry, S = g.attributes.instanceStart.array, E = g.attributes.instanceEnd.array;
+    skip = i => (faint && faint(i)) || cut((S[3*i] + E[3*i]) / 2, (S[3*i+1] + E[3*i+1]) / 2, (S[3*i+2] + E[3*i+2]) / 2);
+  }
+  lineShadows.build(selMesh, densityVoxelMm(), skip, _brainBoxKey === 'none' ? null : brainWorldBox());
 }
 
 // Which segments of a ribbon mesh are drawn translucent (dimmed): the
@@ -2125,7 +2146,7 @@ function brainOccluder() {
       return 1;
     }
     const v = voxel(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
-    return (invert ? 1 - v : v) >= thr ? 1 : 0;
+    return (invert && v >= 0 ? 1 - v : v) >= thr ? 1 : 0;   // (negative: masked out)
   };
 }
 let _brainShadowKey = 'none', _brainShadowTimer = null;
@@ -2350,7 +2371,7 @@ function showHoverEnds(ends) {
   if (_hoverEnds) { scene.remove(_hoverEnds); _hoverEnds.geometry.dispose(); _hoverEnds.material.dispose(); _hoverEnds = null; }
   if (ends && ends.length && _endPick) {
     const pts = [], cols = [], P = _endPick.pos;
-    // The ends' own colors, as drawn (SETTINGS › ends·color, and inner·ends
+    // The ends' own colors, as drawn (3D › ends·color, and probed
     // for ends inside the probe sphere) — 'bundle': the bundle color as the
     // end dots show it (x1.3, see makeEndpointDots).
     const colorOf = (style, bc) => style.mode === 'flat' ? hexToRgbRaw(style.rgb) : bc.map(v => Math.min(1, v * 1.3));
@@ -2577,9 +2598,10 @@ const hitsKey = h => [h.marker ? 'm' + h.marker.rec.file.name + ':' + h.marker.i
   h.vprobe ? 'p' + h.vprobe.count + '@' + h.vprobe.center.map(v => v.toFixed(0)).join(',') : '',
   ].join('|');
 // The regions of the label volume in memory along the mouse ray, front to
-// back (at most 16), clip planes ignored — the meshes aren't clipped, and
-// deep regions stay reachable — up to the first solid surface (wMax). { labels, ras: the first one's entry point }
-// or null. Steps of half a voxel through the whole volume box.
+// back (at most 16), up to the first solid surface (wMax), as drawn: where
+// the clipping plane cut the volume away a region counts only as its mesh
+// (in 3D, and not cut away itself). { labels, ras: the first one's entry
+// point } or null. Steps of half a voxel through the whole volume box.
 const _rgNear = new THREE.Vector3(), _rgFar = new THREE.Vector3();
 function pickRegions(clientX, clientY, wMax = Infinity) {
   const ref = endLabelSrc;
@@ -2604,11 +2626,17 @@ function pickRegions(clientX, clientY, wMax = Infinity) {
   const wN = camDepth(_rgNear.toArray()), wF = camDepth(_rgFar.toArray());
   if (wMax < Infinity && wF > wN) t1 = Math.min(t1, (wMax - wN) / (wF - wN));
   let tFirst = null;
+  const volCut = renderMode !== 'none' ? volumeClipTest() : null, wp = new THREE.Vector3();
   for (let t = t0 + step / 2; t <= t1 && labels.length < 16; t += step) {
     const x = Math.round(o[0] + t * d[0]), y = Math.round(o[1] + t * d[1]), z = Math.round(o[2] + t * d[2]);
     if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) continue;
     const v = raw[x + nx * (y + ny * z)];
-    if (v > 0 && !labels.includes(v)) { labels.push(v); if (tFirst === null) tFirst = t; }
+    if (!(v > 0) || labels.includes(v)) continue;
+    if (volCut) {
+      wp.copy(_rgNear).lerp(_rgFar, t);
+      if (volCut(wp.x, wp.y, wp.z) && !(regionMeshes && regionMeshes.visible && regionMeshes.has(v) && !regionMeshes.clipped(wp))) continue;
+    }
+    labels.push(v); if (tFirst === null) tFirst = t;
   }
   if (!labels.length) return null;
   const p = _rgNear.clone().lerp(_rgFar, tFirst);
@@ -2763,7 +2791,7 @@ function renderCtxMenu() {
     volume: () => {
       if (!activeVolume || !state.get('anat.file')) return; // (always there with a volume)
       const multi = volumes.length > 1;
-      // checkbox: drawn or not (SETTINGS › shader none); sun: solid, or glass (unlit)
+      // checkbox: drawn or not (the volume shader none); sun: solid, or glass (unlit)
       const on = renderMode !== 'none', solidish = (on ? renderMode : _shownRenderMode) === 'solid';
       const cb = document.createElement('input');
       cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = on;
@@ -2941,6 +2969,8 @@ function brickSvg(solid) {
     + '<line x1="1" y1="5.6" x2="15" y2="5.6"/><line x1="1" y1="10.4" x2="15" y2="10.4"/>'
     + '<line x1="8" y1="1" x2="8" y2="5.6"/><line x1="4.5" y1="5.6" x2="4.5" y2="10.4"/><line x1="11.5" y1="5.6" x2="11.5" y2="10.4"/><line x1="8" y1="10.4" x2="8" y2="15"/></g></svg>';
 }
+// region meshes' dim mode ('glass' | 'inside') ⇄ its name in the panel and session
+const dimName = mode => mode === 'inside' ? 'hollow' : 'glass';
 function makeBrickButton() {
   const b = document.createElement('button');
   const on = renderMode !== 'none', solid = (on ? renderMode : _shownRenderMode) === 'solid';
@@ -2957,7 +2987,7 @@ function makeBrickButton() {
   return b;
 }
 // The shader of the rendered volume: 'none' | 'glass' | 'solid' (the
-// bricks and '---' in ANATOMY › VOLUME RENDER, the 3D menu), or
+// bricks and '---' in ANATOMY › IMAGE VOLUME, the 3D menu), or
 // 'translucent' (RIM-LIT, a glowing haze: console only). The one place it
 // changes.
 function setRenderMode(mode) {
@@ -2967,7 +2997,8 @@ function setRenderMode(mode) {
   applyRenderModeUI();
   updateGlassBrainUniforms();
   if (ctxMenu) renderCtxMenu();      // the bricks there,
-  dataStore.refresh();               // and in ANATOMY
+  dataStore.refresh();               // and in ANATOMY,
+  refreshClipSection();              // and in 3D › CLIPPING PLANE
 }
 
 // The label volume in memory: '---' or one of the parcellations.
@@ -3049,10 +3080,19 @@ let clipPlane = 'none';
 let sliceMode = true;   // SLICE on by default (the clip-slice box starts ticked)
 // Default clips away the positive (R/A/S) side; FLIP flips to negative (L/P/I).
 let clipFlip = false;
-// When on (default), the cut face is painted with the sampled anatomy, like
-// a 2D slice. When off, that flat cap is skipped so the ray looks past the
-// cut into whatever real tissue boundary lies behind it.
-let cover = true;
+// The cut face is always painted with the sampled anatomy, like a 2D slice.
+const cover = true;
+// CLIPPING of each part of the scene (the clipping panel, 3D view): whether
+// the plane cuts it, and how far (mm) it may reach past the cut — in slice
+// mode past either face of the slab. One view setting for the whole scene.
+const clipParts = {
+  volume:       { clip: false },
+  parcellation: { clip: false, extend: 5 },
+  segmentation: { clip: false, extend: 5 },
+  isosurface:   { clip: false, extend: 10 },
+  streamlines:  { clip: false, extend: 15 },
+};
+let lastClipPlane = 'cor';   // the plane clipping comes back on with
 // Shows the plane rectangles (default) — independent of clipping. Also
 // switchable from the 3D view: the 3D menu's Cursor row (with the axes).
 let framesVisible = true;
@@ -3127,6 +3167,7 @@ function updateCursorAxes() {
 // raymarcher — the tractogram LineSegments mesh is untouched, so
 // streamlines never get cut.
 function updateClipUniforms() {
+  updateClip3D();
   if (!glassBrainMesh) return;
   const u = glassBrainMesh.material.uniforms;
   const modelMatrix = u.u_model.value;   // THREE.Matrix4 (local voxel-index -> world/RAS)
@@ -3142,7 +3183,7 @@ function updateClipUniforms() {
     // hide positive side, keep negative. Default (not inverted) is clip+,
     // per the requested "default positive side is clipped".
     let dir = 0;
-    if (clipPlane === k) dir = clipFlip ? 1 : -1;
+    if (clipPlane === k && clipParts.volume.clip) dir = clipFlip ? 1 : -1;
 
     if (dir !== 0 && haveAnat) {
       const vc = state.get('tgt.view.'+k) || state.get('tgt.cursor');
@@ -3166,7 +3207,93 @@ function updateClipUniforms() {
   }
   u.u_fillIn.value = cover ? 1.0 : 0.0;
   u.u_sliceMode.value = sliceMode ? 1.0 : 0.0;
-  u.u_sliceThickness.value = slabMultiplier; // reusing THICKNESS - see its declaration for why no unit conversion is needed
+  u.u_sliceThickness.value = slabMm; // THICKNESS in mm: the shader's distances along u_clipNormal are mm (see its declaration)
+}
+
+// CLIPPING of the other parts: the plane in world mm (through the cursor,
+// rotated as the sections), into each part's shared clip uniforms.
+const clipU = { streamlines: makeClipUniforms() };   // (the meshes' sets live on their owners)
+// (the owners are set up later in this script: until then, not there yet)
+const clipSets = () => {
+  const out = [['streamlines', clipU.streamlines]];
+  try { if (regionMeshes) out.push(['parcellation', regionMeshes.clipUniforms]); } catch (e) {}
+  try { if (segMeshes) out.push(['segmentation', segMeshes.clipUniforms]); } catch (e) {}
+  try { if (volumeSurfaces) out.push(['isosurface', volumeSurfaces.clipUniforms]); } catch (e) {}
+  return out;
+};
+function updateClip3D() {
+  const on = clipPlane !== 'none' && !!state.get('anat.file');
+  let n = null, q = null;
+  if (on) {
+    const i = PLANE_AXIS_INDEX[clipPlane], d = vr._rot_dirs && vr._rot_dirs[i];
+    const vc = state.get('tgt.view.' + clipPlane) || state.get('tgt.cursor');
+    if (d && vc) { n = d; q = vc; }
+  }
+  for (const [part, u] of clipSets()) {
+    if (!u) continue;
+    const active = !!(n && clipParts[part].clip);
+    u.u_clipOn.value = active ? 1 : 0;
+    if (!active) continue;
+    u.u_clipN.value.set(n[0], n[1], n[2]);
+    u.u_clipQ.value.set(q[0], q[1], q[2]);
+    u.u_clipDir.value = clipFlip ? 1 : -1;
+    u.u_clipSlab.value = sliceMode ? 1 : 0;
+    u.u_clipHalfT.value = slabMm * 0.5;
+    u.u_clipExt.value = clipParts[part].extend || 0;
+  }
+  setLineClipDefine(clipU.streamlines.u_clipOn.value > 0.5);
+  // the region caps follow the plane
+  try { if (regionMeshes) regionMeshes.updateCaps(); } catch (e) {}
+  try { if (segMeshes) segMeshes.updateCaps(); } catch (e) {}
+  // the shadows: cast only by what is drawn — rebuilt when the cut changes
+  const key = streamlineClipKey();
+  if (key !== _lineClipKey) { _lineClipKey = key; try { if (selMesh) shadowsChanged(); } catch (e) {} }
+}
+let _lineClipKey = '';
+const streamlineClipKey = () => { const u = clipU.streamlines; return u.u_clipOn.value < 0.5 ? 'off'
+  : [u.u_clipN.value.toArray(), u.u_clipQ.value.toArray(), u.u_clipDir.value, u.u_clipSlab.value, u.u_clipHalfT.value, u.u_clipExt.value].join('|'); };
+// the volume's cut (as the raymarcher's): fn(x, y, z) → cut away, or null
+function volumeClipTest() {
+  if (!volumeClipped()) return null;
+  const d = vr._rot_dirs && vr._rot_dirs[PLANE_AXIS_INDEX[clipPlane]];
+  const q = state.get('tgt.view.' + clipPlane) || state.get('tgt.cursor');
+  if (!d || !q) return null;
+  const dir = clipFlip ? 1 : -1, half = slabMm * 0.5, slab = sliceMode;
+  return (x, y, z) => { const s = (x - q[0]) * d[0] + (y - q[1]) * d[1] + (z - q[2]) * d[2];
+    return slab ? Math.abs(s) > half : s * dir < 0; };
+}
+// the same test as CLIP3D_GLSL, for a world point (null: nothing is cut)
+function streamlineClipTest() {
+  const u = clipU.streamlines;
+  if (u.u_clipOn.value < 0.5) return null;
+  const n = u.u_clipN.value, q = u.u_clipQ.value, dir = u.u_clipDir.value, slab = u.u_clipSlab.value > 0.5,
+        half = u.u_clipHalfT.value, ext = u.u_clipExt.value;
+  return (x, y, z) => { const d = (x - q.x) * n.x + (y - q.y) * n.y + (z - q.z) * n.z;
+    return slab ? Math.abs(d) > half + ext : d * dir < -ext; };
+}
+// streamlines: the clip test compiled in only while they are clipped (a
+// shader that can discard costs some GPUs their early depth test)
+let _lineClipDefine = false;
+function setLineClipDefine(on) {
+  let mats = null;
+  try { mats = ribbonMaterials; } catch (e) { return; }
+  if (!mats) { _lineClipDefine = false; return; }
+  if (on === _lineClipDefine) return;
+  _lineClipDefine = on;
+  for (const m of [ribbonMaterials.opaque, ribbonMaterials.faint]) {
+    if (!m) continue;
+    if (on) m.defines.CLIP3D = 1; else delete m.defines.CLIP3D;
+    m.needsUpdate = true;
+  }
+}
+function clipifyRibbon() {   // (new ribbon materials: the shared clip uniforms)
+  if (!ribbonMaterials) return;
+  for (const m of [ribbonMaterials.opaque, ribbonMaterials.faint]) if (m) Object.assign(m.uniforms, clipU.streamlines);
+  _lineClipDefine = false;
+  updateClip3D();
+}
+function clipifyDots() {
+  for (const d of [srcDots, tgtDots]) if (d && d.material && d.material.uniforms) Object.assign(d.material.uniforms, clipU.streamlines);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3203,6 +3330,7 @@ function opacityFromSlider(raw) {
 // with equally good precision depending on their own below/above
 // selector, so a curve skewed toward one end wouldn't make sense for
 // either of them the way it does for a typically-near-zero-only quantity.
+const BG_EPS = 1e-6;   // (see updateGlassBrainUniforms: BACKGROUND counts its own level)
 function linearFromSlider(raw) {
   return raw/100;
 }
@@ -3314,8 +3442,12 @@ function updateGlassBrainUniforms() {
   }
   const u = glassBrainMesh.material.uniforms;
   u.u_alpha.value  = glassBrainAlpha;
-  u.u_thresh.value = backgroundThresh;
-  u.u_background.value = backgroundThresh;
+  // BACKGROUND is "at or below" the level ("at or above" when flipped):
+  // the shaders and the CPU copies test tissue as value >= threshold, so
+  // the threshold sits a hair past the level (an exact 0 at level 0 is
+  // background)
+  u.u_thresh.value = backgroundThresh + BG_EPS;
+  u.u_background.value = backgroundThresh + (bgInvert ? -BG_EPS : BG_EPS);
   u.u_bgInvert.value = bgInvert ? 1 : 0;
   u.u_cutoutT1.value = cutoutT1;
   u.u_cutoutBelowThresh.value = cutoutBelowThresh;
@@ -3653,7 +3785,7 @@ function updateProbe(opts = {}){
     if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
     if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
     _lastDotsProbe = dotsProbe;
-    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip()));
+    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip())); clipifyDots();
     tMark('end dots');
     if(slabRenderer) slabRenderer.invalidate(selMesh);
     updateScene3d(); tMark('3D', true);
@@ -3736,6 +3868,7 @@ function updateProbe(opts = {}){
     selMesh = makeRibbonLines(renderStreamlines, lineWidthPx, 0.5, _lastBundleInfo, fieldInfo, styleInfo);
     tMark('build mesh');
     ribbonMaterials = { opaque: selMesh.material, faint: selMesh.faintMesh.material };
+    clipifyRibbon();
     if (_hl) _hl.mesh = selMesh;
     syncContextUniform();
     setRibbonFaintMode(selMesh, anyFaint());
@@ -3765,7 +3898,7 @@ function updateProbe(opts = {}){
     buildEndPickList(renderIds);
     updateRibbonDensity(); tMark('density');
     shadowsChanged(); tMark('shadows');
-    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip()));
+    ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip())); clipifyDots();
     tMark('end dots');
   }
   if(slabRenderer) slabRenderer.invalidate(selMesh);
@@ -3809,7 +3942,7 @@ function rebuildDots() {
   if (!renderStreamlines || !renderStreamlines.length) return;
   if(srcDots){scene.remove(srcDots);srcDots.geometry.dispose();srcDots=null;}
   if(tgtDots){scene.remove(tgtDots);tgtDots.geometry.dispose();tgtDots=null;}
-  ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip()));
+  ({src: srcDots, tgt: tgtDots} = makeEndpointDots(renderStreamlines, _lastDotsProbe, endsPx, renderer3.getPixelRatio(), _lastBundleInfo, dotsSkip())); clipifyDots();
   if(slabRenderer) slabRenderer.invalidate(selMesh);
   updateScene3d();
 }
@@ -4034,11 +4167,14 @@ function saveTck(){
 function collectState() {
   return {
     settings: {
-      radius, probeOn, probeMode, probeContext, probeEndsOnly, slabMultiplier, endsPx, lineWidthPx, reflectance,
+      radius, probeOn, probeMode, probeContext, probeEndsOnly, slabMm, endsPx, lineWidthPx, reflectance,
       lineStyle, srcStyle, tgtStyle,
       glassBrainAlpha, glassBrainRimPow,
       pitch, yaw, roll,
-      renderMode, qualityTier, clipPlane, clipFlip, cover, framesVisible, cursorAxesOn,
+      renderMode, qualityTier, clipPlane, clipFlip, sliceMode, framesVisible, cursorAxesOn,
+      clipParts: JSON.parse(JSON.stringify(clipParts)),
+      // how dimmed regions are drawn: 'glass' or 'hollow'
+      dimmedRegions: { parcellation: regionMeshes ? dimName(regionMeshes.dimMode) : 'glass', segmentation: segMeshes ? dimName(segMeshes.dimMode) : 'glass' },
     },
     // the ANATOMY tab: which volume plays which role, and each volume's own settings
     anatomy: {
@@ -4057,7 +4193,7 @@ function collectState() {
           ...(sh ? { background: { [sh.bgInvert ? "above" : "below"]: +sh.backgroundThresh.toPrecision(3) },
                      foreground: { [sh.cutoutRow1Above ? 'above' : 'below']: +sh.cutoutT1.toFixed(3),
                                    [sh.cutoutRow2AndBelow ? 'and_below' : 'or_above']: +sh.cutoutBelowThresh.toFixed(3) } } : {}),
-          ...(v.surface && v.surface.level != null ? { surface: { level: v.surface.level, color: v.surface.color } } : {}),
+          ...(v.surface && v.surface.level != null ? { surface: { level: v.surface.level, color: v.surface.color, shader: v.surface.glass ? 'glass' : 'solid' } } : {}),
         };
       }),
     },
@@ -5145,13 +5281,13 @@ function applyRenderModeUI() {
   // OPACITY only actually does anything in RIM-LIT (kept visible-but-
   // disabled in GLASS, same as before).
   const isSolid = renderMode === 'solid';
-  // (OPACITY and RIM: SETTINGS › GLASS MODE, always shown — they also set glass regions)
+  // (OPACITY and RIM: 3D › GLASS MODE, always shown — they also set glass regions)
   document.getElementById('row-cutout').style.display  = isSolid ? '' : 'none';
   document.getElementById('row-cutout-below').style.display = isSolid ? '' : 'none';
 }
 // The shader to come back to when the volume is switched on again (3D menu).
 let _shownRenderMode = 'glass';
-// ── Per-volume shader settings (ANATOMY › VOLUME RENDER › SHADER SETTINGS) ──
+// ── Per-volume shader settings (ANATOMY › IMAGE VOLUME › SHADER SETTINGS) ──
 // background and foreground thresholds, and solid or glass, are kept per
 // volume (vol.shader / vol.shaderMode): stored when another volume is
 // rendered, restored when it is rendered again; a volume rendered for the
@@ -5178,37 +5314,150 @@ function restoreShaderControls() {
 }
 applyRenderModeUI(); // reflect the default MODE (glass) on load
 SHADER_DEFAULTS = captureShader();
-parkShaderRows();   // (shown in ANATOMY › VOLUME RENDER › SHADER SETTINGS, not in SETTINGS)
+parkShaderRows();   // (shown in ANATOMY › IMAGE VOLUME › SHADER SETTINGS, not in 3D)
 window.setRenderMode = mode => { setRenderMode(mode); return renderMode; }; // console: 'none' | 'glass' | 'solid' | 'translucent' (rim-lit)
 // CLIP: the box switches clipping on/off; the plane buttons pick the
 // plane (COR at start) and, picked while off, switch it on too.
-const clipOnEl = document.getElementById('clip-on');
-const chosenClipPlane = () => document.querySelector('input[name="clip-plane"]:checked').value;
-clipOnEl.addEventListener('change', () => {
-  clipPlane = clipOnEl.checked ? chosenClipPlane() : 'none';
+// ── CLIPPING PLANE (a section of the 3D tab) ──
+// A table of the parts in the scene — whether
+// each is cut (clipping is on while any is) and how far it may reach past
+// the cut, the volume's bricks switching solid ⇄ glass — then the plane
+// (sag/cor/axi), the mode — slice (then its thickness) or one-sided (then
+// flip sides) — and the hollow shader for dimmed regions. Clipping the
+// volume makes it solid.
+const clipPanel = document.getElementById('clip-panel');
+const volumeClipped = () => clipPlane !== 'none' && clipParts.volume.clip;
+// Clipping is on while any part is ticked in the table, along the chosen
+// plane (lastClipPlane, COR at start).
+const clipAnyPart = () => Object.values(clipParts).some(c => c.clip);
+function setClip({ plane, flip, slice } = {}) {
+  const wasClipped = volumeClipped();
+  if (plane) lastClipPlane = plane;
+  if (flip !== undefined) clipFlip = !!flip;
+  if (slice !== undefined) sliceMode = !!slice;
+  clipPlane = clipAnyPart() ? lastClipPlane : 'none';
+  if (!wasClipped && volumeClipped() && renderMode === 'glass') setRenderMode('solid');   // (a cut reads as a cut on a solid)
+  refreshClipSection();   // (and the section)
   updatePlaneMeshes();
-});
-document.querySelectorAll('input[name="clip-plane"]').forEach(r=>{
-  r.addEventListener('click', ()=>{   // (click, not change: also the plane already chosen switches clipping on)
-    clipOnEl.checked = true;
-    clipPlane = r.value;
-    updatePlaneMeshes();
-  });
-});
-document.getElementById('clip-flip').disabled = sliceMode; // (FLIP: no effect on a symmetric slab)
-document.getElementById('clip-slice').addEventListener('change', e=>{
-  sliceMode = e.target.checked;
-  document.getElementById('clip-flip').disabled = sliceMode; // FLIP has no effect on a symmetric slab
-  updatePlaneMeshes();
-});
-document.getElementById('clip-flip').addEventListener('change', e=>{
-  clipFlip = e.target.checked;
-  updatePlaneMeshes();
-});
-document.getElementById('clip-cover').addEventListener('change', e=>{
-  cover = e.target.checked;
-  updatePlaneMeshes();
-});
+}
+function refreshClipSection() {   // (the section in the 3D tab; maybe before what it lists exists)
+  try { buildClipPanel(); } catch (e) {}
+}
+// the parts listed: those in the scene now
+function clipPartsShown() {
+  const parts = [];
+  if (activeVolume) parts.push(['volume', 'volume']);
+  if (wantedLabelVol()) parts.push(['parcellation', 'parcellation']);
+  if (segVol) parts.push(['segmentation', 'segmentation']);
+  if (overlayVol) parts.push(['isosurface', 'isosurface']);
+  if (groups.length) parts.push(['streamlines', 'streamlines']);
+  return parts;
+}
+let _clipPanelKey = '';
+function buildClipPanel() {
+  const p = clipPanel;
+  p.innerHTML = '';
+  const b = document.createElement('div');
+  const row = label => {
+    const r = document.createElement('div'); r.className = 'clip-row';
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = label;
+    r.appendChild(l); b.appendChild(r);
+    return r;
+  };
+  // the parts: clip or not, and how far past the cut; the volume's bricks: solid ⇄ glass
+  const parts = clipPartsShown();
+  _clipPanelKey = parts.map(x => x[0]).join();
+  if (parts.length) {
+    const g = document.createElement('div'); g.className = 'clip-grid';
+    g.innerHTML = '<span class="hd">part</span><span class="hd">clip</span><span class="hd">extend</span>';
+    for (const [key, name] of parts) {
+      const cp = clipParts[key];
+      const nm = document.createElement('span'); nm.className = 'nm';
+      nm.appendChild(document.createTextNode(name));
+      if (key === 'volume') {   // its bricks after the name: solid ⇄ glass
+        const on = renderMode !== 'none', solid = (on ? renderMode : _shownRenderMode) === 'solid';
+        const bt = document.createElement('button');
+        bt.className = 'brick-btn' + (on ? '' : ' grey');
+        bt.innerHTML = brickSvg(solid);
+        bt.dataset.tip = (solid ? 'solid' : 'glass') + ' — click: ' + (solid ? 'glass (rim and opacity: 3D › GLASS MODE)' : 'solid');
+        bt.addEventListener('click', e => {
+          e.stopPropagation();
+          const m = solid ? 'glass' : 'solid';
+          if (on) setRenderMode(m); else _shownRenderMode = m;
+          if (activeVolume) activeVolume.shaderMode = m;
+          refreshClipSection(); registerVolumeItems(); buildClipPanel();
+        });
+        nm.appendChild(bt);
+      }
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = cp.clip;
+      cb.dataset.tip = 'cut ' + name + ' by the clipping plane';
+      cb.addEventListener('change', () => { cp.clip = cb.checked; setClip(); });
+      g.append(nm, cb);
+      if (key === 'volume') { g.appendChild(document.createElement('span')); continue; }
+      const ex = makeSliderRow('', { min: 0, max: 50, step: 0.5, value: cp.extend, format: v => v.toFixed(1) + ' mm',
+        onInput: v => { cp.extend = v; updateClip3D(); render3D(); } }).querySelector('.dt-scrub');
+      ex.dataset.tip = 'how far ' + name + ' may reach past the cut (in slice mode: past either face of the slab) — it sticks out of the cut';
+      if (!cp.clip) ex.style.opacity = '0.4';
+      g.appendChild(ex);
+    }
+    b.appendChild(g);
+  }
+  const on = clipPlane !== 'none';
+  // plane
+  const r1 = row('plane');
+  for (const k of ['sag', 'cor', 'axi']) {
+    const bt = document.createElement('button');
+    bt.className = 'clip-plane-btn ' + k + (lastClipPlane === k ? ' on' : '') + (on ? '' : ' idle');
+    bt.textContent = k.toUpperCase();
+    bt.dataset.tip = 'clip along the ' + { sag: 'sagittal', cor: 'coronal', axi: 'axial' }[k] + ' plane, through the cursor';
+    bt.addEventListener('click', () => setClip({ plane: k }));
+    r1.appendChild(bt);
+  }
+  // mode: slice or one-sided; below it, the slab's thickness or which side
+  const r2 = row('mode');
+  for (const [slice, text, tip] of [[true, 'slice', 'keep a slab around the plane'], [false, 'one-sided', 'keep one side of the plane']]) {
+    const bt = document.createElement('button');
+    bt.className = 'clip-mode-btn' + (sliceMode === slice ? ' on' : '');
+    bt.textContent = text; bt.dataset.tip = tip;
+    bt.addEventListener('click', () => setClip({ slice }));
+    r2.appendChild(bt);
+  }
+  if (sliceMode) {
+    const r = row('thickness');
+    const th = makeSliderRow('', { min: 0.5, max: 20, step: 0.5, value: slabMm, format: v => v.toFixed(1) + ' mm',
+      onInput: v => { const el = document.getElementById('slab-slider'); el.value = v; el.dispatchEvent(new Event('input')); } }).querySelector('.dt-scrub');
+    th.dataset.tip = 'the slab\'s thickness (also the slab of streamlines in the 2D sections)';
+    r.appendChild(th);
+  } else {
+    const r = row('');
+    const fl = document.createElement('label'); fl.className = 'chk';
+    fl.innerHTML = '<input type="checkbox" class="dt-check"' + (clipFlip ? ' checked' : '') + '>flip sides';
+    fl.dataset.tip = 'keep the other side (L/P/I instead of R/A/S)';
+    fl.querySelector('input').addEventListener('change', e => setClip({ flip: e.target.checked }));
+    r.appendChild(fl);
+  }
+  // dimmed regions (sun off) of the parcellation and segmentation: glass, or hollow
+  if (wantedLabelVol() || segVol) {
+    const r3 = document.createElement('div'); r3.className = 'clip-row';
+    const hl = document.createElement('label'); hl.className = 'chk';
+    const hollow = !!(regionMeshes && regionMeshes.dimMode === 'inside');
+    hl.innerHTML = '<input type="checkbox" class="dt-check"' + (hollow ? ' checked' : '') + '>hollow shader for dimmed regions/segments';
+    hl.dataset.tip = 'dimmed regions (sun off) as glass with their far inner walls solid: the shape, and what is inside it';
+    hl.querySelector('input').addEventListener('change', e => {
+      const m = e.target.checked ? 'inside' : 'glass';
+      for (const rm of [regionMeshes, segMeshes]) if (rm) rm.setDimMode(m);
+    });
+    r3.appendChild(hl);
+    b.appendChild(r3);
+  }
+  p.append(b);
+}
+// the parts change (a volume, a parcellation, streamlines loaded): the
+// panel follows (registered with the data store once that exists)
+function clipPanelFollow() {
+  if (clipPartsShown().map(x => x[0]).join() !== _clipPanelKey) buildClipPanel();
+}
+refreshClipSection();
 document.getElementById('shadow-slider').addEventListener('input', e => {
   document.getElementById('shadow-val').textContent = e.target.value + '%';
   setShadowAmount(+e.target.value / 100);
@@ -5722,16 +5971,29 @@ function placeTipAt(e) {
   if (y + h > window.innerHeight - 4) y = Math.max(4, e.clientY - pad - h);
   tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
 }
-document.addEventListener('mouseover', e => {
-  if (recentTouch()) return;                // no hover tips for a finger
-  const el = e.target.closest ? e.target.closest('[title],[data-tip]') : null;
+// When a tip shows: only once the mouse rests on an element with a tip
+// (TIP_REST_MS without moving) — passing over the panel shows none. Shown,
+// it follows the mouse while it stays on that element; leaving it hides the
+// tip, and the next one again waits for the mouse to rest. No tips while a
+// button is down (dragging a slider, orbiting), nor again on the element
+// that was being used, until the mouse has left it.
+const TIP_REST_MS = 250;
+let _tipCand = null, _tipRestTimer = 0, _tipLastEvt = null, _tipButtons = false, _tipUsed = null;
+function tipElAt(target) { return target && target.closest ? target.closest('[title],[data-tip]') : null; }
+function showTipFor(el, e) {
   const text = el && tipTextOf(el);
-  if (!text) { hideTip(); return; }
-  if (el === _tipOwner) return;
+  if (!text) return;
   _tipOwner = el;
   tipEl.textContent = text.replace(/\\n/g, '\n');
   tipEl.style.display = 'block';
   placeTipAt(e);
+}
+document.addEventListener('mouseover', e => {
+  if (recentTouch()) return;                // no hover tips for a finger
+  const el = tipElAt(e.target);
+  if (el === _tipOwner) return;
+  if (_tipOwner) hideTip();
+  _tipCand = el && el !== _tipUsed ? el : null;
 });
 // Convert titles as soon as they appear (rows re-render, buttons retitle
 // themselves), so the browser's delayed tooltip never shows at all.
@@ -5748,15 +6010,35 @@ new MutationObserver(muts => {
   }
 }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
 document.addEventListener('mousemove', e => {
-  if (!_tipOwner) return;
-  if (!_tipOwner.isConnected) { hideTip(); return; }
-  placeTipAt(e);
+  _tipLastEvt = e;
+  if (_tipOwner) {
+    if (!_tipOwner.isConnected) { hideTip(); return; }
+    placeTipAt(e);
+    return;
+  }
+  clearTimeout(_tipRestTimer);              // moving: wait for it to rest
+  if (!_tipCand || _tipButtons || e.buttons) return;
+  _tipRestTimer = setTimeout(() => {
+    const el = _tipCand, ev = _tipLastEvt;
+    if (!el || !el.isConnected || _tipButtons || el === _tipUsed) return;
+    if (tipElAt(document.elementFromPoint(ev.clientX, ev.clientY)) !== el) return;   // (left it meanwhile)
+    showTipFor(el, ev);
+  }, TIP_REST_MS);
 });
 document.addEventListener('mouseout', e => {
-  if (_tipOwner && !(e.relatedTarget && _tipOwner.contains(e.relatedTarget))) hideTip();
+  const leaving = el => el && !(e.relatedTarget && el.contains(e.relatedTarget));
+  if (leaving(_tipOwner)) hideTip();
+  if (leaving(_tipUsed)) _tipUsed = null;
+  if (leaving(_tipCand)) { _tipCand = null; clearTimeout(_tipRestTimer); }
 });
-// A click hides the tip (the row under it may be re-rendered away).
-document.addEventListener('pointerdown', () => hideTip(), true);
+// Using a control hides the tip (the row under it may be re-rendered away),
+// and keeps that element's tip away until the mouse has left it.
+document.addEventListener('pointerdown', e => {
+  _tipButtons = true; clearTimeout(_tipRestTimer);
+  _tipUsed = tipElAt(e.target);
+  hideTip();
+}, true);
+document.addEventListener('pointerup', () => { _tipButtons = false; }, true);
 document.getElementById('rot-reset').addEventListener('click',()=>{
   pitch=yaw=roll=0;
   ['pitch','yaw','roll'].forEach(a=>{document.getElementById(a+'-slider').value=0;document.getElementById(a+'-val').textContent='0°';});
@@ -5836,7 +6118,7 @@ document.querySelectorAll('input[name="probe-select"]').forEach(r=>{
   });
 });
 document.getElementById('slab-slider').addEventListener('input',e=>{
-  slabMultiplier=+e.target.value;document.getElementById('slab-val').textContent=slabMultiplier.toFixed(1)+'×';
+  slabMm=+e.target.value;document.getElementById('slab-val').textContent=slabMm.toFixed(1)+' mm';
   updateSlicesA(); updateSlicesB();
   updatePlaneMeshes(); // also pushes u_sliceThickness to the 3D SLICE clip, not just the 2D streamline slab
 });
@@ -6205,9 +6487,11 @@ async function dispatchOpenedFiles(rawFiles){
   if (pendingAutoLut && resolveAutoLut() === activeVolume) activeChanged = true;
 
   if (newVols.length) {
-    // Load the first new volume; the rest are listed, classified in the
-    // background, and loaded when selected.
-    state.update({ 'anat.file': newVols[0].file });
+    // Load one new volume — a scan rather than a label volume when the drop
+    // has both, whatever the order of the files (a re-packed zip lists them
+    // differently); the rest are listed, classified in the background, and
+    // loaded when selected.
+    state.update({ 'anat.file': firstToShow(newVols).file });
     did = true;
   } else if (activeChanged) {
     applyActiveVolumeDisplay();
@@ -6215,6 +6499,15 @@ async function dispatchOpenedFiles(rawFiles){
     registerVolumeItems();
   }
   return did;
+}
+
+// The volume of a drop to show first: not one known (manifest, lookup table)
+// or named (aseg, aparc, dseg, seg, label, mask, parc, atlas) as a label
+// volume, when there is another; else the first.
+const LABEL_NAME_RE = /(^|[^a-z])(a?seg|aparc|dseg|label|labels|mask|parc|parcellation|atlas|wmparc)([^a-z]|$)/i;
+function firstToShow(vols) {
+  const labelish = v => v.category === 'parcellation' || LABEL_NAME_RE.test(volumeBaseName(v.file.name));
+  return vols.find(v => !labelish(v)) || vols[0];
 }
 
 // Makes another listed volume the active one (radio select in the FILE
@@ -6255,6 +6548,7 @@ document.getElementById('fi-load').addEventListener('change', async e => {
 // wires each item's on/off checkbox to what little visibility control
 // the renderer currently exposes.
 const dataStore = new LoadedDataStore(); // shown in the left column's tabs (section 11b)
+dataStore.listen(clipPanelFollow);
 
 function rgbRawToHex([r, g, b]) {
   const c = v => Math.max(0, Math.min(255, Math.round(v * 255))).toString(16).padStart(2, '0');
@@ -6585,7 +6879,7 @@ function buildLabelList(vol, el, rm = regionMeshes) {
 // ── The ANATOMY tab: one section per role ──────────────────
 // Each loaded volume can play these roles; each section is one select
 // (which volume) and, below it, that volume's settings for the role:
-//   VOLUME RENDER  the volume raymarched in 3D and shown in the sections
+//   IMAGE VOLUME   the volume raymarched in 3D and shown in the sections
 //                  ('---': none in 3D) — intensity, apply mask, label colors
 //   ISOSURFACE OVERLAY  another scalar volume as a surface at a level of its
 //                  own values (a vessel map, a lesion) — one at a time
@@ -6658,7 +6952,7 @@ function volumeNameRow(vol, tag) {
 function freeUnused() {
   for (const v of volumes) {
     if (v === activeVolume || v === overlayVol) continue;
-    if (v.surface && v.surface.loaded) { volumeSurfaces.drop(v); v.surface.loaded = false; v.surface.field = null; v.surface.on = false; }
+    if (v.surface && v.surface.loaded) { volumeSurfaces.drop(v); v.surface.loaded = false; v.surface.field = null; v.surface.rgb = null; v.surface.on = false; }
     v.maskCache = null;
   }
 }
@@ -6693,9 +6987,9 @@ function renderAnatomyPane(el) {
   const opts = list => [['', '---'], ...list.map((v, i) => [String(i), v.label])];
   const kind = v => v.category == null ? 'checking…' : v.isColor ? 'colour' : v.category === 'parcellation' ? 'labels' : 'scan';
 
-  // VOLUME RENDER
+  // IMAGE VOLUME
   const shown = renderMode !== 'none' ? activeVolume : null;
-  anatomySection(el, 'Volume render', 'The volume raymarched in 3D and shown in the 2D sections.',
+  anatomySection(el, 'Image volume', 'The image volume (a scan) raymarched in 3D and shown in the 2D sections.',
     opts(volumes), idx(volumes, shown), value => {
       if (value === '') { setRenderMode('none'); registerVolumeItems(); return; }
       const v = volumes[+value];
@@ -6734,17 +7028,6 @@ function renderAnatomyPane(el) {
       buildShaderPanel(d);
     });
 
-  // ISOSURFACE OVERLAY
-  const ov = volumes.filter(surfaceCapable);
-  anatomySection(el, 'Isosurface overlay', 'Another scalar volume (a vessel map, a lesion, a cluster) as a solid surface at a level of its own values (an isosurface), in 3D, and filled in the 2D sections.',
-    opts(ov), idx(ov, overlayVol), value => setOverlay(value === '' ? null : ov[+value]),
-    d => {
-      if (!overlayVol) return;
-      d.appendChild(volumeNameRow(overlayVol, kind(overlayVol)));
-      buildSurfaceRows(overlayVol, d);
-      buildMaskRow(overlayVol, d);
-    });
-
   // PARCELLATION
   const lv = labelVolCandidates(), pv = wantedLabelVol();
   anatomySection(el, 'Parcellation', 'A label volume: region names at the cursor, outlines in the sections, Label end colors, and its regions as meshes in 3D.',
@@ -6765,6 +7048,17 @@ function renderAnatomyPane(el) {
       d.appendChild(volumeNameRow(sv, sv.lut ? 'LUT' : 'auto colors'));
       buildLutChoice(sv, d);
       buildLabelList(sv, d, segMeshes);
+    });
+
+  // ISOSURFACE OVERLAY (last: the most expert tool)
+  const ov = volumes.filter(surfaceCapable);
+  anatomySection(el, 'Isosurface overlay', 'Another scalar volume (a vessel map, a lesion, a cluster) as a solid surface at a level of its own values (an isosurface), in 3D, and filled in the 2D sections.',
+    opts(ov), idx(ov, overlayVol), value => setOverlay(value === '' ? null : ov[+value]),
+    d => {
+      if (!overlayVol) return;
+      d.appendChild(volumeNameRow(overlayVol, kind(overlayVol)));
+      buildSurfaceRows(overlayVol, d);
+      buildMaskRow(overlayVol, d);
     });
 }
 
@@ -6820,7 +7114,7 @@ function buildShaderPanel(d) {
   };
   row('background', [['below', 'below'], ['above', 'above']], bgInvert ? 'above' : 'below', v => { bgInvert = v === 'above'; },
     backgroundThresh, v => { backgroundThresh = v; },
-    'What is background, around the volume\'s outer surface: values below (or above) this level, 0–1 of the volume\'s range (at least 0.0001: at 0 the whole box would count).', 1e-4);
+    'What is background, around the volume\'s outer surface: values at or below (or at or above) this level, 0–1 of the volume\'s range. At 0, exact zeros (outside a mask, an empty border) are background.', 0);
   {   // (shown in glass mode too: it takes effect in solid)
     row('foreground', [['above', 'above'], ['below', 'below']], cutoutRow1Above ? 'above' : 'below', v => { cutoutRow1Above = v === 'above'; },
       cutoutT1, v => { cutoutT1 = v; },
@@ -6831,6 +7125,7 @@ function buildShaderPanel(d) {
   }
   p.append(h, body);
   d.appendChild(p);
+
 }
 
 // ── SEGMENTATION: a second label volume as region meshes ──
@@ -6913,7 +7208,7 @@ function buildIntensityRow(vol, el, after = null) {
 // own values (js/volume-surfaces.js): scalar volumes that are not label
 // volumes (those have their region meshes).
 let volumeSurfaces = null;   // set up with the 3D scene (below)
-const surfaceCapable = vol => !vol.isColor && vol.category !== 'parcellation';   // (the rendered volume too)
+const surfaceCapable = vol => vol.category !== 'parcellation';   // (the rendered volume too; colour volumes: see COLOR CHANNEL CONTRIBUTIONS)
 const SURFACE_TRIS_WARN = 3e6;
 function syncVolumeSurfacesHidden() {
   if (!volumeSurfaces) return;
@@ -6926,8 +7221,12 @@ async function loadSurfaceField(vol) {
   if (s.loaded || s.loading) return s.loading;
   s.loading = (async () => {
     const a = cropToContent(await parseVolumeFile(vol.file), { noisy: isWebmName(vol.file.name) });
-    if ((a.channels || 1) !== 1) { vol.isColor = true; throw new Error('a colour volume has no surface'); }
-    const d = a.data;
+    let d = a.data;
+    if ((a.channels || 1) === 3) {   // colour: the field is the weighted colour's length (see combineChannels)
+      vol.isColor = true;
+      s.rgb = a.data; s.weights = s.weights || [1, 1, 1];
+      d = combineChannels(s.rgb, s.weights);
+    }
     let lo = Infinity, hi = -Infinity;
     for (let i = 0; i < d.length; i++) { const v = d[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
     const pos = [], stride = Math.max(1, Math.floor(d.length / 200000));
@@ -6941,6 +7240,33 @@ async function loadSurfaceField(vol) {
     s.loaded = true;
   })();
   try { await s.loading; } finally { s.loading = null; }
+}
+// COLOR CHANNEL CONTRIBUTIONS (a colour volume's isosurface): the field is
+// the length of the colour with each channel weighted, 0–1 (default all 1,
+// the colour's plain length, as the raymarcher thresholds it). Red only:
+// the surface of the red channel — e.g. vessels painted red in a T1.
+function combineChannels(rgb, [wr, wg, wb]) {
+  const n = rgb.length / 3, out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const r = wr * rgb[3 * i], g = wg * rgb[3 * i + 1], b = wb * rgb[3 * i + 2];
+    out[i] = Math.sqrt(r * r + g * g + b * b);
+  }
+  return out;
+}
+let _chanTimer = 0;
+function setChannelWeights(vol) {   // (a drag: meshed once it pauses)
+  clearTimeout(_chanTimer);
+  _chanTimer = setTimeout(() => {
+    const s = vol.surface;
+    if (!s || !s.rgb || !s.field) return;
+    s.field.data = combineChannels(s.rgb, s.weights);
+    let lo = Infinity, hi = -Infinity;
+    for (const v of s.field.data) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    s.lo = lo; s.hi = hi;
+    if (s.level > hi) s.level = +(hi / 2).toPrecision(3);
+    _ov2dKey = null;
+    refreshSurfaceField(vol).then(() => registerVolumeItems());
+  }, 250);
 }
 // the field to the mesher, multiplied by the volume's mask (APPLY MASK)
 async function sendSurfaceField(vol) {
@@ -7000,7 +7326,7 @@ const hexToRgb01 = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) /
 async function refreshSurfaceField(vol) {
   const s = vol.surface;
   await sendSurfaceField(vol);
-  if (s.on) { volumeSurfaces.hide(vol); volumeSurfaces.show(vol, { level: s.level, color: s.color }); volumeSurfaces.setHidden(vol, false); }
+  if (s.on) { volumeSurfaces.hide(vol); volumeSurfaces.show(vol, { level: s.level, color: s.color, glass: s.glass }); volumeSurfaces.setHidden(vol, false); }
   writeSurfaceNote(vol);
 }
 async function setVolumeSurface(vol, on) {
@@ -7013,7 +7339,7 @@ async function setVolumeSurface(vol, on) {
   try { await loadSurfaceField(vol); }
   catch (e) { s.on = false; s.error = (e && e.message) || String(e); console.warn('surface of ' + vol.file.name, e); registerVolumeItems(); return; }
   if (!s.on) return;   // switched off meanwhile
-  volumeSurfaces.show(vol, { level: s.level, color: s.color });
+  volumeSurfaces.show(vol, { level: s.level, color: s.color, glass: s.glass });
   volumeSurfaces.setHidden(vol, false);
   registerVolumeItems();
 }
@@ -7048,7 +7374,39 @@ function buildSurfaceRows(vol, el) {
     });
     lv.title = 'The value the surface is drawn at (this volume\'s own units): voxels at or above it are inside.';
     el.appendChild(lv);
+    if (s.rgb) buildChannelPanel(vol, el);
   }
+}
+// COLOR CHANNEL CONTRIBUTIONS: an expert panel (as SHADER SETTINGS) below
+// the level, for a colour volume
+function buildChannelPanel(vol, el) {
+  const s = vol.surface;
+  const toggle = () => { s.chanOpen = !s.chanOpen; registerVolumeItems(); };
+  if (!s.chanOpen) {
+    const o = document.createElement('div');
+    o.className = 'adv-open';
+    o.innerHTML = '<span>color channel contributions</span><span class="adv-chev">»</span>';
+    o.dataset.tip = 'how much red, green and blue count for the surface (default: all, the colour\'s length)';
+    o.addEventListener('click', toggle);
+    el.appendChild(o);
+    return;
+  }
+  const p = document.createElement('div');
+  p.className = 'adv-panel';
+  const h = document.createElement('div');
+  h.className = 'adv-head';
+  h.innerHTML = '<span>color channel contributions</span><span class="adv-chev">«</span>';
+  h.addEventListener('click', toggle);
+  const body = document.createElement('div');
+  body.className = 'adv-body';
+  ['red', 'green', 'blue'].forEach((name, c) => {
+    const r = makeSliderRow(name, { min: 0, max: 1, step: 0.01, value: s.weights[c], format: v => v.toFixed(2),
+      onInput: v => { s.weights[c] = v; setChannelWeights(vol); } });
+    r.classList.add('chan-' + name);
+    body.appendChild(r);
+  });
+  p.append(h, body);
+  el.appendChild(p);
 }
 // The note after the switch: building…, the triangle count, or what went wrong.
 // Updated in place (a rebuild of the tree would break a level drag).
@@ -7082,8 +7440,13 @@ function surfaceChanged(vol) { if (vol) writeSurfaceNote(vol); if (vol && vol ==
 // Choosing another mask computes it again.
 let activeMaskData = null, _texUnmasked = null;
 // texData × mask, in texture units: a scalar volume's normalized values
-// go towards the value of 0 (not to texture 0), a label volume's stay or
-// go (in or out), a colour volume's channels scale (sqrt-encoded: × √m).
+// (0…1) go towards MASKED_OUT (−1): below any BACKGROUND threshold, and
+// read as background in its 'above' direction too (scene3d.js keeps
+// negative values out of the flip) — so outside the mask nothing shows,
+// whatever the threshold; the sections clamp it to black. A label
+// volume's stay or go (in or out), a colour volume's channels scale
+// (sqrt-encoded: × √m).
+const MASKED_OUT = -1;
 function maskTexData(tex, mask, anat, labels) {
   const n = mask.length;
   if ((anat.channels || 1) === 3) {
@@ -7098,7 +7461,7 @@ function maskTexData(tex, mask, anat, labels) {
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const m = mask[i];
-    out[i] = m === 255 ? tex[i] : labels ? (m >= 128 ? tex[i] : zn) : zn + (tex[i] - zn) * (m / 255);
+    out[i] = m === 255 ? tex[i] : labels ? (m >= 128 ? tex[i] : zn) : MASKED_OUT + (tex[i] - MASKED_OUT) * (m / 255);
   }
   return out;
 }
@@ -7181,7 +7544,10 @@ async function setVolumeMask(vol, src) {
   registerVolumeItems();
 }
 function buildMaskRow(vol, el) {
-  const cands = maskCandidates(vol);
+  // label volumes first; any other scalar volume works too ("is not 0"),
+  // so a mask doesn't depend on how a volume was classified
+  const others = volumes.filter(v => v !== vol && !v.isColor && !maskCandidates(vol).includes(v));
+  const cands = [...maskCandidates(vol), ...others];
   if (!cands.length && !vol.maskSrc) return;
   const options = [['', '---'], ...cands.map((v, i) => [String(i), v.label])];
   const cur = vol.maskSrc && cands.includes(vol.maskSrc) ? String(cands.indexOf(vol.maskSrc)) : '';
@@ -7286,7 +7652,7 @@ function showBundleHeader(g) {
   showHeaderPanel('TRACTS HEADER · ' + g.source.name, JSON.stringify(g.source.header, null, 2));
 }
 // FOCUS: every bundle has a sun icon — lit: drawn solid (focused), unlit:
-// dimmed (SETTINGS › dimming). All bundles start focused. The sun is a
+// dimmed (3D › dimming). All bundles start focused. The sun is a
 // plain on/off toggle everywhere (DATA row, 3D menu); the 3D
 // menu also has the spotlight, "focus only this" (soloFocus).
 function toggleFocus(g) {
@@ -7471,7 +7837,7 @@ function buildFieldSettings(p, el) {
   const helper = (r, tip) => { r.classList.add('dt-helper'); if (tip) attachTip(r, tip); el.appendChild(r); };
   helper(makeColormapPicker(rec), 'The colormap, spread over the from–to window.');
   const [fr, to] = makeFieldWindowRows(rec);
-  helper(fr, 'Value at the start of the colormap. Parts of the streamlines outside from–to are dimmed (SETTINGS › dimming). to < from reverses the colormap. Drag, or click to type.');
+  helper(fr, 'Value at the start of the colormap. Parts of the streamlines outside from–to are dimmed (3D › dimming). to < from reverses the colormap. Drag, or click to type.');
   helper(to, 'Value at the end of the colormap. Drag, or click to type.');
 }
 
@@ -7485,7 +7851,7 @@ function buildFieldSettings(p, el) {
 // › line·width; the per-bundle width multiplier was dropped: with flat
 // ribbons it added little.) (Opacity isn't per file: what is dimmed — the
 // parts outside a field's window, the probe highlight's and the focus's
-// context — uses SETTINGS › dimming; see FIELD_COLOR_GLSL.)
+// context — uses 3D › dimming; see FIELD_COLOR_GLSL.)
 function fileStyle(p) {
   return p.style || (p.style = {});
 }
@@ -7689,7 +8055,44 @@ function makeSliderRow(label, { min, max, step, value, format, onInput, parse = 
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); set(value - k * st); }
     else if (e.key === 'Enter') { e.preventDefault(); startEditing(); }
   });
+  field.setValue = v => { v = +v; if (Number.isFinite(v)) { value = v; show(); } };   // (from outside: no onInput)
   return row;
+}
+
+// The tabs' plain sliders (<input type=range> in TRACTS › PROBE, 3D, 2D,
+// TOOLS) as scrub fields, editable as the others: the range input stays,
+// hidden, as the one the code reads, sets and listens to — the scrub sets
+// it (and fires its 'input'), and follows it when the code sets it. The
+// text shown is the row's own value text (what the input's listener
+// writes), or opts.format. Typed text is the slider's own number unless
+// opts.parse / opts.editText map it (rim: its exponent).
+const SCRUB_OPTS = {
+  'brain-rim-slider': {   // shown: the exponent's reciprocal d = r/(1−r), r = raw/100
+    editText: raw => { const r = Math.min(raw / 100, 0.995); return String(+(r / (1 - r)).toFixed(2)); },
+    parse: t => { const d = parseFloat(String(t).replace(',', '.')); return d >= 0 ? 100 * d / (1 + d) : NaN; } },
+  'light-slider': { format: v => v === 0 ? 'center' : (v < 0 ? 'left ' : 'right ') + Math.abs(v) },
+};
+function scrubifyRange(range) {
+  const row = range.parentElement;
+  const val = [...row.children].find(el => el !== range && (el.classList.contains('ctl-val') || el.classList.contains('slider-val')));
+  const opts = SCRUB_OPTS[range.id] || {};
+  const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  const rawSet = v => proto.set.call(range, v);
+  let field = null;
+  const shown = v => {
+    if (+range.value !== v) { rawSet(v); range.dispatchEvent(new Event('input', { bubbles: true })); }   // (its listener writes the text)
+    return opts.format ? opts.format(v) : val ? val.textContent : String(v);
+  };
+  field = makeSliderRow('', { min: +range.min, max: +range.max, step: +range.step || 1, value: +range.value,
+    format: shown, onInput: v => shown(v), parse: opts.parse || null, editText: opts.editText || null }).querySelector('.dt-scrub');
+  // set by the code (a reset, a session, another control): follow, once its text is written too
+  const follow = () => queueMicrotask(() => field.setValue(+range.value));
+  Object.defineProperty(range, 'value', { configurable: true, get() { return proto.get.call(this); }, set(v) { rawSet(v); follow(); } });
+  range.addEventListener('input', follow);
+  range.style.display = 'none';
+  if (val) val.style.display = 'none';
+  if (range.dataset.tip && !row.dataset.tip) row.dataset.tip = range.dataset.tip;
+  range.after(field);
 }
 
 function setActiveField(p, rec) {
@@ -8529,7 +8932,7 @@ function handleTap(clientX, clientY) {
 // mouse pixel only: the camera ray, in the volume's voxel-index space
 // (the shader's own space, see GLASS_VS/CLIP_SETUP_GLSL in scene3d.js),
 // cut to the volume box and the active clip plane, is stepped in half-
-// voxel steps until the anatomy reaches SETTINGS › background (the rim).
+// voxel steps until the anatomy reaches the volume's background (the rim).
 // Two candidate points:
 //   'brain' — that rim point;
 //   'clip'  — where the ray enters the volume through the clip plane (in
@@ -8612,7 +9015,7 @@ function pickBrain(clientX, clientY, { labels: wantLabels = false } = {}) {
     const c01 = voxel(i, j, k + 1) * (1 - fx) + voxel(i + 1, j, k + 1) * fx;
     const c11 = voxel(i, j + 1, k + 1) * (1 - fx) + voxel(i + 1, j + 1, k + 1) * fx;
     const v = (c00 * (1 - fy) + c10 * fy) * (1 - fz) + (c01 * (1 - fy) + c11 * fy) * fz;
-    return u.u_bgInvert.value > 0.5 ? 1 - v : v;
+    return u.u_bgInvert.value > 0.5 && v >= 0 ? 1 - v : v;   // (negative: masked out)
   };
   const thr = labelMode ? 0.5 : (u.u_bgInvert.value > 0.5 ? 1 - u.u_background.value : u.u_background.value);
   const at = t => sample(ro.x + t * rd.x, ro.y + t * rd.y, ro.z + t * rd.z);
@@ -8873,7 +9276,7 @@ document.body.addEventListener('drop',async e=>{
   set('roll-slider',         0,                ['roll-val',        '0°']);
   set('radius-slider',       radius,           ['radius-val',      radius.toFixed(2)+' mm']);
   set('context-slider',      Math.round(probeContext * 100), ['context-val', Math.round(probeContext * 100) + '%']);
-  set('slab-slider',         slabMultiplier,   ['slab-val',        slabMultiplier.toFixed(1)+'×']);
+  set('slab-slider',         slabMm,   ['slab-val',        slabMm.toFixed(1)+' mm']);
   set('brain-alpha-slider',  50,               ['brain-alpha-val', '50%']);
   set('brain-thresh-slider', 0,                 ['brain-thresh-val', cutoutT1.toFixed(2)]);
   set('brain-cutout-below-slider', 100,          ['brain-cutout-below-val', cutoutBelowThresh.toFixed(2)]);
@@ -9075,12 +9478,15 @@ resizeAll();
 // The rail's tabs pick what the left column shows:
 //   ANATOMY      volumes and parcellations (the loaded-data tree's
 //                Anatomy and Parcellations groups)
-//   STREAMLINES  the bundles / tractogram and their data files
+//   TRACTS       the probe's settings (with streamlines), then the
+//                bundles / tractogram and their data files
 //   PROBE        the probe's sections; with streamlines loaded and the
 //                probe off, what the probe does and a switch to turn it on
 //                (without streamlines the probe is just a second cursor)
 //   MARKERS      the markers files
-//   SETTINGS     how things are drawn (was a floating panel)
+//   3D           the 3D view: GPU tier, clipping plane, streamline
+//                appearance, glass mode, light
+//   2D           the sections: slab thickness, the planes' rotation
 //   TOOLS        view, screenshot, movie, export / session
 // A tab with nothing loaded says what to load and has a LOAD button.
 // Clicking the shown tab, or ‹ (top and bottom of the rail), folds the
@@ -9089,7 +9495,7 @@ resizeAll();
 // A load picks the tab for what was loaded (streamlines: STREAMLINES for a
 // bundle set, PROBE for a whole tractogram; else volumes: ANATOMY; else
 // markers: MARKERS) — unless a data tab was picked by hand since
-// everything was last empty (SETTINGS or TOOLS shown: always).
+// everything was last empty (3D, 2D or TOOLS shown: always).
 (function initLeftTabs() {
   const left = document.getElementById('left');
   const page = document.createElement('div');
@@ -9123,11 +9529,14 @@ resizeAll();
     el.appendChild(d);
   };
   const panes = {};
+  // opts.top: an element above the list (TRACTS: the probe settings)
   const listPane = (key, opts) => {
     const body = document.createElement('div');
     body.className = 'lp-body';
     page.appendChild(body);
-    new DataTreeView(body, dataStore, opts);
+    let list = body;
+    if (opts.top) { body.appendChild(opts.top); list = document.createElement('div'); body.appendChild(list); }
+    new DataTreeView(list, dataStore, opts);
     panes[key] = body;
   };
   { // ANATOMY: the role sections (renderAnatomyPane), or how to start
@@ -9142,12 +9551,13 @@ resizeAll();
     draw();
     panes.anatomy = body;
   }
-  listPane('streamlines', { categories: ['streamlines'], flat: true, empty: emptyFill(
+  const tractsProbe = document.getElementById('panel-content-probe');
+  listPane('streamlines', { categories: ['streamlines'], flat: true, top: tractsProbe, empty: emptyFill(
     '<p><b>Load a streamlines file</b> to get started. Supported formats are .tck (MRtrix), .trk (TrackVis) and <a href="doc.html?dqz-format" target="_blank" rel="noopener">.dqz</a> (a compressed .tck).</p>') });
   listPane('markers', { categories: ['markers'], flat: true, empty: emptyFill(
     '<p><b>Load a markers file</b> to place points (and links between them) in the view, with their properties shown on mouse-over: ' +
     'a .json file in the <a href="doc.html?markers-format" target="_blank" rel="noopener">markers format</a>.</p>') });
-  for (const key of ['settings', 'tools']) {   // the former floating panels' contents
+  for (const key of ['3d', '2d', 'tools']) {   // the settings' pages
     const body = document.createElement('div');
     body.className = 'lp-body';
     body.appendChild(document.getElementById('panel-content-' + key));
@@ -9181,6 +9591,10 @@ resizeAll();
     setLeftPanelHidden(folded);
     const probeSections = current === 'probe' && (probeOn || !hasStreamlines());
     for (const [k, el] of Object.entries(panes)) el.style.display = k === current ? '' : 'none';
+    tractsProbe.style.display = hasStreamlines() ? '' : 'none';   // (the probe settings: with streamlines)
+    // a data tab with nothing loaded yet (a LOAD button; PROBE: no streamlines, or the probe off): darker
+    const empty = { anatomy: !(dataStore.anatomyItems.length + dataStore.parcellationItems.length), streamlines: !hasStreamlines(), probe: !hasStreamlines() || !probeOn, markers: !dataStore.markerItems.length };
+    for (const t of tabs) t.classList.toggle('empty', !!empty[t.dataset.page]);
     if (panes.probe.style.display === '') panes.probe.querySelector('input').checked = false;
     page.classList.toggle('on', !probeSections);
     const badge = document.getElementById('label-badge-src');
@@ -9230,13 +9644,17 @@ resizeAll();
     if (!has.vol && !has.str && !has.mk) userPicked = false;
     const added = (has.vol && !had.vol) || (has.str && !had.str) || (has.mk && !had.mk);
     had = has;
-    if (added && (!userPicked || current === 'settings' || current === 'tools')) {   // (those aren't about data)
+    if (added && (!userPicked || current === '3d' || current === '2d' || current === 'tools')) {   // (those aren't about data)
       current = has.str ? (isBundle ? 'streamlines' : 'probe') : has.vol ? 'anatomy' : 'markers';
       folded = false;
     }
     show();
   });
   window.leftTabsChanged = show;
+  window.openLeftTab = open;
+  buildClipPanel();
+  for (const id of ['panel-content-probe', 'panel-content-3d', 'panel-content-2d', 'panel-content-tools'])
+    for (const r of document.querySelectorAll('#' + id + ' input[type=range]')) if (!r.closest('#shader-rows')) scrubifyRange(r);
   show();
 })();
 

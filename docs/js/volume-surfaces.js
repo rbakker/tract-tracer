@@ -11,9 +11,11 @@
 // level wins. Shading and light are those of the region meshes (solid).
 //
 // Per volume: setField(key, { data, shape, invAb }) once, then
-// show(key, { level, color }), setLevel, setColor, hide, drop.
+// show(key, { level, color, glass }), setLevel, setColor, setGlass, hide,
+// drop. Glass: the region meshes' glass (rim and opacity of GLASS MODE).
 
 import { VS, FS, hexToRaw, voxelGeometry } from './region-meshes.js';
+import { makeClipUniforms } from './scene3d.js';
 
 export class VolumeSurfaces {
   // THREE; scene; render(): redraw; onChange(key): a mesh was (re)built or
@@ -27,6 +29,7 @@ export class VolumeSurfaces {
     scene.add(this.group);
     this.items = new Map();   // key → { id, invAb, level, color, shown, hidden, mesh, tris, busy, want, seq, error }
     this.nextId = 1;
+    this.clipUniforms = makeClipUniforms();   // (CLIPPING: index.html updates their values)
     try {
       this.worker = new Worker(new URL('./region-mesh-worker.js', import.meta.url), { type: 'module' });
       this.worker.onmessage = e => this._done(e.data);
@@ -45,10 +48,11 @@ export class VolumeSurfaces {
     if (this.worker) this.worker.postMessage({ type: 'field', id: it.id, data: f, shape: shape.slice(0, 3) }, [f.buffer]);
   }
 
-  show(key, { level, color }) {
+  show(key, { level, color, glass }) {
     const it = this.items.get(key);
     if (!it) return;
     it.shown = true; it.color = color || it.color;
+    if (glass !== undefined) it.glass = !!glass;
     this.setLevel(key, level);
   }
   hide(key) {
@@ -70,6 +74,14 @@ export class VolumeSurfaces {
     if (!it) return;
     it.color = color;
     if (it.mesh) it.mesh.material.uniforms.u_color.value.set(...hexToRaw(color));
+    this.render();
+  }
+  // solid (false) or glass (true)
+  setGlass(key, glass) {
+    const it = this.items.get(key);
+    if (!it) return;
+    it.glass = !!glass;
+    if (it.mesh) this._style(it);
     this.render();
   }
   setLevel(key, level) {
@@ -122,13 +134,25 @@ export class VolumeSurfaces {
     const THREE = this.THREE;
     const mat = new THREE.ShaderMaterial({
       vertexShader: VS, fragmentShader: FS, side: THREE.DoubleSide,
-      uniforms: { ...this.uniforms, u_color: { value: new THREE.Vector3(...hexToRaw(it.color)) }, u_glass: { value: 0 } },
+      uniforms: { ...this.uniforms, ...this.clipUniforms, u_color: { value: new THREE.Vector3(...hexToRaw(it.color)) }, u_glass: { value: 0 } },
     });
     const m = new THREE.Mesh(geo, mat);
     m.onBeforeRender = (renderer, scene, cam) => this.syncLight(cam);
     m.visible = !it.hidden;
     it.mesh = m;
+    this._style(it);
     this.group.add(m);
+  }
+
+  // as the region meshes: solid opaque, both sides; glass blended, front
+  // faces, drawn before the glass brain (renderOrder 999)
+  _style(it) {
+    const m = it.mesh, mat = m.material, glass = !!it.glass;
+    mat.uniforms.u_glass.value = glass ? 1 : 0;
+    mat.transparent = glass; mat.depthWrite = !glass;
+    mat.side = glass ? this.THREE.FrontSide : this.THREE.DoubleSide;
+    mat.needsUpdate = true;
+    m.renderOrder = glass ? 998 : 0;
   }
 
   _drop(it) {
