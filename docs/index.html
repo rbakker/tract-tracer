@@ -60,7 +60,7 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
 .lp-head{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);flex:none;}
 .lp-title{color:var(--accent);font-size:9px;letter-spacing:0.16em;flex:none;}
 .lp-sub{color:var(--dim);font-size:9px;letter-spacing:0.06em;flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.lp-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:8px 0;box-sizing:border-box;}
+.lp-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:8px 0;box-sizing:border-box;position:relative;}
 .lp-body .dt-scroll{max-height:none;overflow:visible;}
 #left-page .lp-body > *{zoom:var(--ui);}   /* the UI's size, as the panels had (see "UI size") */
 .lp-body > .panel-content{padding:4px 12px 8px;}
@@ -223,15 +223,28 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
 .panel-content{display:block;}
 
 /* ── ☰ MENU (top left): LOAD… and the left column's tabs ── */
-#main-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:170px;flex-direction:column;gap:2px;
+#main-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:170px;flex-direction:column;gap:0;
   background:rgb(8,11,15);border:2px solid var(--border);padding:6px;box-shadow:0 6px 24px rgba(0,0,0,0.55);}
 #main-menu.open{display:flex;}
 #main-menu button{background:none;border:1px solid transparent;color:var(--dim);font-family:'JetBrains Mono',monospace;
-  font-size:11px;letter-spacing:0.04em;text-align:left;padding:6px 10px;cursor:pointer;}
+  font-size:11px;letter-spacing:0.04em;text-align:left;padding:6px 10px;cursor:pointer;white-space:nowrap;}
 #main-menu button:hover{color:var(--bright);background:rgba(255,255,255,0.05);}
 #main-menu button.on{color:var(--bright);border-left:2px solid var(--accent);}
-#main-menu .mm-load{border-color:var(--accent);color:var(--accent);background:rgba(74,170,255,0.08);text-align:center;margin-bottom:6px;}
-#main-menu .mm-about{margin-top:6px;border-top:1px solid var(--border);}
+#main-menu .mm-load{border-color:var(--accent);color:var(--accent);background:rgba(74,170,255,0.08);text-align:center;margin-bottom:10px;}
+#main-menu .mm-about{margin-top:12px;border-top:1px solid var(--border);}
+#main-menu button.mm-sub{padding:2px 10px 2px 24px;font-size:10px;color:#7f8fa6;}   /* a tab's popular part: secondary to the tab */
+#main-menu button.mm-sub:hover{color:var(--bright);}
+#main-menu button.mm-empty{color:#56606e;}                                    /* its tab has nothing loaded yet */
+/* compact within a tab's group (tab, then its parts); the old distance (16px between the texts) before each next tab */
+#main-menu button[data-page]:not(.mm-sub){padding-bottom:2px;}
+#main-menu button[data-page]:not(.mm-sub) ~ button[data-page]:not(.mm-sub){margin-top:8px;}
+/* SECTION HIGHLIGHT (☰ menu shortcuts): a layer over the marked sections — outline,
+   glow and tint as the open tab — that moves nothing; pulses once on arrival */
+.sec-hl{position:absolute;pointer-events:none;border-radius:5px;z-index:3;background:rgba(155,187,255,0.07);
+  box-shadow:0 0 0 1px rgba(155,187,255,0.55),0 0 10px 2px rgba(110,160,255,0.40);animation:sec-hl-pulse 0.9s ease-out 1;}
+#left-page .lp-body > .sec-hl{zoom:1;}   /* (the tab's contents are zoomed; the layer is placed in the tab's own pixels) */
+@keyframes sec-hl-pulse{0%{box-shadow:0 0 0 1px rgba(155,187,255,0.9),0 0 18px 6px rgba(110,160,255,0.75);background:rgba(155,187,255,0.16);}
+  100%{box-shadow:0 0 0 1px rgba(155,187,255,0.55),0 0 10px 2px rgba(110,160,255,0.40);background:rgba(155,187,255,0.07);}}
 #main-menu .mm-load:hover{background:var(--accent);color:#04070a;}
 /* ── DATA TREE (the left column's tabs) ── */
 .data-tree{border:1px solid var(--border);margin-bottom:14px;min-height:36px;}
@@ -784,13 +797,25 @@ input[type=file]{display:none;}
     <!-- the ☰ menu: Load…, the left column's tabs (see section 11b), About… -->
     <div id="main-menu" role="menu">
       <button class="mm-load" data-act="load">Load…</button>
+      <!-- a tab, and under it its popular parts: opens the tab and marks those sections (data-sec: their titles, |-separated) -->
       <button data-page="anatomy">Anatomy</button>
+      <button class="mm-sub" data-page="anatomy" data-sec="Image volume">Image volume</button>
+      <button class="mm-sub" data-page="anatomy" data-sec="Parcellation|Segmentation">Parcellation &amp; segmentation</button>
+      <button class="mm-sub" data-page="anatomy" data-sec="Isosurface">Isosurface</button>
       <button data-page="streamlines">Tracts</button>
+      <button class="mm-sub" data-page="streamlines" data-sec="PROBE SETTINGS">Probe settings</button>
+      <button class="mm-sub" data-page="streamlines" data-sec="APPEARANCE">Appearance</button>
       <button data-page="probe">Probe</button>
       <button data-page="markers">Markers</button>
       <button data-page="3d">3D</button>
+      <button class="mm-sub" data-page="3d" data-sec="CLIPPING PLANE">Clipping</button>
+      <button class="mm-sub" data-page="3d" data-sec="GLASS MODE|LIGHT">Light &amp; effects</button>
       <button data-page="2d">2D</button>
+      <button class="mm-sub" data-page="2d" data-sec="SLICE PLANES">Slice cutting angle</button>
       <button data-page="tools">Tools</button>
+      <button class="mm-sub" data-page="tools" data-sec="VIEW">View</button>
+      <button class="mm-sub" data-page="tools" data-sec="SCREENSHOT|ROTATION MOVIE">Screenshot &amp; movie</button>
+      <button class="mm-sub" data-page="tools" data-sec="EXPORT / SESSION">Save…</button>
       <button class="mm-about" data-act="about">About…</button>
     </div>
   </div>
@@ -803,9 +828,9 @@ input[type=file]{display:none;}
      (section 11b); parked here, hidden, until then -->
   <div id="left-stash" style="display:none">
 
-    <!-- TRACTS: the probe, above the list of streamline files -->
+    <!-- TRACTS: the probe settings and the streamlines' appearance, above the list of streamline files -->
     <div id="panel-content-probe" class="panel-content" style="border-bottom:1px solid var(--border);margin-bottom:6px;">
-    <div class="cfg-section" data-tip="Which streamlines are shown, and how.\nThe probe: left-click or drag to move it, scroll to step through slices, Ctrl+Scroll to zoom, right-drag to pan.\nFocus a bundle with the sun icon next to its color (DATA panel, or hover its ends in 3D).">PROBE</div>
+    <div class="cfg-section" data-tip="Which streamlines are shown, and how.\nThe probe: left-click or drag to move it, scroll to step through slices, Ctrl+Scroll to zoom, right-drag to pan.\nFocus a bundle with the sun icon next to its color (DATA panel, or hover its ends in 3D).">PROBE SETTINGS</div>
     <div class="ctl-row" data-tip="The probe.\noff: no probe, all streamlines shown (the probe panel is hidden).\nselect: show only the streamlines the probe hits.\nhighlight: show all streamlines, the hit ones solid and the rest dimmed (see dimming).">
       <label>probe</label>
       <div class="clip-radio-row" style="grid-template-columns:repeat(3,auto);justify-content:start;">
@@ -826,20 +851,7 @@ input[type=file]{display:none;}
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-select" value="ends" id="probe-select-ends"><span>ends</span></label>
       </div>
     </div>
-    </div>
-    <!-- 3D: the 3D view -->
-    <div id="panel-content-3d" class="panel-content">
-    <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
-      <label>GPU·tier</label>
-      <div class="clip-radio-row">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>low</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>high</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="ultra" id="quality-ultra"><span>ultra</span></label>
-      </div>
-    </div>
-    <div class="cfg-section" data-tip="The clipping plane: which parts of the scene it cuts (and the volume solid or glass), along which plane, as a slice or one side.">CLIPPING PLANE</div>
-    <div id="clip-panel"></div>
-    <div class="cfg-section" data-tip="Streamlines selected by the probe are shown in both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">STREAMLINE APPEARANCE</div>
+    <div class="cfg-section" data-tip="Streamlines selected by the probe are shown in both panels within a slab around each slice.\nAdjust slab thickness and end-filtering below.">APPEARANCE</div>
 
 <div class="ctl-row" data-tip="Streamline width in screen pixels. 0 switches lines off entirely (replaces the old None color option). In the 3D view this is the width at the NEAR end of the depth fade (the far end is fixed at 0.5px, always thinner). In the 2D slab panels width is a constant half this value (minimum 1px) — no depth fade there, since an orthographic slice has no meaningful camera depth.">
   <label>line·width</label>
@@ -878,11 +890,7 @@ input[type=file]{display:none;}
   <input autocomplete="off" type="range" id="reflectance-slider" min="0" max="1" step="0.05" value="0.5">
   <span class="slider-val" id="reflectance-val">1.00</span>
 </div>
-<div class="ctl-row" data-tip="Streamlines shading each other, like light through hair: the more streamlines between a spot and the light, the darker it gets — shows where streamlines run and end behind others. 0 = off. Strongest with the light from the side (LIGHT: left or right).">
-  <label>shadowing</label>
-  <input autocomplete="off" type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
-  <span class="slider-val" id="shadow-val">0%</span>
-</div>
+
     <div class="ctl-row" data-tip="Opacity of the dimmed streamlines — those the highlight probe doesn't hit, and those outside the focused bundles — times their bundle's own opacity. Lower is dimmer.">
       <label>dimming</label>
       <input autocomplete="off" type="range" id="context-slider" min="0" max="100" value="15" step="1">
@@ -890,6 +898,19 @@ input[type=file]{display:none;}
     </div>
 
 
+    </div>
+    <!-- 3D: the 3D view -->
+    <div id="panel-content-3d" class="panel-content">
+    <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
+      <label>GPU·tier</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>low</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>high</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="ultra" id="quality-ultra"><span>ultra</span></label>
+      </div>
+    </div>
+    <div class="cfg-section" data-tip="The clipping plane: which parts of the scene it cuts (and the volume solid or glass), along which plane, as a slice or one side.">CLIPPING PLANE</div>
+    <div id="clip-panel"></div>
     <div class="cfg-section" data-tip="The glass of the rendered volume (the mortar-only brick in ANATOMY › IMAGE VOLUME) and of regions drawn as glass: how thin its rim, how see-through.">GLASS MODE</div>
     <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
       <label>rim</label>
@@ -907,6 +928,11 @@ input[type=file]{display:none;}
       <input autocomplete="off" type="range" id="light-slider" min="-100" max="100" value="0" step="1">
       <span class="ctl-val" id="light-val">center</span>
     </div>
+    <div class="ctl-row" data-tip="Shadows: light that things in the scene take away from each other. Streamlines shade each other (like light through hair) at every GPU tier. At the high and ultra tiers also: the streamlines shade the solid brain, and the solid regions (parcellation, segmentation) and the isosurface shade themselves, each other, the streamlines and the brain. 0% = off. Strongest with the light from the side (direction: left or right).">
+  <label>shadows</label>
+  <input autocomplete="off" type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
+  <span class="slider-val" id="shadow-val">0%</span>
+</div>
     <!-- per volume, shown in ANATOMY › IMAGE VOLUME › SHADER SETTINGS (moved there while open) -->
     <div id="shader-rows">
     <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from FOREGROUND below, so narrowing FOREGROUND to hide a tissue type can never also erode this outer surface.">
@@ -1011,9 +1037,20 @@ input[type=file]{display:none;}
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="shot-scale" value="4"><span>×4</span></label>
       </div>
     </div>
+    <div class="ctl-row shot-2d-row" data-tip="Sections: PNG, a picture; or SVG, for figures: the section as an embedded picture (with the streamlines and, if chosen, the cursor), the regions and the orientation arrows as vector layers on top, and two hidden extra layers: every region the section cuts outlined, and filled. Open it in Inkscape or Illustrator to show, recolor or edit the layers.">
+      <label>format</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="shot-format" value="png" checked><span>PNG</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="shot-format" value="svg"><span>SVG</span></label>
+      </div>
+    </div>
     <div class="ctl-row shot-2d-row" data-tip="Sections: draw the orientation arrows (L/R, A/P, S/I) into the image.">
       <label>arrows</label>
       <input autocomplete="off" type="checkbox" class="dt-check" id="shot-arrows" checked>
+    </div>
+    <div class="ctl-row shot-2d-row" data-tip="Sections: include the parcellation's regions as the section shows them: the regions shown in 3D filled, and the outlined region (the one at the cursor).">
+      <label>regions</label>
+      <input autocomplete="off" type="checkbox" class="dt-check" id="shot-regions" checked>
     </div>
     <div class="ctl-row shot-2d-row" data-tip="Sections: include the cursor lines (and the probe ring). Off: only the image itself.">
       <label>cursor</label>
@@ -2016,18 +2053,123 @@ let shadowAmount = 0.5; // the slider, 0..1 — on at every GPU tier
 let _shadowTimer = null;
 function buildShadowsNow() {
   clearTimeout(_shadowTimer); _shadowTimer = null;
-  if (!(shadowAmount > 0) || !selMesh) { lineShadows.clear(); return; }
+  const casters = meshCasters();
+  const lines = selMesh && anyLineWidth() > 0 ? selMesh : null;   // (lines switched off — width 0 — cast nothing)
+  if (!(shadowAmount > 0) || (!lines && !casters)) { lineShadows.clear(); return; }
   _brainShadowKey = brainShadowKey(); // the occluder goes with the build
   _brainBoxKey = brainBoxKey();
-  lineShadows.occluderFn = brainOccluder();
+  _castersKey = casters ? casters.key : 'none'; _castersBoxKey = casters ? casters.boxKey : 'none';
+  lineShadows.occluderFn = combinedOccluder(casters);
   // segments cut away by the clipping plane cast no shadow either
-  const faint = faintSegments(selMesh), cut = streamlineClipTest();
-  let skip = faint;
-  if (cut) {
-    const g = selMesh.geometry, S = g.attributes.instanceStart.array, E = g.attributes.instanceEnd.array;
-    skip = i => (faint && faint(i)) || cut((S[3*i] + E[3*i]) / 2, (S[3*i+1] + E[3*i+1]) / 2, (S[3*i+2] + E[3*i+2]) / 2);
+  let skip = null;
+  if (lines) {
+    const faint = faintSegments(selMesh), cut = streamlineClipTest();
+    skip = faint;
+    if (cut) {
+      const g = selMesh.geometry, S = g.attributes.instanceStart.array, E = g.attributes.instanceEnd.array;
+      skip = i => (faint && faint(i)) || cut((S[3*i] + E[3*i]) / 2, (S[3*i+1] + E[3*i+1]) / 2, (S[3*i+2] + E[3*i+2]) / 2);
+    }
   }
-  lineShadows.build(selMesh, densityVoxelMm(), skip, _brainBoxKey === 'none' ? null : brainWorldBox());
+  const boxes = [_brainBoxKey === 'none' ? null : brainWorldBox(), casters && casters.box].filter(Boolean);
+  const extra = boxes.length ? { min: [0, 1, 2].map(c => Math.min(...boxes.map(b => b.min[c]))), max: [0, 1, 2].map(c => Math.max(...boxes.map(b => b.max[c]))) } : null;
+  lineShadows.build(lines, lines ? densityVoxelMm() : 0, skip, extra);
+}
+
+// ── Shadows of the solid region meshes and the isosurface (high/ultra GPU) ──
+// The solid regions (parcellation, segmentation) and the isosurface cast
+// shadows — on themselves, each other, the streamlines and the solid brain
+// — and receive them (region-meshes.js FS). As occluders in the shadow
+// density (line-shadows.js), like the brain: per grid voxel the fraction
+// of 8 sub-points inside (a label in the solid set; the isosurface's field
+// at or above its level), what the clipping plane cut away left out. The
+// grid then exists without streamlines too (1/100 of the casters' box).
+// Rebuilt (after a short pause) when the casters change.
+const meshShadowsOn = () => qualityTier !== 'low' && shadowAmount > 0;
+let _castersKey = 'none', _castersBoxKey = 'none';
+// a clip uniform set (scene3d.js makeClipUniforms) as a test fn(x, y, z) → cut away, or null
+function clipFnOf(u) {
+  if (!u || u.u_clipOn.value < 0.5) return null;
+  const n = u.u_clipN.value, q = u.u_clipQ.value, dir = u.u_clipDir.value, slab = u.u_clipSlab.value > 0.5,
+        half = u.u_clipHalfT.value, ext = u.u_clipExt.value;
+  return (x, y, z) => { const d = (x - q.x) * n.x + (y - q.y) * n.y + (z - q.z) * n.z;
+    return slab ? Math.abs(d) > half + ext : d * dir < -ext; };
+}
+const clipKeyOf = u => !u || u.u_clipOn.value < 0.5 ? 'off'
+  : [u.u_clipN.value.toArray(), u.u_clipQ.value.toArray(), u.u_clipDir.value, u.u_clipSlab.value, u.u_clipHalfT.value, u.u_clipExt.value].join('|');
+// { key, boxKey, box, sample(x, y, z, h) → 0..1 } or null: nothing casts
+function meshCasters() {
+  if (!meshShadowsOn()) return null;
+  const parts = [];
+  for (const rm of [regionMeshes, segMeshes]) {
+    let sr = null;
+    try { sr = rm && rm.solidRegions(); } catch (e) {}
+    if (!sr) continue;
+    const { raw, shape, invAb } = sr.ref, [nx, ny, nz] = shape, solid = sr.solid, cut = clipFnOf(rm.clipUniforms);
+    const isSolid = solid instanceof Uint8Array ? v => v >= 0 && v < solid.length && solid[v] === 1 : v => solid.has(v);
+    const A = invAb, t = A.length === 4 ? A[3] : [0, 0, 0];
+    parts.push({ key: 'r' + rm.version + ':' + clipKeyOf(rm.clipUniforms), box: sr.box,
+      at: (x, y, z) => {
+        if (cut && cut(x, y, z)) return 0;
+        const i = Math.round(A[0][0] * x + A[0][1] * y + A[0][2] * z + t[0]), j = Math.round(A[1][0] * x + A[1][1] * y + A[1][2] * z + t[1]),
+              k = Math.round(A[2][0] * x + A[2][1] * y + A[2][2] * z + t[2]);
+        if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return 0;
+        return isSolid(raw[i + nx * (j + ny * k)]) ? 1 : 0;
+      } });
+  }
+  // the isosurface: shown, solid, built
+  try {
+    const vol = overlayVol, s = vol && vol.surface, it = vol && volumeSurfaces && volumeSurfaces.info(vol);
+    if (s && s.on && !s.glass && s.sent && it && it.mesh && !it.hidden) {
+      const f = s.sent, [mx, my, mz] = f.shape, d = f.data, A = f.invAb, t = A.length === 4 ? A[3] : [0, 0, 0], lev = it.builtLevel;
+      const g = it.mesh.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      const cut = clipFnOf(volumeSurfaces.clipUniforms);
+      parts.push({ key: 'i' + vol.file.name + ':' + lev + ':' + clipKeyOf(volumeSurfaces.clipUniforms) + ':' + d.length,
+        box: { min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() },
+        at: (x, y, z) => {
+          if (cut && cut(x, y, z)) return 0;
+          const i = Math.round(A[0][0] * x + A[0][1] * y + A[0][2] * z + t[0]), j = Math.round(A[1][0] * x + A[1][1] * y + A[1][2] * z + t[1]),
+                k = Math.round(A[2][0] * x + A[2][1] * y + A[2][2] * z + t[2]);
+          if (i < 0 || j < 0 || k < 0 || i >= mx || j >= my || k >= mz) return 0;
+          return d[i + mx * (j + my * k)] >= lev ? 1 : 0;
+        } });
+    }
+  } catch (e) {}
+  if (!parts.length) return null;
+  const box = { min: [0, 1, 2].map(c => Math.min(...parts.map(p => p.box.min[c]))), max: [0, 1, 2].map(c => Math.max(...parts.map(p => p.box.max[c]))) };
+  return { key: parts.map(p => p.key).join(';'), boxKey: box.min.concat(box.max).map(v => v.toFixed(1)).join(','), box,
+    // the fraction of 8 sub-points (±h/4 per axis) inside any caster
+    sample: (x, y, z, h) => {
+      const o = h / 4; let n = 0;
+      for (let q = 0; q < 8; q++) {
+        const px = x + (q & 1 ? o : -o), py = y + (q & 2 ? o : -o), pz = z + (q & 4 ? o : -o);
+        for (const p of parts) if (p.at(px, py, pz)) { n++; break; }
+      }
+      return n / 8;
+    } };
+}
+// the brain's occluder and the casters' together (line-shadows.js setOccluder: fn(x, y, z) → 0..1)
+function combinedOccluder(casters) {
+  const brain = brainOccluder();
+  if (!casters) return brain;
+  return (x, y, z) => {
+    const b = brain ? brain(x, y, z) : 0;
+    if (b >= 1) return b;
+    return Math.max(b, casters.sample(x, y, z, lineShadows.vox || 1));
+  };
+}
+// the region meshes' (and the isosurface's) shadow uniforms (every frame)
+function syncMeshShadowUniforms() {
+  const on = meshShadowsOn() && lineShadows.active, su = lineShadows.uniforms;
+  for (const rm of [regionMeshes, segMeshes]) {
+    if (!rm) continue;
+    const u = rm.uniforms;
+    u.u_meshShadowOn.value = on ? 1 : 0;
+    if (!on) continue;
+    u.u_shadowTex.value = su.u_shadowTex.value;
+    u.u_shadowMin.value.copy(su.u_shadowMin.value);
+    u.u_shadowSize.value.copy(su.u_shadowSize.value);
+    u.u_shadowVoxMm.value = lineShadows.vox || 1;
+  }
 }
 
 // Which segments of a ribbon mesh are drawn translucent (dimmed): the
@@ -2152,16 +2294,24 @@ let _brainShadowKey = 'none', _brainShadowTimer = null;
 // Called every 3D frame: re-samples the brain (after a short pause) when
 // anything it depends on changed.
 function checkBrainShadow() {
-  if (!lineShadows.lineDens) return;
+  if (!(shadowAmount > 0)) return;
+  let casters = null;
+  try { casters = meshCasters(); } catch (e) { return; }   // (before the region meshes exist)
+  const cKey = casters ? casters.key : 'none', cBox = casters ? casters.boxKey : 'none';
+  if (!lineShadows.lineDens) {                       // no grid yet: casters alone may start one
+    if (casters && !_brainShadowTimer) { _brainShadowTimer = setTimeout(() => { _brainShadowTimer = null; buildShadowsNow(); render3D(); }, 200); }
+    return;
+  }
   const key = brainShadowKey(), boxKey = brainBoxKey();
-  if (key === _brainShadowKey && boxKey === _brainBoxKey) return;
-  // the grid's box changed (a brain shown or gone, the tier, the switch): rebuild it all
-  const boxChanged = boxKey !== _brainBoxKey;
-  _brainShadowKey = key; _brainBoxKey = boxKey;
+  if (key === _brainShadowKey && boxKey === _brainBoxKey && cKey === _castersKey && cBox === _castersBoxKey) return;
+  // the grid's box changed (a brain or caster shown or gone, the tier, the switch): rebuild it all
+  const boxChanged = boxKey !== _brainBoxKey || cBox !== _castersBoxKey;
+  _brainShadowKey = key; _brainBoxKey = boxKey; _castersKey = cKey; _castersBoxKey = cBox;
   clearTimeout(_brainShadowTimer);
   _brainShadowTimer = setTimeout(() => {
-    if (boxChanged) buildShadowsNow();
-    else lineShadows.setOccluder(brainOccluder());
+    _brainShadowTimer = null;
+    if (boxChanged || (!selMesh && !casters)) buildShadowsNow();
+    else lineShadows.setOccluder(combinedOccluder(meshCasters()));
     render3D();
   }, 200);
 }
@@ -2203,10 +2353,13 @@ window.setPointLight = on => { pointLightOn = !!on; lineShadows._dirty = true; r
 window.setAmbient = v => { ambientLight = Math.max(0, Math.min(1, +v)); render3D(); return ambientLight; };
 window.setLightFalloff = v => { lightFalloff = Math.max(0, Math.min(1, +v)); render3D(); return lightFalloff; };
 const _shCamR = new THREE.Vector3(), _shCamU = new THREE.Vector3(), _shCamF = new THREE.Vector3(), _shLight = new THREE.Vector3();
+const _shLightCam = new THREE.Vector3();
 function updateShadowLight() {
-  if (!lineShadows.active || !selMesh || !selMesh.parent) return;
+  if (!lineShadows.active) return;
+  const lines = selMesh && selMesh.parent;
+  if (!lines && !meshShadowsOn()) return;
   camera.updateMatrixWorld();
-  const lc = selMesh.userData.lightCam;
+  const lc = lines ? selMesh.userData.lightCam : _shLightCam.set(...lightCamFromBias(lightBias)).normalize();
   _shCamR.setFromMatrixColumn(camera.matrixWorld, 0);
   _shCamU.setFromMatrixColumn(camera.matrixWorld, 1);
   _shCamF.setFromMatrixColumn(camera.matrixWorld, 2).multiplyScalar(-1);
@@ -2215,7 +2368,7 @@ function updateShadowLight() {
   // along the view, a headlamp); the march goes the other way, to the light
   _shLight.set(0, 0, 0).addScaledVector(_shCamR, lc.x).addScaledVector(_shCamU, lc.y).addScaledVector(_shCamF, lc.z).normalize();
   // point light (default): at the camera with LIGHT centered — see lightPosition
-  const point = selMesh.material.uniforms.u_pointLight.value > 0.5;
+  const point = lines ? selMesh.material.uniforms.u_pointLight.value > 0.5 : pointLightOn;
   if (point) lightPosition(camera, controls.target, _shLight, _shLightPos);
   _shLight.negate();
   lineShadows.update(_shLight, point ? _shLightPos : null);
@@ -2258,6 +2411,7 @@ function render3D() {
   checkBrainShadow();
   updateShadowLight();
   syncBrainShadowUniforms();
+  syncMeshShadowUniforms();
   renderer3.render(scene, camera);
 }
 
@@ -2868,7 +3022,7 @@ function renderCtxMenu() {
     if (!open.has('coord')) return;
     const d = nest(1);
     d.classList.add('ctx-moves');
-    if (probeOn) d.append(makeSettingsButton('move probe here', () => state.update({ 'src.cursor': c.ras.slice() }), 'the probe (left sections) to this point'));
+    if (probeOn && groups.length) d.append(makeSettingsButton('move probe here', () => state.update({ 'src.cursor': c.ras.slice() }), 'the probe (left sections) to this point'));
     d.append(makeSettingsButton('move cursor here', () => state.update({ 'tgt.cursor': c.ras.slice() }), 'the cursor (right sections) to this point'));
   };
   for (const k of ['bundle', 'volume', 'region', 'marker', 'frame', 'coord']) sections[k]();
@@ -5628,8 +5782,11 @@ function fillShotViews() {
 function syncShotRows() {
   const is3d = document.getElementById('shot-view').value === '3d';
   document.querySelectorAll('.shot-2d-row').forEach(r => { r.style.display = is3d ? 'none' : ''; });
+  const svg = !is3d && document.querySelector('input[name="shot-format"]:checked')?.value === 'svg';
+  document.getElementById('shot-save').textContent = svg ? 'save SVG' : 'save PNG';
 }
 document.getElementById('shot-view').addEventListener('change', syncShotRows);
+for (const r of document.querySelectorAll('input[name="shot-format"]')) r.addEventListener('change', syncShotRows);
 const radioVal = name => document.querySelector('input[name="' + name + '"]:checked').value;
 const stamp = () => { const d = new Date(), z = n => String(n).padStart(2, '0');
   return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()); };
@@ -5713,14 +5870,74 @@ function shotSection(planeKey, tag, k, arrows, cursor = true) {
   if (dirs) paintOrientArrows(out.getContext('2d'), out.height, out.width / (cvs.clientWidth || W), dirs);
   return out;
 }
-document.getElementById('shot-save').addEventListener('click', e => {
+// A section as an SVG for figures: the picture (the section with its
+// streamlines, and the cursor if chosen) embedded as PNG, and on top, as
+// vector layers: the regions as shown, the orientation arrows, and two
+// hidden extras — every region the section cuts outlined, and filled. The
+// layers are Inkscape layers (named; Illustrator takes the ids).
+function sectionSvg(planeKey, tag, k, { regions, arrows, cursor }) {
+  const cvs = (tag === 'src' ? canvasA : canvasB)[planeKey];
+  const W = cvs.width, H = cvs.height;
+  const pic = shotSection(planeKey, tag, k, false, cursor);
+  const outW = pic.width, outH = pic.height, pxOut = outW / W;   // output px per canvas px
+  const layer = (id, label, body, hidden = false) => '<g id="' + id + '" inkscape:groupmode="layer" inkscape:label="' + label + '"'
+    + (hidden ? ' style="display:none"' : '') + '>' + body + '</g>\n';
+  let out = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"'
+    + ' width="' + outW + '" height="' + outH + '" viewBox="0 0 ' + W + ' ' + H + '">\n'
+    + layer('section', 'section', '<image x="0" y="0" width="' + W + '" height="' + H + '" preserveAspectRatio="none" xlink:href="' + pic.toDataURL('image/png') + '"/>');
+  const L = sectionOutlines && sectionOutlines.exportLayers(tag, planeKey, pxOut);
+  if (L) {
+    out += layer('all-region-fills', 'all regions, filled (' + L.count + ')', L.fills, true);
+    out += layer('all-region-outlines', 'all regions, outlined (' + L.count + ')', L.outlines, true);
+    if (regions && L.shown) out += layer('regions', 'regions as shown', L.shown);
+  }
+  const dirs = arrows ? orientDirs(planeKey, tag, cvs) : null;
+  if (dirs) {
+    const s = W / (cvs.clientWidth || W), [h, v] = dirs, grey = getComputedStyle(document.documentElement).getPropertyValue('--dim').trim() || '#9ad';
+    const arrow = (o, x1, y1, head, tx, ty, anchor) => '<g fill="' + grey + '" stroke="' + grey + '">'
+      + '<path d="M10 -10L' + x1 + ' ' + y1 + '" fill="none" stroke-width="1.2" stroke-linecap="round"/>'
+      + '<path d="M' + head.map(p => p.join(' ')).join('L') + 'Z" stroke="none"/>'
+      // the dark halo as a copy underneath (no paint-order, no rgba(): PowerPoint and others ignore them)
+      + '<text x="' + tx + '" y="' + ty + '" text-anchor="' + anchor + '" font-family="JetBrains Mono, monospace" font-weight="600" font-size="10" fill="none" stroke="#000000" stroke-opacity="0.6" stroke-width="2" stroke-linejoin="round">' + o[0] + '</text>'
+      + '<text x="' + tx + '" y="' + ty + '" text-anchor="' + anchor + '" font-family="JetBrains Mono, monospace" font-weight="600" font-size="10" stroke="none">' + o[0] + '</text></g>';
+    out += layer('orientation', 'orientation arrows', '<g transform="translate(0 ' + H + ') scale(' + s + ')">'
+      + arrow(h, 20, -10, [[24, -10], [18, -13.5], [18, -6.5]], 27, -6, 'start')
+      + arrow(v, 10, -20, [[10, -24], [6.5, -18], [13.5, -18]], 10, -28, 'middle') + '</g>');
+  }
+  return out + '</svg>\n';
+}
+// The parcellation's regions on a section (its SVG layer, see
+// js/section-outlines.js) drawn into a screenshot of it, at its size.
+async function paintSectionRegions(out, planeKey, tag, k) {
+  const markup = sectionOutlines && sectionOutlines.snapshotSvg(tag, planeKey, out.width, out.height, k);
+  if (!markup) return;
+  const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    await new Promise((ok, bad) => { img.onload = ok; img.onerror = () => bad(new Error('regions layer')); img.src = url; });
+    out.getContext('2d').drawImage(img, 0, 0, out.width, out.height);
+  } finally { URL.revokeObjectURL(url); }
+}
+document.getElementById('shot-save').addEventListener('click', async e => {
   e.stopPropagation();
   const view = document.getElementById('shot-view').value, k = +radioVal('shot-scale');
   const status = document.getElementById('shot-status');
   try {
     let c, name;
     if (view === '3d') { c = shot3D(k); name = '3d'; }
-    else { const [pk, tag] = view.split(':'); c = shotSection(pk, tag, k, document.getElementById('shot-arrows').checked, document.getElementById('shot-cursor').checked);
+    else if (radioVal('shot-format') === 'svg') {
+      const [pk, tag] = view.split(':');
+      const svg = sectionSvg(pk, tag, k, { regions: document.getElementById('shot-regions').checked,
+        arrows: document.getElementById('shot-arrows').checked, cursor: document.getElementById('shot-cursor').checked });
+      downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), 'tractogram-observer_' + pk + '-' + (tag === 'src' ? 'probe' : 'cursor') + '_' + stamp() + '.svg');
+      status.textContent = 'SVG saved';
+      return;
+    }
+    else { const [pk, tag] = view.split(':'), arrows = document.getElementById('shot-arrows').checked;
+           c = shotSection(pk, tag, k, false, document.getElementById('shot-cursor').checked);
+           if (document.getElementById('shot-regions').checked) await paintSectionRegions(c, pk, tag, k);
+           if (arrows) paintOrientArrows(c.getContext('2d'), c.height, c.width / ((tag === 'src' ? canvasA : canvasB)[pk].clientWidth || c.width), orientDirs(pk, tag, (tag === 'src' ? canvasA : canvasB)[pk]));   // (on top of the regions)
            name = pk + '-' + (tag === 'src' ? 'probe' : 'cursor'); }
     c.toBlob(b => {
       if (!b) { status.textContent = 'could not make the image'; return; }
@@ -6880,7 +7097,7 @@ function buildLabelList(vol, el, rm = regionMeshes) {
 // (which volume) and, below it, that volume's settings for the role:
 //   IMAGE VOLUME   the volume raymarched in 3D and shown in the sections
 //                  ('---': none in 3D) — intensity, apply mask, label colors
-//   ISOSURFACE OVERLAY  another scalar volume as a surface at a level of its
+//   ISOSURFACE  another scalar volume as a surface at a level of its
 //                  own values (a vessel map, a lesion) — one at a time
 //   PARCELLATION   a label volume: names at the cursor, outlines in the
 //                  sections, end-dot colors, its regions as meshes in 3D
@@ -7049,9 +7266,9 @@ function renderAnatomyPane(el) {
       buildLabelList(sv, d, segMeshes);
     });
 
-  // ISOSURFACE OVERLAY (last: the most expert tool)
+  // ISOSURFACE (last: the most expert tool)
   const ov = volumes.filter(surfaceCapable);
-  anatomySection(el, 'Isosurface overlay', 'Another scalar volume (a vessel map, a lesion, a cluster) as a solid surface at a level of its own values (an isosurface), in 3D, and filled in the 2D sections.',
+  anatomySection(el, 'Isosurface', 'Another scalar volume (a vessel map, a lesion, a cluster) as a solid surface at a level of its own values (an isosurface), in 3D, and filled in the 2D sections.',
     opts(ov), idx(ov, overlayVol), value => setOverlay(value === '' ? null : ov[+value]),
     d => {
       if (!overlayVol) return;
@@ -7163,7 +7380,7 @@ function paletteHex(v) {
   return '#' + [f(0), f(8), f(4)].map(c => c.toString(16).padStart(2, '0')).join('');
 }
 
-// ── ISOSURFACE OVERLAY: one volume as a surface ──
+// ── ISOSURFACE: one volume as a surface ──
 let overlayVol = null;
 function setOverlay(vol) {
   if (overlayVol && overlayVol !== vol) setVolumeSurface(overlayVol, false);
@@ -7281,7 +7498,7 @@ async function sendSurfaceField(vol) {
   volumeSurfaces.setField(vol, { data, shape: f.shape, invAb: f.invAb });
 }
 
-// ISOSURFACE OVERLAY in the 2D sections: where the overlay volume is at or above
+// ISOSURFACE in the 2D sections: where the overlay volume is at or above
 // its level, painted in its colour over the sections — the inside of the
 // same surface the 3D view shows. Sampled (trilinear) at each voxel of the
 // rendered volume's grid, as 0/255; the sections blend it softly. Computed
@@ -9477,20 +9694,20 @@ resizeAll();
 // The rail's tabs pick what the left column shows:
 //   ANATOMY      volumes and parcellations (the loaded-data tree's
 //                Anatomy and Parcellations groups)
-//   TRACTS       the probe's settings (with streamlines), then the
-//                bundles / tractogram and their data files
+//   TRACTS       (with streamlines) PROBE SETTINGS and APPEARANCE, then
+//                the bundles / tractogram and their data files
 //   PROBE        the probe's sections; with streamlines loaded and the
 //                probe off, what the probe does and a switch to turn it on
 //                (without streamlines the probe is just a second cursor)
 //   MARKERS      the markers files
-//   3D           the 3D view: GPU tier, clipping plane, streamline
-//                appearance, glass mode, light
+//   3D           the 3D view: GPU tier, clipping plane, glass mode, light
 //   2D           the sections: slab thickness, the planes' rotation
 //   TOOLS        view, screenshot, movie, export / session
 // A tab with nothing loaded says what to load and has a LOAD button.
 // Clicking the shown tab, or ‹ (top and bottom of the rail), folds the
 // column away, rail and all. The ☰ menu (top left) has Load…, opens any
-// tab (unfolding the column) and About….
+// tab (unfolding the column) and About…; under the tabs, their popular
+// parts: opens the tab and marks those sections (SECTION HIGHLIGHT).
 // A load picks the tab for what was loaded (streamlines: STREAMLINES for a
 // bundle set, PROBE for a whole tractogram; else volumes: ANATOMY; else
 // markers: MARKERS) — unless a data tab was picked by hand since
@@ -9584,6 +9801,87 @@ resizeAll();
   }
 
   const hasStreamlines = () => dataStore.streamlineItems.length > 0;
+  let emptyTabs = {};
+
+  // ── SECTION HIGHLIGHT: a ☰ menu shortcut opens a tab and marks some of
+  // its sections (by title) — a layer over them in the tab's scrolling
+  // area (.sec-hl), so nothing in the tab moves; it pulses once. The tab
+  // scrolls only as far as needed to show them (their top first if they
+  // don't fit). It goes when the tab changes, with another shortcut, or
+  // with a click in the tab outside the marked sections.
+  let hl = null;   // { page, titles, layers: [el], raf }
+  // the elements of a section: an ANATOMY section (.an-sec), or a header
+  // (.cfg-section) with what follows it up to the next header
+  const sectionEls = (pane, title) => {
+    const t = title.toLowerCase();
+    const an = [...pane.querySelectorAll('.an-head')].find(h => h.textContent.trim().toLowerCase() === t);
+    if (an) return [an.closest('.an-sec')];
+    const h = [...pane.querySelectorAll('.cfg-section')].find(x => x.textContent.trim().toLowerCase() === t);
+    if (!h) return null;
+    const els = [h];
+    for (let n = h.nextElementSibling; n && !n.classList.contains('cfg-section'); n = n.nextElementSibling) els.push(n);
+    return els;
+  };
+  const sectionRect = (pane, els) => {
+    const pr = pane.getBoundingClientRect();
+    const z = pane.offsetHeight ? pr.height / pane.offsetHeight : 1;   // (the column is zoomed: screen px → CSS px)
+    let top = Infinity, bottom = -Infinity;
+    for (const e of els) {
+      const r = e.getBoundingClientRect();
+      if (!r.width && !r.height) continue;            // (hidden rows)
+      top = Math.min(top, r.top); bottom = Math.max(bottom, r.bottom);
+    }
+    if (!(bottom > top)) return null;
+    return { top: (top - pr.top) / z + pane.scrollTop - 4, bottom: (bottom - pr.top) / z + pane.scrollTop + 4 };
+  };
+  function placeHighlight(first) {
+    if (!hl) return;
+    const pane = panes[hl.page];
+    if (!pane) return;
+    const rects = hl.titles.map(t => { const els = sectionEls(pane, t); return els ? sectionRect(pane, els) : null; });
+    rects.forEach((r, i) => {
+      let el = hl.layers[i];
+      if (!el) { el = hl.layers[i] = document.createElement('div'); el.className = 'sec-hl'; }
+      if (el.parentNode !== pane) pane.appendChild(el);   // (the tab redrew itself)
+      el.style.display = r ? '' : 'none';
+      if (!r) return;
+      el.style.left = '6px'; el.style.width = (pane.clientWidth - 12) + 'px';
+      el.style.top = r.top + 'px'; el.style.height = (r.bottom - r.top) + 'px';
+    });
+    hl.rects = rects;
+    if (first) {   // only as far as needed
+      const ok = rects.filter(Boolean);
+      if (!ok.length) return;
+      const top = Math.min(...ok.map(r => r.top)), bottom = Math.max(...ok.map(r => r.bottom));
+      const vt = pane.scrollTop, vh = pane.clientHeight;
+      let to = null;
+      if (bottom - top > vh) to = top - 4;                 // taller than the tab: their top at the top
+      else if (top < vt) to = top - 4;
+      else if (bottom > vt + vh) to = bottom - vh + 4;
+      if (to !== null) pane.scrollTo({ top: Math.max(0, to), behavior: 'smooth' });
+    }
+  }
+  function clearHighlight() {
+    if (!hl) return;
+    cancelAnimationFrame(hl.raf);
+    for (const el of hl.layers) el.remove();
+    hl = null;
+  }
+  function highlight(page, titles) {
+    clearHighlight();
+    hl = { page, titles, layers: [], rects: [] };
+    const loop = () => { if (!hl) return; placeHighlight(false); hl.raf = requestAnimationFrame(loop); };
+    requestAnimationFrame(() => { if (!hl) return; placeHighlight(true); hl.raf = requestAnimationFrame(loop); });
+  }
+  // a click in the tab outside the marked sections ends it
+  page.addEventListener('pointerdown', e => {
+    if (!hl) return;
+    const pane = panes[hl.page];
+    if (!pane || !pane.contains(e.target)) return;
+    const pr = pane.getBoundingClientRect(), z = pane.offsetHeight ? pr.height / pane.offsetHeight : 1;
+    const y = (e.clientY - pr.top) / z + pane.scrollTop;
+    if (!hl.rects.some(r => r && y >= r.top && y <= r.bottom)) clearHighlight();
+  }, true);
   function show() {
     for (const t of tabs) t.classList.toggle('on', !folded && t.dataset.page === current);
     document.body.classList.toggle('left-folded', folded);   // (before the widths: the rail goes too)
@@ -9592,14 +9890,18 @@ resizeAll();
     for (const [k, el] of Object.entries(panes)) el.style.display = k === current ? '' : 'none';
     tractsProbe.style.display = hasStreamlines() ? '' : 'none';   // (the probe settings: with streamlines)
     // a data tab with nothing loaded yet (a LOAD button; PROBE: no streamlines, or the probe off): darker
-    const empty = { anatomy: !(dataStore.anatomyItems.length + dataStore.parcellationItems.length), streamlines: !hasStreamlines(), probe: !hasStreamlines() || !probeOn, markers: !dataStore.markerItems.length };
+    const empty = emptyTabs = { anatomy: !(dataStore.anatomyItems.length + dataStore.parcellationItems.length), streamlines: !hasStreamlines(), probe: !hasStreamlines() || !probeOn, markers: !dataStore.markerItems.length };
     for (const t of tabs) t.classList.toggle('empty', !!empty[t.dataset.page]);
     if (panes.probe.style.display === '') panes.probe.querySelector('input').checked = false;
     page.classList.toggle('on', !probeSections);
     const badge = document.getElementById('label-badge-src');
     if (badge) badge.style.visibility = probeSections ? '' : 'hidden';
     placeEdges();
-    for (const b of menu.querySelectorAll('[data-page]')) b.classList.toggle('on', !folded && b.dataset.page === current);
+    for (const b of menu.querySelectorAll('[data-page]')) {
+      b.classList.toggle('on', !folded && b.dataset.page === current && !b.classList.contains('mm-sub'));
+      b.classList.toggle('mm-empty', !!emptyTabs[b.dataset.page]);
+    }
+    if (hl && (folded || hl.page !== current)) clearHighlight();
     if (!folded && current === 'tools') toolsShown();
   }
   const pick = key => {
@@ -9625,7 +9927,7 @@ resizeAll();
     closeMenu();
     if (b.dataset.act === 'load') openFiles();
     else if (b.dataset.act === 'about') aboutPanel.open();
-    else open(b.dataset.page);
+    else { open(b.dataset.page); if (b.dataset.sec) highlight(b.dataset.page, b.dataset.sec.split('|')); else clearHighlight(); }
   });
   document.addEventListener('pointerdown', e => { if (!menu.contains(e.target) && e.target !== menuBtn && !menuBtn.contains(e.target)) closeMenu(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });

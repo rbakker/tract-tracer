@@ -285,6 +285,58 @@ export class SectionOutlines {
     } else if (this.tagSide === tag || !this.tagSide) { this.tag.style.display = 'none'; this.tagSide = null; }
   }
 
+  // For a screenshot: what this section shows of the regions now (the
+  // filled regions and the outlined one) as a standalone SVG, w × h pixels
+  // over the canvas's own pixel grid (cw × ch); line widths × k. null:
+  // nothing shown.
+  snapshotSvg(tag, pk, w, h, k = 1) {
+    const P = this.panels.get(tag + ':' + pk);
+    if (!P || P.svg.style.display === 'none' || !P.geo) return null;
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('xmlns', NS);
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    svg.setAttribute('viewBox', '0 0 ' + P.canvas.width + ' ' + P.canvas.height);
+    const g = P.g.cloneNode(true);
+    g.setAttribute('transform', 'matrix(' + P.geo.toCanvas.join(' ') + ')');
+    // (non-scaling strokes are in output pixels here: scale them as the image)
+    for (const el of g.querySelectorAll('[stroke-width]')) el.setAttribute('stroke-width', String(+el.getAttribute('stroke-width') * k));
+    svg.appendChild(g);
+    return new XMLSerializer().serializeToString(svg);
+  }
+
+  // For an SVG screenshot: the regions as layers (groups) in the canvas's
+  // own pixel grid (cw × ch), strokes in output pixels (pxOut = output
+  // pixels per canvas pixel), as real widths — no non-scaling strokes, so
+  // drawing programs show them as on screen:
+  //   shown:    what the section shows now (fills of the regions in 3D, the
+  //             outlined region), or '' — visible
+  //   outlines: every region the section cuts, outlined in its color
+  //   fills:    every region the section cuts, filled, opaque
+  // Each region a path with its name (<title>, id). null: not traced.
+  exportLayers(tag, pk, pxOut = 1) {
+    const P = this.panels.get(tag + ':' + pk);
+    if (!P || !P.geo || !P.paths) return null;
+    const m = P.geo.toCanvas, sc = Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
+    const w = px => +(px / pxOut / sc).toPrecision(4);           // a width in output px → group units
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const idOf = v => 'r' + v + '-' + String(this.nameOf(v)).replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 40);
+    const tf = ' transform="matrix(' + m.join(' ') + ')"';
+    const region = (v, attrs, suffix) => '<path id="' + idOf(v) + suffix + '" d="' + P.paths.get(v) + '" ' + attrs + '><title>' + esc(this.nameOf(v)) + '</title></path>';
+    const labels = [...P.paths.keys()].filter(v => v).sort((a, b) => a - b);
+    const outlines = labels.map(v => region(v, 'fill="none" stroke="' + (this.colorOf(v) || '#fff') + '" stroke-width="' + w(1.2) + '" stroke-linejoin="round"', '-outline')).join('');
+    const fills = labels.map(v => region(v, 'fill="' + (this.colorOf(v) || '#fff') + '" stroke="none"', '-fill')).join('');
+    let shown = '';
+    if (P.svg.style.display !== 'none') {
+      const filled = [...P.fill.children].map(f => '<path d="' + f.getAttribute('d') + '" fill="' + f.getAttribute('fill') + '" fill-opacity="' + f.getAttribute('fill-opacity') + '"/>').join('');
+      const d = P.over.getAttribute('d');
+      const line = d ? '<path d="' + d + '" fill="none" stroke="#000000" stroke-opacity="0.75" stroke-width="' + w(3.5) + '" stroke-linejoin="round"/>'
+        + '<path d="' + d + '" fill="none" stroke="' + P.over.getAttribute('stroke') + '" stroke-width="' + w(1.6) + '" stroke-linejoin="round"><title>' + esc(this.nameOf(P.label)) + '</title></path>' : '';
+      if (filled || line) shown = '<g' + tf + '>' + filled + line + '</g>';
+    }
+    return { shown, outlines: '<g' + tf + '>' + outlines + '</g>', fills: '<g' + tf + '>' + fills + '</g>', count: labels.length };
+  }
+
   // The label volume in memory changed (another one, or its colors / names).
   refresh() {
     for (const P of this.panels.values()) { P.label = 0; P.fillKey = ''; }

@@ -44,6 +44,7 @@ void main() {
 }`;
 
 export const FS = `
+precision highp sampler3D;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 uniform vec3  u_color;
@@ -57,6 +58,16 @@ uniform float u_ambient;
 uniform vec3  u_camFwd;
 uniform vec3  u_depthTarget;
 uniform float u_depthRadius;
+// SHADOWS (js/line-shadows.js, high/ultra GPU tier): the light left at a
+// point after the way to the light — what the streamlines, the solid brain
+// and the solid regions take away. Read 1.5 shadow voxels towards the
+// light and 1.5 off the surface, so a surface doesn't shade itself.
+// u_meshShadowOn = 0: off.
+uniform sampler3D u_shadowTex;
+uniform float u_meshShadowOn;
+uniform vec3  u_shadowMin;
+uniform vec3  u_shadowSize;
+uniform float u_shadowVoxMm;
 ` + LIGHT_FALLOFF_GLSL + CLIP3D_GLSL + `
 void main() {
   if (clipped3d(vWorldPos)) discard;
@@ -74,7 +85,12 @@ void main() {
   vec3 Hraw = L + V;
   float Hlen = length(Hraw);
   float spec = Hlen > 1e-4 ? pow(max(dot(N, Hraw / Hlen), 0.0), 32.0) * smoothstep(0.02, 0.25, Hlen) : 0.0;
-  vec3 col = u_color * (u_ambient + (1.0 - u_ambient) * diffuse * fall) + vec3(0.25 * spec * fall);
+  float T = 1.0;   // the direct light that gets here (shadows only take away direct light)
+  // (off the surface along its normal too: where the light grazes it, the
+  // way to the light would skim the region's own bumps — shadow acne)
+  if (u_meshShadowOn > 0.5 && (u_glass < 0.5 || u_glass > 2.5))
+    T = texture(u_shadowTex, (vWorldPos + (L * 1.5 + N * 1.5) * u_shadowVoxMm - u_shadowMin) / u_shadowSize).r;
+  vec3 col = u_color * (u_ambient + (1.0 - u_ambient) * diffuse * fall * T) + vec3(0.25 * spec * fall * T);
   float alpha = 1.0;
   if (u_glass > 2.5) col *= 0.75;                       // the inner wall: a little darker
   else if (u_glass > 0.5) alpha = clamp(pow(1.0 - abs(dot(N, V)), u_rimPow) * u_alphaMult, 0.0, 1.0);
@@ -186,7 +202,12 @@ export class RegionMeshes {
       u_pointLight: { value: 1 }, u_ambient: { value: 0.25 }, u_falloff: { value: 0.5 },
       u_camFwd: { value: new THREE.Vector3(0, 0, -1) }, u_depthTarget: { value: new THREE.Vector3() },
       u_depthRadius: { value: 1 },
+      // SHADOWS: kept up to date by index.html (syncMeshShadowUniforms)
+      u_shadowTex: { value: null }, u_meshShadowOn: { value: 0 },
+      u_shadowMin: { value: new THREE.Vector3() }, u_shadowSize: { value: new THREE.Vector3(1, 1, 1) },
+      u_shadowVoxMm: { value: 1 },
     };
+    this.version = 0;            // +1 on every change of the set (shadow casters follow it)
     // How a dimmed region is drawn: 'glass' (rim) or 'inside' (glass
     // front, its inner walls solid). setDimMode().
     this.dimMode = 'glass';
@@ -324,7 +345,28 @@ export class RegionMeshes {
     this.render();
   }
 
-  _changed() { if (this._cap) this._cap.dirty = true; this.updateCaps(); this.onChange(); this.render(); }
+  _changed() { this.version++; if (this._cap) this._cap.dirty = true; this.updateCaps(); this.onChange(); this.render(); }
+
+  // ── SHADOW CASTERS ──
+  // The regions drawn solid (in the set, focused, meshed, group shown):
+  // { ref, solid: Uint8Array by label value (1 = solid) | Set, box: { min, max } world } or null.
+  solidRegions() {
+    if (!this.group.visible || !this.ref) return null;
+    const labels = [];
+    const box = new this.THREE.Box3();
+    for (const [v, e] of this.set) if (e.focus && e.mesh) {
+      labels.push(v);
+      const g = e.mesh.geometry;
+      if (!g.boundingBox) g.computeBoundingBox();
+      box.union(g.boundingBox);
+    }
+    if (!labels.length) return null;
+    const max = Math.max(...labels);
+    let solid;
+    if (max >= 0 && max < 1 << 20) { solid = new Uint8Array(max + 1); for (const v of labels) solid[v] = 1; }
+    else solid = new Set(labels);
+    return { ref: this.ref, solid, box: { min: box.min.toArray(), max: box.max.toArray() } };
+  }
 
   // ── CAPS ──
   // Places (or hides) the caps after the clip uniforms or the set changed.

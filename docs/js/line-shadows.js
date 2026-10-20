@@ -124,14 +124,23 @@ export class LineShadows {
   // isFaint(i): whether segment i is drawn translucent (dimmed) — those
   // neither cast shadows nor receive them (LINE_FS's FAINT_PASS); null: none.
   // extraBox: { min: [x,y,z], max: [x,y,z] } (world) the grid must cover
-  // too — the solid brain's, so it can cast and receive shadows.
+  // too — the solid brain's and the region meshes', so they can cast and
+  // receive shadows. Without streamlines (mesh null) the grid covers
+  // extraBox alone, the occluder being all there is; voxelMm 0 then means
+  // 1/100 of its diagonal.
   build(mesh, voxelMm, isFaint = null, extraBox = null) {
     const t0 = performance.now();
     const geo = mesh && mesh.geometry;
-    const n = geo ? geo.instanceCount : 0;
-    if (!n || !(voxelMm > 0) || !geo.userData.instanceTract) { this.clear(); return; }
-    const S = geo.attributes.instanceStart.array, E = geo.attributes.instanceEnd.array;
-    const tractOf = geo.userData.instanceTract;
+    const lines = !!(geo && geo.instanceCount && geo.userData.instanceTract);
+    const n = lines ? geo.instanceCount : 0;
+    if (!lines && !extraBox) { this.clear(); return; }
+    if (!(voxelMm > 0)) {
+      if (lines || !extraBox) { this.clear(); return; }
+      voxelMm = Math.hypot(...[0, 1, 2].map(c => extraBox.max[c] - extraBox.min[c])) / 100;
+      if (!(voxelMm > 0)) { this.clear(); return; }
+    }
+    const S = lines ? geo.attributes.instanceStart.array : null, E = lines ? geo.attributes.instanceEnd.array : null;
+    const tractOf = lines ? geo.userData.instanceTract : null;
     let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
     for (let i = 0; i < 3 * n; i += 3) for (const A of [S, E]) {
       const x = A[i], y = A[i + 1], z = A[i + 2];
