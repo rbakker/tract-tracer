@@ -47,6 +47,14 @@ function invert3(m) {
           [C / det, -(a * h - b * g) / det, (a * e - b * d) / det]];
 }
 
+// The region a raw value stands for: the value itself, or for an ROI set
+// (ref.bits: one bit per ROI) the first ROI whose bit is set (0: none).
+function regionOf(ref, v) {
+  if (!ref.bits || !v) return v;
+  for (let m = v >>> 0, i = 1; m; m >>>= 1, i++) if (m & 1) return i;
+  return 0;
+}
+
 export class SectionOutlines {
   // vr: the VolRenderer (canvasToRas / rasToCanvas per section)
   // getRef(): the label volume in memory { vol, raw, shape, invAb } or null
@@ -179,7 +187,7 @@ export class SectionOutlines {
     const [x, y, z] = affine(ref.invAb, geo.gridToWorld(gx + 0.5, gy + 0.5)).map(Math.round);
     const [nx, ny, nz] = ref.shape;
     if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) return 0;
-    return ref.raw[x + nx * (y + ny * z)];
+    return regionOf(ref, ref.raw[x + nx * (y + ny * z)]);
   }
 
   _schedule(P) {
@@ -197,8 +205,23 @@ export class SectionOutlines {
         if (xi >= 0 && yi >= 0 && zi >= 0 && xi < nx && yi < ny && zi < nz) out[j * W + i] = raw[xi + nx * (yi + ny * zi)];
       }
     }
+    // an ROI set (bits): each ROI traced on its own (they may overlap) —
+    // one 0/1 image per ROI the section cuts, labelled with its region number
+    let parts;
+    if (ref.bits) {
+      let any = 0;
+      for (let c = 0; c < out.length; c++) any |= out[c];
+      parts = [];
+      for (let b = 0; b < 32; b++) {
+        const bit = 1 << b;
+        if (!(any & bit)) continue;
+        const img = new Int32Array(out.length);
+        for (let c = 0; c < out.length; c++) if (out[c] & bit) img[c] = b + 1;
+        parts.push(img);
+      }
+    } else parts = [out];
     this.queue.delete(P.id);
-    this.queue.set(P.id, { id: P.id, key: P.key, labels: out, W, H });
+    this.queue.set(P.id, { id: P.id, key: P.key, parts, W, H, paths: [] });
     this._next();
   }
 
@@ -207,16 +230,24 @@ export class SectionOutlines {
     const [pid, job] = [...this.queue.entries()].pop();   // the newest first
     this.queue.delete(pid);
     this.busy = job;
-    this.worker.postMessage({ id: 1, labels: job.labels, width: job.W, height: job.H, pathsOnly: true,
-      options: { background: 0, seamStroke: 0 } }, [job.labels.buffer]);
+    this._post(job);
+  }
+  _post(job) {
+    if (!job.parts.length) { this._done({ paths: [] }); return; }
+    const labels = job.parts.shift();
+    this.worker.postMessage({ id: 1, labels, width: job.W, height: job.H, pathsOnly: true,
+      options: { background: 0, seamStroke: 0 } }, [labels.buffer]);
   }
 
   _done(msg) {
-    const job = this.busy; this.busy = false;
+    const job = this.busy;
+    if (job && msg.paths && job.parts.length) { job.paths.push(...msg.paths); this._post(job); return; }   // (an ROI set: the next ROI)
+    this.busy = false;
     if (job && msg.paths) {
+      job.paths.push(...msg.paths);
       const P = this.panels.get(job.id);
       if (P && P.key === job.key) {
-        P.paths = new Map(msg.paths.map(p => [p.label, p.d]));
+        P.paths = new Map(job.paths.map(p => [p.label, p.d]));
         this._showSide(P.tag);
       }
     } else if (msg.error) console.warn('section outlines:', msg.error);
@@ -238,7 +269,7 @@ export class SectionOutlines {
     if (!ref || !p) return 0;
     const [x, y, z] = affine(ref.invAb, p).map(Math.round), [nx, ny, nz] = ref.shape;
     if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) return 0;
-    return ref.raw[x + nx * (y + ny * z)];
+    return regionOf(ref, ref.raw[x + nx * (y + ny * z)]);
   }
 
   // Outlines one region in all three sections of a set — the hovered one,

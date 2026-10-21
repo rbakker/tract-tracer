@@ -14,7 +14,8 @@
 // different label volume starts an empty set.
 //
 // Meshes are built in a worker (region-mesh-worker.js: surface nets on the
-// region blurred as the raymarcher does, normals from its gradient) and cached per (volume, region), so
+// region's voxels, rounded within their cells — or, setSurface('voxels'),
+// the voxel faces themselves) and cached per (volume, region), so
 // switching a region off and on again, or going back to an earlier label
 // volume, builds nothing.
 //
@@ -29,7 +30,8 @@
 // region numbers) and colors the pixel by a small table of the solid
 // regions, or lets it through. The lookup is a trilinear vote over the 8
 // voxels around the point (a region wins where its share reaches 0.5),
-// so the cap's edge is smooth like the mesh's, not voxel steps.
+// so the cap's edge follows the region's voxel boundary, as the mesh does
+// (setSurface('voxels'): the nearest voxel only — squares, as the cubes).
 
 import { LIGHT_FALLOFF_GLSL, CLIP3D_GLSL, makeClipUniforms } from './scene3d.js';
 
@@ -115,6 +117,7 @@ uniform sampler3D u_lab;
 uniform sampler2D u_tab;
 uniform mat4 u_w2v;
 uniform vec3 u_dims;
+uniform float u_nearest;   // 1: the nearest voxel only (surface 'voxels')
 varying vec3 vWorld;
 int idAt(ivec3 i) {
   if (any(lessThan(i, ivec3(0))) || any(greaterThanEqual(i, ivec3(u_dims)))) return 0;
@@ -124,6 +127,7 @@ int idAt(ivec3 i) {
 void main() {
   vec3 v = (u_w2v * vec4(vWorld, 1.0)).xyz;     // voxel coordinates (centres at integers)
   vec3 b = floor(v), f = v - b;
+  if (u_nearest > 0.5) f = step(0.5, f);         // all weight on the nearest voxel
   ivec3 ib = ivec3(b);
   int ids[8]; float ws[8];
   for (int c = 0; c < 8; c++) {
@@ -139,6 +143,49 @@ void main() {
     if (e.a < 0.5) continue;                     // not a solid region in 3D
     float share = 0.0;
     for (int c = 0; c < 8; c++) if (ids[c] == id) share += ws[c];
+    if (share >= 0.5) { gl_FragColor = vec4(e.rgb * 0.72, 1.0); return; }
+  }
+  discard;
+}`;
+
+// the cap of an ROI set: u_lab holds each voxel's ROI bits (4 bytes), u_tab
+// per ROI (bit) its color and alpha = solid; the first solid ROI whose
+// trilinear share at the point reaches 0.5 colors it (overlap: the lower one)
+const CAP_FS_BITS = `
+precision highp float;
+precision highp int;
+precision highp sampler3D;
+uniform sampler3D u_lab;
+uniform sampler2D u_tab;
+uniform mat4 u_w2v;
+uniform vec3 u_dims;
+uniform int u_n;
+uniform float u_nearest;
+varying vec3 vWorld;
+uint bitsAt(ivec3 i) {
+  if (any(lessThan(i, ivec3(0))) || any(greaterThanEqual(i, ivec3(u_dims)))) return 0u;
+  uvec4 b = uvec4(texelFetch(u_lab, i, 0) * 255.0 + 0.5);
+  return b.r | (b.g << 8) | (b.b << 16) | (b.a << 24);
+}
+void main() {
+  vec3 v = (u_w2v * vec4(vWorld, 1.0)).xyz;
+  vec3 b = floor(v), f = v - b;
+  if (u_nearest > 0.5) f = step(0.5, f);         // all weight on the nearest voxel
+  ivec3 ib = ivec3(b);
+  uint m[8]; float ws[8];
+  for (int c = 0; c < 8; c++) {
+    ivec3 o = ivec3(c & 1, (c >> 1) & 1, (c >> 2) & 1);
+    m[c] = bitsAt(ib + o);
+    vec3 t = mix(1.0 - f, f, vec3(o));
+    ws[c] = t.x * t.y * t.z;
+  }
+  for (int k = 0; k < 32; k++) {
+    if (k >= u_n) break;
+    vec4 e = texelFetch(u_tab, ivec2(k, 0), 0);
+    if (e.a < 0.5) continue;
+    uint bit = 1u << uint(k);
+    float share = 0.0;
+    for (int c = 0; c < 8; c++) if ((m[c] & bit) != 0u) share += ws[c];
     if (share >= 0.5) { gl_FragColor = vec4(e.rgb * 0.72, 1.0); return; }
   }
   discard;
@@ -196,6 +243,7 @@ export class RegionMeshes {
     this.cache = new Map();      // vol → Map(label → BufferGeometry | null (empty))
     this.vol = null; this.ref = null; this.gen = 0;
     this.pending = new Set();    // labels requested from the worker (this gen)
+    this.surface = 'smooth';     // setSurface()
     this.uniforms = {
       u_rimPow: { value: 1 }, u_alphaMult: { value: 1 },
       u_lightDir: { value: new THREE.Vector3(0, 0, 1) }, u_lightPos: { value: new THREE.Vector3() },
@@ -222,8 +270,10 @@ export class RegionMeshes {
     } catch (e) { console.warn('region meshes: no worker', e); this.worker = null; }
   }
 
-  // The current label volume ({ vol, raw, shape, invAb } or null). Another
-  // volume empties the set (its meshes stay cached).
+  // The current label volume ({ vol, raw, shape, invAb, bits } or null).
+  // bits: an ROI set — raw holds one bit per ROI (region v = bit v−1 set),
+  // so regions may overlap. Another volume empties the set (its meshes
+  // stay cached).
   setRef(ref) {
     if (ref && this.vol === ref.vol) { this.ref = ref; return; }
     this.clear(false);
@@ -232,9 +282,29 @@ export class RegionMeshes {
     this.pending.clear();
     if (ref && this.worker) {
       if (!this.cache.has(ref.vol)) this.cache.set(ref.vol, new Map());
-      this.worker.postMessage({ type: 'volume', gen: this.gen, raw: ref.raw.slice(), shape: ref.shape.slice() });
+      this._postVolume();
     }
     this._changed();   // (redraw now: the old volume's meshes are gone)
+  }
+  _postVolume() {
+    const ref = this.ref;
+    this.worker.postMessage({ type: 'volume', gen: this.gen, raw: ref.raw.slice(), shape: ref.shape.slice(), bits: !!ref.bits, surface: this.surface });
+  }
+  // How region surfaces are built (region-mesh-worker.js): 'smooth' (on the
+  // voxels, rounded within their cells) or 'voxels' (every voxel step, lit
+  // flat). Rebuilds what is shown.
+  setSurface(style) {
+    if (style === this.surface) return;
+    this.surface = style;
+    for (const m of this.cache.values()) for (const g of m.values()) if (g) g.dispose();
+    this.cache = new Map();
+    if (!this.ref) return;
+    this.cache.set(this.vol, new Map());
+    if (this._cap) this._cap.mat.uniforms.u_nearest.value = style === 'voxels' ? 1 : 0;
+    this.gen++; this.pending.clear();
+    if (this.worker) this._postVolume();
+    for (const [v, e] of this.set) { this._drop(e); e.mesh = null; e.back = null; this._request(v); }
+    this._changed();
   }
 
   get size() { return this.set.size; }
@@ -349,7 +419,7 @@ export class RegionMeshes {
 
   // ── SHADOW CASTERS ──
   // The regions drawn solid (in the set, focused, meshed, group shown):
-  // { ref, solid: Uint8Array by label value (1 = solid) | Set, box: { min, max } world } or null.
+  // { ref, test(raw value) → solid, box: { min, max } world } or null.
   solidRegions() {
     if (!this.group.visible || !this.ref) return null;
     const labels = [];
@@ -361,11 +431,16 @@ export class RegionMeshes {
       box.union(g.boundingBox);
     }
     if (!labels.length) return null;
-    const max = Math.max(...labels);
-    let solid;
-    if (max >= 0 && max < 1 << 20) { solid = new Uint8Array(max + 1); for (const v of labels) solid[v] = 1; }
-    else solid = new Set(labels);
-    return { ref: this.ref, solid, box: { min: box.min.toArray(), max: box.max.toArray() } };
+    let test;
+    if (this.ref.bits) {                      // any solid ROI's bit set
+      let mask = 0; for (const v of labels) mask |= 1 << (v - 1);
+      test = raw => (raw & mask) !== 0;
+    } else {
+      const max = Math.max(...labels);
+      if (max >= 0 && max < 1 << 20) { const solid = new Uint8Array(max + 1); for (const v of labels) solid[v] = 1; test = raw => raw >= 0 && raw < solid.length && solid[raw] === 1; }
+      else { const solid = new Set(labels); test = raw => solid.has(raw); }
+    }
+    return { ref: this.ref, test, box: { min: box.min.toArray(), max: box.max.toArray() } };
   }
 
   // ── CAPS ──
@@ -398,6 +473,7 @@ export class RegionMeshes {
 
   _buildCaps() {
     const THREE = this.THREE, ref = this.ref, raw = ref.raw, [nx, ny, nz] = ref.shape;
+    if (ref.bits) return this._buildCapsBits();
     // compact numbers: 0 = background, 1… the label values present
     const compact = new Map([[0, 0]]), lab = new Uint8Array(raw.length * 2);
     for (let i = 0; i < raw.length; i++) {
@@ -428,7 +504,7 @@ export class RegionMeshes {
       vertexShader: CAP_VS, fragmentShader: CAP_FS, side: THREE.DoubleSide,
       // in front of what lies in the same plane (the volume's own cut face, at extend 0)
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
-      uniforms: { u_lab: { value: labTex }, u_tab: { value: tabTex }, u_w2v: { value: w2v }, u_dims: { value: new THREE.Vector3(nx, ny, nz) } },
+      uniforms: { u_lab: { value: labTex }, u_tab: { value: tabTex }, u_w2v: { value: w2v }, u_dims: { value: new THREE.Vector3(nx, ny, nz) }, u_nearest: { value: this.surface === 'voxels' ? 1 : 0 } },
     });
     const geo = new THREE.PlaneGeometry(1, 1);
     const meshes = [0, 1].map(k => {
@@ -441,10 +517,58 @@ export class RegionMeshes {
       centre: box.getCenter(new THREE.Vector3()), size: box.getSize(new THREE.Vector3()).length() };
   }
 
-  // the table: per compact number its color, alpha 255 = a solid region in the set
+  // an ROI set: the bits as they are (RGBA bytes), the table per bit
+  _buildCapsBits() {
+    const THREE = this.THREE, ref = this.ref, [nx, ny, nz] = ref.shape;
+    const bytes = new Uint8Array(ref.raw.buffer.slice(ref.raw.byteOffset, ref.raw.byteOffset + ref.raw.byteLength));
+    const labTex = new THREE.Data3DTexture(bytes, nx, ny, nz);
+    labTex.format = THREE.RGBAFormat; labTex.type = THREE.UnsignedByteType;
+    labTex.minFilter = labTex.magFilter = THREE.NearestFilter;
+    labTex.unpackAlignment = 1; labTex.needsUpdate = true;
+    const tab = new Uint8Array(32 * 4);
+    const tabTex = new THREE.DataTexture(tab, 32, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    tabTex.minFilter = tabTex.magFilter = THREE.NearestFilter; tabTex.needsUpdate = true;
+    const box = this._volBox(ref);
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: CAP_VS, fragmentShader: CAP_FS_BITS, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+      uniforms: { u_lab: { value: labTex }, u_tab: { value: tabTex }, u_w2v: { value: box.w2v }, u_dims: { value: new THREE.Vector3(nx, ny, nz) }, u_n: { value: 32 }, u_nearest: { value: this.surface === 'voxels' ? 1 : 0 } },
+    });
+    this._capMeshes(mat, { labTex, tabTex, tab, bits: true, box });
+  }
+  // world ↔ voxel and the volume's world box
+  _volBox(ref) {
+    const THREE = this.THREE, [nx, ny, nz] = ref.shape, M = ref.invAb, t = M.length === 4 ? M[3] : [0, 0, 0];
+    const w2v = new THREE.Matrix4().set(M[0][0], M[0][1], M[0][2], t[0], M[1][0], M[1][1], M[1][2], t[1], M[2][0], M[2][1], M[2][2], t[2], 0, 0, 0, 1);
+    const v2w = w2v.clone().invert(), box = new THREE.Box3();
+    for (const x of [-0.5, nx - 0.5]) for (const y of [-0.5, ny - 0.5]) for (const z of [-0.5, nz - 0.5])
+      box.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(v2w));
+    return { w2v, centre: box.getCenter(new THREE.Vector3()), size: box.getSize(new THREE.Vector3()).length() };
+  }
+  _capMeshes(mat, extra) {
+    const THREE = this.THREE, geo = new THREE.PlaneGeometry(1, 1);
+    const meshes = [0, 1].map(k => {
+      const m = new THREE.Mesh(geo, mat);
+      m.name = 'region cap ' + k; m.matrixAutoUpdate = false; m.frustumCulled = false; m.visible = false;
+      this.group.add(m);
+      return m;
+    });
+    this._cap = { ...extra, mat, geo, meshes, dirty: true, centre: extra.box.centre, size: extra.box.size };
+  }
+
+  // the table: per compact number (per bit for an ROI set) its color, alpha 255 = a solid region in the set
   _fillTable() {
     const C = this._cap;
     C.tab.fill(0);
+    if (C.bits) {
+      for (const [v, e] of this.set) {
+        if (!e.focus || !e.mesh || v < 1 || v > 32) continue;
+        const rgb = hexToRaw(this.colorOf(v) || '#ffffff');
+        C.tab.set([Math.round(rgb[0] * 255), Math.round(rgb[1] * 255), Math.round(rgb[2] * 255), 255], 4 * (v - 1));
+      }
+      C.tabTex.needsUpdate = true; C.dirty = false;
+      return;
+    }
     for (const [v, e] of this.set) {
       if (!e.focus || !e.mesh) continue;
       const c = C.compact.get(v);
@@ -468,6 +592,9 @@ export class RegionMeshes {
     this.set.set(v, { focus, mesh: null });
     const cached = this.cache.get(this.vol);
     if (cached && cached.has(v)) { this._mesh(v, cached.get(v)); return; }
+    this._request(v);
+  }
+  _request(v) {
     if (!this.worker || this.pending.has(v)) return;
     this.pending.add(v);
     this.worker.postMessage({ type: 'mesh', gen: this.gen, label: v });

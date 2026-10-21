@@ -1,10 +1,10 @@
 // ── Volume surfaces: a scalar volume's level surface as a mesh ──────────
 // A loaded volume other than the one the raymarcher shows (a vessel or
 // probability map, a lesion, a cluster) drawn as a solid triangle surface
-// at a level of its own values, together with the raymarched brain. Unlike
-// a label volume's region meshes there is no mask and no blur: the map's
-// own gradual edges place the surface between voxels, so thin structures
-// keep their shape as long as their values reach the level.
+// at a level of its own values, together with the raymarched brain. The
+// map's own gradual edges place the surface between voxels, so thin
+// structures keep their shape as long as their values reach the level.
+// setVoxels(true): instead the voxels at or above the level, as cubes.
 //
 // Meshes are built in the region-mesh worker (its 'field' / 'surface'
 // requests). Moving the level re-meshes: one request at a time, the latest
@@ -29,6 +29,7 @@ export class VolumeSurfaces {
     scene.add(this.group);
     this.items = new Map();   // key → { id, invAb, level, color, shown, hidden, mesh, tris, busy, want, seq, error }
     this.nextId = 1;
+    this.voxels = false;      // setVoxels(): the voxels at or above the level as cubes
     this.clipUniforms = makeClipUniforms();   // (CLIPPING: index.html updates their values)
     try {
       this.worker = new Worker(new URL('./region-mesh-worker.js', import.meta.url), { type: 'module' });
@@ -92,6 +93,12 @@ export class VolumeSurfaces {
     it.want = level;
     this._next(it);
   }
+  // smooth level surfaces (false) or the voxels at or above the level (true): rebuilds the shown ones
+  setVoxels(on) {
+    if (this.voxels === !!on) return;
+    this.voxels = !!on;
+    for (const it of this.items.values()) if (it.shown) { it.builtLevel = undefined; it.want = it.level; this._next(it); }
+  }
   // forget the volume (removed from the list)
   drop(key) {
     const it = this.items.get(key);
@@ -106,7 +113,7 @@ export class VolumeSurfaces {
     if (it.busy || it.want === null || !this.worker) return;
     it.busy = true; it.seq++;
     const level = it.want; it.want = null;
-    this.worker.postMessage({ type: 'surface', id: it.id, seq: it.seq, level });
+    this.worker.postMessage({ type: 'surface', id: it.id, seq: it.seq, level, voxels: this.voxels });
   }
 
   _done(msg) {

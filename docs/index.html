@@ -148,9 +148,16 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
 #menu-btn .icon{margin-right:0;}
 /* CLIPPING: the button pair and its panel */
 .clip-btns{display:flex;}
+/* SURFACE SMOOTHING: a section of the 3D tab (buildSmoothPanel) */
+#smooth-panel .smooth-grid{display:flex;flex-direction:column;gap:3px;margin:0 0 8px 10px;}
+#smooth-panel .clip-dim{opacity:0.45;}
+#smooth-panel label.chk{display:flex;align-items:center;gap:6px;cursor:pointer;}
 /* CLIPPING PLANE: a section of the 3D tab (buildClipPanel) */
 #clip-panel{margin-bottom:4px;}
-#clip-panel .clip-grid{display:grid;grid-template-columns:120px 26px 1fr;align-items:center;gap:4px 6px;margin:2px 0 8px;}
+#clip-panel .clip-grid{display:grid;grid-template-columns:18px auto minmax(0,1fr);align-items:center;gap:4px 8px;margin:0 0 8px 10px;}
+#clip-panel .clip-row .clip-mode-btn{white-space:nowrap;padding:2px 5px;}
+#clip-panel .clip-row.clip-modes{gap:4px;}
+#clip-panel .clip-dim{opacity:0.45;}   /* mode off: kept, still usable, dimmed */
 #clip-panel .clip-grid .nm{display:flex;align-items:center;gap:6px;}
 #clip-panel .clip-grid .brick-btn{width:18px;height:18px;flex:none;}
 #clip-panel .clip-row > .lbl{color:var(--dim);font-size:9px;letter-spacing:0.08em;min-width:64px;}
@@ -162,7 +169,6 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
 #clip-panel .clip-plane-btn.sag{--pc:var(--sag);} #clip-panel .clip-plane-btn.cor{--pc:var(--cor);} #clip-panel .clip-plane-btn.axi{--pc:var(--axi);}
 #clip-panel .clip-plane-btn{border-color:var(--pc);color:var(--pc);}
 #clip-panel .clip-plane-btn.on{background:var(--pc);color:#04070a;}
-#clip-panel .clip-plane-btn.on.idle{background:transparent;color:var(--pc);border-style:dashed;}
 #clip-panel .clip-mode-btn{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid var(--border);color:var(--dim);
   font:inherit;font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;}
 #clip-panel .clip-mode-btn.on{border-color:var(--accent);color:var(--bright);background:rgba(155,187,255,0.12);}
@@ -809,6 +815,7 @@ input[type=file]{display:none;}
       <button data-page="markers">Markers</button>
       <button data-page="3d">3D</button>
       <button class="mm-sub" data-page="3d" data-sec="CLIPPING PLANE">Clipping</button>
+      <button class="mm-sub" data-page="3d" data-sec="SURFACE SMOOTHING">Surface smoothing</button>
       <button class="mm-sub" data-page="3d" data-sec="GLASS MODE|LIGHT">Light &amp; effects</button>
       <button data-page="2d">2D</button>
       <button class="mm-sub" data-page="2d" data-sec="SLICE PLANES">Slice cutting angle</button>
@@ -911,6 +918,8 @@ input[type=file]{display:none;}
     </div>
     <div class="cfg-section" data-tip="The clipping plane: which parts of the scene it cuts (and the volume solid or glass), along which plane, as a slice or one side.">CLIPPING PLANE</div>
     <div id="clip-panel"></div>
+    <div class="cfg-section" data-tip="Per part of the scene: its surfaces smooth, or every voxel step as it is (cubes, lit flat). Either way the surface follows the voxels — smoothing only rounds the steps.">SURFACE SMOOTHING</div>
+    <div id="smooth-panel"></div>
     <div class="cfg-section" data-tip="The glass of the rendered volume (the mortar-only brick in ANATOMY › IMAGE VOLUME) and of regions drawn as glass: how thin its rim, how see-through.">GLASS MODE</div>
     <div class="ctl-row" id="row-rim" data-tip="Fresnel exponent (shown at right), 0 to ∞. Higher = thinner silhouette edges only,\nlower = broader, more filled-in glass brain. Möbius-mapped: centre = 1.0, the standard linear Fresnel term.">
       <label>rim</label>
@@ -1809,9 +1818,16 @@ function updateCoordLabel(planeKey, cursor, tag) {
   const invAb = state.get('anat.invAb'), off = state.get('anat.cropOffset') || [0, 0, 0];
   const vox  = mat3mulVec(invAb, cursor).map((v, i) => Math.round(v) + off[i]); // indices of the original file
   const ids  = { sag: `coord-sag-${tag}`, cor: `coord-cor-${tag}`, axi: `coord-axi-${tag}` };
-  const axes = { sag: 'x', cor: 'y', axi: 'z' };
-  const idx  = { sag: 0,   cor: 1,   axi: 2 };
-  document.getElementById(ids[planeKey]).textContent = axes[planeKey] + '=' + vox[idx[planeKey]];
+  // the file's own voxel axis (i, j or k) that runs most nearly along the
+  // section's normal (R–L for SAG, A–P for COR, S–I for AXI): stepping the
+  // section steps that index. A file stored in another order (PSR, say)
+  // gets SAG = k, not i.
+  const w = { sag: 0, cor: 1, axi: 2 }[planeKey];
+  let r = 0;
+  for (let q = 1; q < 3; q++) if (Math.abs(invAb[q][w]) > Math.abs(invAb[r][w])) r = q;
+  const el = document.getElementById(ids[planeKey]);
+  el.textContent = 'ijk'[r] + '=' + vox[r];
+  el.title = 'voxel index ' + 'ijk'[r] + ' (the image volume\'s ' + ['1st', '2nd', '3rd'][r] + ' axis) — click to copy';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2104,8 +2120,7 @@ function meshCasters() {
     let sr = null;
     try { sr = rm && rm.solidRegions(); } catch (e) {}
     if (!sr) continue;
-    const { raw, shape, invAb } = sr.ref, [nx, ny, nz] = shape, solid = sr.solid, cut = clipFnOf(rm.clipUniforms);
-    const isSolid = solid instanceof Uint8Array ? v => v >= 0 && v < solid.length && solid[v] === 1 : v => solid.has(v);
+    const { raw, shape, invAb } = sr.ref, [nx, ny, nz] = shape, isSolid = sr.test, cut = clipFnOf(rm.clipUniforms);
     const A = invAb, t = A.length === 4 ? A[3] : [0, 0, 0];
     parts.push({ key: 'r' + rm.version + ':' + clipKeyOf(rm.clipUniforms), box: sr.box,
       at: (x, y, z) => {
@@ -2783,13 +2798,14 @@ function pickRegions(clientX, clientY, wMax = Infinity) {
   for (let t = t0 + step / 2; t <= t1 && labels.length < 16; t += step) {
     const x = Math.round(o[0] + t * d[0]), y = Math.round(o[1] + t * d[1]), z = Math.round(o[2] + t * d[2]);
     if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) continue;
-    const v = raw[x + nx * (y + ny * z)];
-    if (!(v > 0) || labels.includes(v)) continue;
-    if (volCut) {
-      wp.copy(_rgNear).lerp(_rgFar, t);
-      if (volCut(wp.x, wp.y, wp.z) && !(regionMeshes && regionMeshes.visible && regionMeshes.has(v) && !regionMeshes.clipped(wp))) continue;
+    for (const v of regionsOfRaw(ref, raw[x + nx * (y + ny * z)])) {   // (an ROI set: each of its ROIs here)
+      if (!(v > 0) || labels.includes(v)) continue;
+      if (volCut) {
+        wp.copy(_rgNear).lerp(_rgFar, t);
+        if (volCut(wp.x, wp.y, wp.z) && !(regionMeshes && regionMeshes.visible && regionMeshes.has(v) && !regionMeshes.clipped(wp))) continue;
+      }
+      labels.push(v); if (tFirst === null) tFirst = t;
     }
-    labels.push(v); if (tFirst === null) tFirst = t;
   }
   if (!labels.length) return null;
   const p = _rgNear.clone().lerp(_rgFar, tFirst);
@@ -4113,10 +4129,10 @@ let endLabelSrc = null;   // { vol, raw: Int32Array, shape, invAb, map }
 let _labelRefLoading = null;
 let labelVolChoice;       // undefined: the default; null: none ('---'); else the chosen volume
 let regionMeshes = null;  // set up with the 3D scene (below)
-const labelVolCandidates = () => volumes.filter(v => v.category === 'parcellation' && !v.isColor);
+const labelVolCandidates = () => [...volumes.filter(v => v.category === 'parcellation' && !v.isColor), ...roiSets()];
 function wantedLabelVol() {
   if (labelVolChoice === null) return null;
-  if (labelVolChoice && volumes.includes(labelVolChoice)) return labelVolChoice;
+  if (labelVolChoice && (volumes.includes(labelVolChoice) || roiSets().includes(labelVolChoice))) return labelVolChoice;
   return volumes.find(v => v.category === 'parcellation' && v.lut && !v.isColor) || null;
 }
 // The color table of the label volume in memory (the shown volume's own
@@ -4143,6 +4159,15 @@ async function ensureLabelRef() {
     return;
   }
   _labelRefLoading = vol;
+  if (vol.roiSet) {   // an ROI set: its bits
+    try {
+      const r = await roiRefOf(vol);
+      if (wantedLabelVol() === vol) setLabelRef({ vol, ...r, map: labelMapOf(vol) });
+    } catch (e) { console.warn('could not read the ROIs', e); }
+    finally { if (_labelRefLoading === vol) _labelRefLoading = null; }
+    if (wantedLabelVol() !== (endLabelSrc && endLabelSrc.vol)) ensureLabelRef();
+    return;
+  }
   try {
     const a = cropToContent(await parseVolumeFile(vol.file), { noisy: false });
     if (wantedLabelVol() !== vol || (a.channels || 1) !== 1) return;
@@ -4171,10 +4196,11 @@ function labelRefAt(p) {
   const [nx, ny, nz] = ref.shape;
   const [x, y, z] = mat3mulVec(ref.invAb, p).map(Math.round);
   if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) return null;
-  const v = ref.raw[x + nx * (y + ny * z)];
+  const raw = ref.raw[x + nx * (y + ny * z)];
   const map = ref.vol === activeVolume && lutMap ? lutMap : ref.map;
-  const e = map && map.get(v);
-  return [v, e ? e.name : (v === 0 ? '' : 'label ' + v + ' (unmapped)')];
+  const regs = regionsOfRaw(ref, raw), v = regs.length ? regs[0] : 0;   // (an ROI set: all its ROIs here, named together)
+  const nameOf = r => { const e = map && map.get(r); return e ? e.name : 'label ' + r + ' (unmapped)'; };
+  return [v, regs.map(nameOf).join(' + ')];
 }
 const END_BG_RGB = [0.45, 0.45, 0.45];
 const endStyleLabel = () => srcStyle.mode === 'label' || tgtStyle.mode === 'label';
@@ -4205,7 +4231,7 @@ function applyEndDotColors() {
       const [x, y, z] = mat3mulVec(invAb, [P[i], P[i + 1], P[i + 2]]).map(Math.round);
       let rgb = END_BG_RGB;
       if (x >= 0 && y >= 0 && z >= 0 && x < nx && y < ny && z < nz) {
-        const v = raw[x + nx * (y + ny * z)];
+        const r0 = raw[x + nx * (y + ny * z)], v = endLabelSrc.bits ? (regionsOfRaw(endLabelSrc, r0)[0] || 0) : r0;
         if (v !== 0) {
           rgb = cache.get(v);
           if (!rgb) { const e = map && map.get(v); rgb = e ? [e.r, e.g, e.b] : END_BG_RGB; cache.set(v, rgb); }
@@ -4324,8 +4350,9 @@ function collectState() {
       lineStyle, srcStyle, tgtStyle,
       glassBrainAlpha, glassBrainRimPow,
       pitch, yaw, roll,
-      renderMode, qualityTier, clipPlane, clipFlip, sliceMode, framesVisible, cursorAxesOn,
+      renderMode, qualityTier, clipOn, clipPlane, clipFlip, sliceMode, framesVisible, cursorAxesOn,
       clipParts: JSON.parse(JSON.stringify(clipParts)),
+      surfaceSmoothing: { ...smoothing },
       // how dimmed regions are drawn: 'glass' or 'hollow'
       dimmedRegions: { parcellation: regionMeshes ? dimName(regionMeshes.dimMode) : 'glass', segmentation: segMeshes ? dimName(segMeshes.dimMode) : 'glass' },
     },
@@ -4732,11 +4759,114 @@ async function parseVolumeFile(f) {
   throw `Unsupported format ${ext}`;
 }
 
+// ── ROI SETS ──
+// Masks (0/1 volumes: one value besides 0, as MRtrix ROIs: seed, include,
+// exclude) are grouped, per voxel grid (same size and voxel → world
+// matrix), into ROI sets of at most ROI_MAX: a set is offered as a label
+// volume in PARCELLATION and SEGMENTATION ("ROIs (3)"; several sets:
+// "ROIs 1 (3)", "ROIs 2 (5)"; a full one "ROIs (32=MAX)"), each ROI one
+// region, named after its file. Masks beyond the 32nd on a grid stay
+// ordinary label volumes only. ROIs may overlap: the set's volume holds one
+// bit per ROI (ref.bits; region v = bit v−1). Each mask stays an ordinary
+// volume too (apply mask, image volume). Colors from the name: seed
+// green, include blue, exclude red, mask amber, else spread.
+const ROI_MAX = 32;
+function markMask(vol, p) {
+  vol.mask = false;
+  if ((p.channels || 1) !== 1 || !p.data || !p.shape) return;
+  const d = p.data;
+  let val = null, n = 0;
+  for (let i = 0; i < d.length; i++) {
+    const v = d[i];
+    if (v === 0 || v !== v) continue;
+    if (val === null) val = v; else if (v !== val) return;
+    n++;
+  }
+  if (!n) return;
+  vol.mask = true;
+  vol.gridKey = p.shape.slice(0, 3).join('x') + '|' + [].concat(...(p.Ab || []).map(r => [].concat(r))).map(x => (+x).toFixed(4)).join(',');
+}
+const _roiSetCache = new Map();
+function roiColor(name, i) {
+  const n = name.toLowerCase();
+  if (/seed/.test(n)) return [0.25, 0.85, 0.35];
+  if (/include|incl/.test(n)) return [0.25, 0.6, 1.0];
+  if (/exclude|excl|avoid/.test(n)) return [0.92, 0.25, 0.22];
+  if (/mask/.test(n)) return [1.0, 0.7, 0.15];
+  const h = ((i * 137.508 + 200) % 360) / 60, c = 0.65 * (1 - Math.abs(2 * 0.58 - 1)), x = c * (1 - Math.abs(h % 2 - 1)), m = 0.58 - c / 2;
+  const [r, g, b] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
+  return [r + m, g + m, b + m];
+}
+function makeRoiSet(members, gridKey) {
+  const map = new Map();
+  members.forEach((m, i) => { const name = volumeBaseName(m.label || m.file.name), [r, g, b] = roiColor(name, i); map.set(i + 1, { name, r, g, b }); });
+  const set = { roiSet: true, members, gridKey, file: { name: 'ROIs' }, label: 'ROIs', category: 'parcellation', isColor: false,
+                autoLut: null, uiSettingsOpen: false, labelInfo: { values: members.map((_, i) => i + 1) } };
+  set.lut = { file: null, name: 'ROI colors', map, maxIndex: members.length, volume: set, uiSettingsOpen: false, custom: true };
+  return set;
+}
+// the ROI sets of the masks loaded now (the same objects while their members stay)
+function roiSets() {
+  const groups = new Map();
+  for (const v of volumes) if (v.mask && v.gridKey && !v.isColor) {
+    if (!groups.has(v.gridKey)) groups.set(v.gridKey, []);
+    groups.get(v.gridKey).push(v);
+  }
+  const sets = [...groups].map(([gk, vs]) => ({ gk, members: vs.slice(0, ROI_MAX) }));
+  return sets.map((s, i) => {
+    const key = s.gk + '|' + s.members.map(m => m.file.name).join('|');
+    let o = _roiSetCache.get(key);
+    if (!o) { o = makeRoiSet(s.members, s.gk); _roiSetCache.set(key, o); }
+    const n = s.members.length;
+    o.label = o.file.name = 'ROIs' + (sets.length > 1 ? ' ' + (i + 1) : '') + ' (' + (n >= ROI_MAX ? n + '=MAX' : n) + ')';
+    return o;
+  });
+}
+// an ROI set's volume: one bit per ROI, on the masks' own grid (read once)
+async function roiRefOf(set) {
+  if (set._ref) return set._ref;
+  let raw = null, shape, invAb;
+  for (let k = 0; k < set.members.length; k++) {
+    const p = await parseVolumeFile(set.members[k].file);
+    if (!raw) { shape = p.shape.slice(0, 3); invAb = p.invAb; raw = new Uint32Array(shape[0] * shape[1] * shape[2]); }
+    const d = p.data, bit = (1 << k) >>> 0;
+    for (let i = 0; i < raw.length; i++) { const v = d[i]; if (v !== 0 && v === v) raw[i] |= bit; }
+  }
+  return set._ref = { raw, shape, invAb, bits: true };
+}
+// the regions at a raw value of a label volume in memory: [v] (0: none), or an ROI set's ROIs
+function regionsOfRaw(ref, v) {
+  if (!v) return [];
+  if (!ref.bits) return [v];
+  const out = [];
+  for (let m = v >>> 0, i = 1; m; m >>>= 1, i++) if (m & 1) out.push(i);
+  return out;
+}
+
 // Classifies the volumes that aren't classified yet (and aren't being
 // loaded as the active one — loadAnat does that one itself), one at a
 // time after the active volume has finished loading, so it doesn't slow
 // that down. Each needs a full parse; nothing of it is kept.
 let _classifying = false, _loadingVolume = null;
+// one volume: its box, colour or not, mask or not (and its grid), scan or label volume
+async function classifyVolume(vol) {
+  try {
+    const parsed = await parseVolumeFile(vol.file);
+    markMask(vol, parsed);
+    const a = cropToContent(parsed, { noisy: isWebmName(vol.file.name) });
+    vol.box = volumeWorldBox(a.shape, a.Ab); // for the scene's reference (recomputeView)
+    recomputeView();
+    vol.isColor = (a.channels || 1) === 3;
+    if (vol.category == null) { // may have been set meanwhile (LUT attached, "show as")
+      vol.category = !vol.isColor && (vol.mask || looksLikeParcellation(a)) ? 'parcellation' : 'anatomy';   // (a 0/1 mask: always — thin ROIs can fail the sniff)
+      vol.categorySource = 'sniff';
+    }
+  } catch (e) {
+    console.warn('could not classify ' + vol.file.name, e);
+    vol.classifyFailed = true;
+    if (vol.category == null) { vol.category = 'anatomy'; vol.categorySource = 'error'; }
+  }
+}
 async function classifyPendingVolumes() {
   if (_classifying) return;
   _classifying = true;
@@ -4747,20 +4877,7 @@ async function classifyPendingVolumes() {
                                  && v !== activeVolume && v !== _loadingVolume && !v.classifyFailed);
       if (!vol) break;
       await new Promise(r => setTimeout(r, 30)); // let the UI breathe between volumes
-      try {
-        const a = cropToContent(await parseVolumeFile(vol.file), { noisy: isWebmName(vol.file.name) });
-        vol.box = volumeWorldBox(a.shape, a.Ab); // for the scene's reference (recomputeView)
-        recomputeView();
-        vol.isColor = (a.channels || 1) === 3;
-        if (vol.category == null) { // may have been set meanwhile (LUT attached, "show as")
-          vol.category = !vol.isColor && looksLikeParcellation(a) ? 'parcellation' : 'anatomy';
-          vol.categorySource = 'sniff';
-        }
-      } catch (e) {
-        console.warn('could not classify ' + vol.file.name, e);
-        vol.classifyFailed = true;
-        if (vol.category == null) { vol.category = 'anatomy'; vol.categorySource = 'error'; }
-      }
+      await classifyVolume(vol);
       if (resolveAutoLut() === activeVolume) applyActiveVolumeDisplay();
       registerVolumeItems();
     }
@@ -4801,7 +4918,7 @@ async function loadAnat(f){
   const vol = volumeForFile(f);
   _loadingVolume = vol;
   let anat;
-  try { anat = cropToContent(await parseVolumeFile(f), { noisy: isWebmName(f.name) }); }
+  try { const parsed = await parseVolumeFile(f); markMask(vol, parsed); anat = cropToContent(parsed, { noisy: isWebmName(f.name) }); }
   catch (e) { setProgress('Error.'); await tick(); throw e; }
   finally { if (_loadingVolume === vol) _loadingVolume = null; }
   const { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels, cropOffset, origShape, cropThreshold } = anat;
@@ -4813,7 +4930,7 @@ async function loadAnat(f){
   const isColorData = channels === 3;
   vol.isColor = isColorData;
   if (vol.category == null) {
-    vol.category = !isColorData && looksLikeParcellation(anat) ? 'parcellation' : 'anatomy';
+    vol.category = !isColorData && (vol.mask || looksLikeParcellation(anat)) ? 'parcellation' : 'anatomy';
     vol.categorySource = 'sniff';
   }
   resolveAutoLut(); // (its table, if it gets one, is used just below)
@@ -5472,23 +5589,36 @@ window.setRenderMode = mode => { setRenderMode(mode); return renderMode; }; // c
 // CLIP: the box switches clipping on/off; the plane buttons pick the
 // plane (COR at start) and, picked while off, switch it on too.
 // ── CLIPPING PLANE (a section of the 3D tab) ──
-// A table of the parts in the scene — whether
-// each is cut (clipping is on while any is) and how far it may reach past
-// the cut, the volume's bricks switching solid ⇄ glass — then the plane
-// (sag/cor/axi), the mode — slice (then its thickness) or one-sided (then
-// flip sides) — and the hollow shader for dimmed regions. Clipping the
-// volume makes it solid.
+// MODE (off / slice / one-sided: the switch), PLANE (sag/cor/axi), the
+// slab's THICKNESS or FLIP SIDES, and APPLY TO: per part in the scene
+// whether it is cut and how far it may reach past the cut (the volume's
+// bricks after its name: solid ⇄ glass); then the hollow shader for
+// dimmed regions. Mode off dims the rest, which stays usable and is kept.
+// Clipping the volume makes it solid.
 const clipPanel = document.getElementById('clip-panel');
 const volumeClipped = () => clipPlane !== 'none' && clipParts.volume.clip;
-// Clipping is on while any part is ticked in the table, along the chosen
-// plane (lastClipPlane, COR at start).
+// Clipping: MODE off / slice / one-sided (clipOn, sliceMode), along the
+// chosen plane (lastClipPlane, COR at start), applied to the parts ticked
+// under APPLY TO. Off keeps all of it for the next time; switching on with
+// nothing ticked ticks the volume (or the first part shown).
 const clipAnyPart = () => Object.values(clipParts).some(c => c.clip);
-function setClip({ plane, flip, slice } = {}) {
+let clipOn = false;
+function setClip({ on, plane, flip, slice } = {}) {
   const wasClipped = volumeClipped();
   if (plane) lastClipPlane = plane;
   if (flip !== undefined) clipFlip = !!flip;
   if (slice !== undefined) sliceMode = !!slice;
-  clipPlane = clipAnyPart() ? lastClipPlane : 'none';
+  if (on !== undefined) {
+    clipOn = !!on;
+    if (clipOn) {
+      const shown = clipPartsShown();
+      if (!shown.some(([k]) => clipParts[k].clip)) {
+        const first = shown.find(([k]) => k === 'volume') || shown[0];
+        if (first) clipParts[first[0]].clip = true;
+      }
+    }
+  }
+  clipPlane = clipOn && clipAnyPart() ? lastClipPlane : 'none';
   if (!wasClipped && volumeClipped() && renderMode === 'glass') setRenderMode('solid');   // (a cut reads as a cut on a solid)
   refreshClipSection();   // (and the section)
   updatePlaneMeshes();
@@ -5511,23 +5641,64 @@ function buildClipPanel() {
   const p = clipPanel;
   p.innerHTML = '';
   const b = document.createElement('div');
-  const row = label => {
-    const r = document.createElement('div'); r.className = 'clip-row';
+  const row = (label, dim) => {
+    const r = document.createElement('div'); r.className = 'clip-row' + (dim ? ' clip-dim' : '');
     const l = document.createElement('span'); l.className = 'lbl'; l.textContent = label;
     r.appendChild(l); b.appendChild(r);
     return r;
   };
-  // the parts: clip or not, and how far past the cut; the volume's bricks: solid ⇄ glass
+  const off = !clipOn;
+  // mode: the switch
+  const r0 = row('mode'); r0.classList.add('clip-modes');
+  for (const [m, text, tip] of [['off', 'off', 'no clipping (the settings below are kept)'],
+                                ['slice', 'slice', 'keep a slab around the plane'], ['one', 'one-sided', 'keep one side of the plane']]) {
+    const cur = !clipOn ? 'off' : sliceMode ? 'slice' : 'one';
+    const bt = document.createElement('button');
+    bt.className = 'clip-mode-btn' + (cur === m ? ' on' : '');
+    bt.textContent = text; bt.dataset.tip = tip;
+    bt.addEventListener('click', () => setClip(m === 'off' ? { on: false } : { on: true, slice: m === 'slice' }));
+    r0.appendChild(bt);
+  }
+  // plane
+  const r1 = row('plane', off);
+  for (const k of ['sag', 'cor', 'axi']) {
+    const bt = document.createElement('button');
+    bt.className = 'clip-plane-btn ' + k + (lastClipPlane === k ? ' on' : '');
+    bt.textContent = k.toUpperCase();
+    bt.dataset.tip = 'clip along the ' + { sag: 'sagittal', cor: 'coronal', axi: 'axial' }[k] + ' plane, through the cursor';
+    bt.addEventListener('click', () => setClip({ plane: k }));
+    r1.appendChild(bt);
+  }
+  // the slab's thickness (slice), or which side (one-sided)
+  if (sliceMode) {
+    const r = row('thickness', off);
+    const th = makeSliderRow('', { min: 0.5, max: 20, step: 0.5, value: slabMm, format: v => v.toFixed(1) + ' mm',
+      onInput: v => { const el = document.getElementById('slab-slider'); el.value = v; el.dispatchEvent(new Event('input')); } }).querySelector('.dt-scrub');
+    th.dataset.tip = 'the slab\'s thickness (also the slab of streamlines in the 2D sections)';
+    r.appendChild(th);
+  } else {
+    const r = row('', off);
+    const fl = document.createElement('label'); fl.className = 'chk';
+    fl.innerHTML = '<input type="checkbox" class="dt-check"' + (clipFlip ? ' checked' : '') + '>flip sides';
+    fl.dataset.tip = 'keep the other side (L/P/I instead of R/A/S)';
+    fl.querySelector('input').addEventListener('change', e => setClip({ flip: e.target.checked }));
+    r.appendChild(fl);
+  }
+  // apply to: per part in the scene, cut or not, and how far it may reach past the cut;
+  // the volume's bricks (solid ⇄ glass) after its name
   const parts = clipPartsShown();
   _clipPanelKey = parts.map(x => x[0]).join();
   if (parts.length) {
-    const g = document.createElement('div'); g.className = 'clip-grid';
-    g.innerHTML = '<span class="hd">part</span><span class="hd">clip</span><span class="hd">extend</span>';
+    row('apply to', off);
+    const g = document.createElement('div'); g.className = 'clip-grid' + (off ? ' clip-dim' : '');
     for (const [key, name] of parts) {
       const cp = clipParts[key];
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = cp.clip;
+      cb.dataset.tip = 'cut ' + name + ' by the clipping plane';
+      cb.addEventListener('change', () => { cp.clip = cb.checked; setClip(); });
       const nm = document.createElement('span'); nm.className = 'nm';
       nm.appendChild(document.createTextNode(name));
-      if (key === 'volume') {   // its bricks after the name: solid ⇄ glass
+      if (key === 'volume') {
         const on = renderMode !== 'none', solid = (on ? renderMode : _shownRenderMode) === 'solid';
         const bt = document.createElement('button');
         bt.className = 'brick-btn' + (on ? '' : ' grey');
@@ -5538,56 +5709,19 @@ function buildClipPanel() {
           const m = solid ? 'glass' : 'solid';
           if (on) setRenderMode(m); else _shownRenderMode = m;
           if (activeVolume) activeVolume.shaderMode = m;
-          refreshClipSection(); registerVolumeItems(); buildClipPanel();
+          registerVolumeItems(); buildClipPanel();
         });
         nm.appendChild(bt);
       }
-      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = cp.clip;
-      cb.dataset.tip = 'cut ' + name + ' by the clipping plane';
-      cb.addEventListener('change', () => { cp.clip = cb.checked; setClip(); });
-      g.append(nm, cb);
-      if (key === 'volume') { g.appendChild(document.createElement('span')); continue; }
-      const ex = makeSliderRow('', { min: 0, max: 50, step: 0.5, value: cp.extend, format: v => v.toFixed(1) + ' mm',
+      g.append(cb, nm);
+      if (key === 'volume') { g.append(document.createElement('span')); continue; }
+      const ex = makeSliderRow('', { min: 0, max: 50, step: 0.5, value: cp.extend, format: v => 'extend ' + v.toFixed(1) + ' mm',
         onInput: v => { cp.extend = v; updateClip3D(); render3D(); } }).querySelector('.dt-scrub');
       ex.dataset.tip = 'how far ' + name + ' may reach past the cut (in slice mode: past either face of the slab) — it sticks out of the cut';
       if (!cp.clip) ex.style.opacity = '0.4';
-      g.appendChild(ex);
+      g.append(ex);
     }
     b.appendChild(g);
-  }
-  const on = clipPlane !== 'none';
-  // plane
-  const r1 = row('plane');
-  for (const k of ['sag', 'cor', 'axi']) {
-    const bt = document.createElement('button');
-    bt.className = 'clip-plane-btn ' + k + (lastClipPlane === k ? ' on' : '') + (on ? '' : ' idle');
-    bt.textContent = k.toUpperCase();
-    bt.dataset.tip = 'clip along the ' + { sag: 'sagittal', cor: 'coronal', axi: 'axial' }[k] + ' plane, through the cursor';
-    bt.addEventListener('click', () => setClip({ plane: k }));
-    r1.appendChild(bt);
-  }
-  // mode: slice or one-sided; below it, the slab's thickness or which side
-  const r2 = row('mode');
-  for (const [slice, text, tip] of [[true, 'slice', 'keep a slab around the plane'], [false, 'one-sided', 'keep one side of the plane']]) {
-    const bt = document.createElement('button');
-    bt.className = 'clip-mode-btn' + (sliceMode === slice ? ' on' : '');
-    bt.textContent = text; bt.dataset.tip = tip;
-    bt.addEventListener('click', () => setClip({ slice }));
-    r2.appendChild(bt);
-  }
-  if (sliceMode) {
-    const r = row('thickness');
-    const th = makeSliderRow('', { min: 0.5, max: 20, step: 0.5, value: slabMm, format: v => v.toFixed(1) + ' mm',
-      onInput: v => { const el = document.getElementById('slab-slider'); el.value = v; el.dispatchEvent(new Event('input')); } }).querySelector('.dt-scrub');
-    th.dataset.tip = 'the slab\'s thickness (also the slab of streamlines in the 2D sections)';
-    r.appendChild(th);
-  } else {
-    const r = row('');
-    const fl = document.createElement('label'); fl.className = 'chk';
-    fl.innerHTML = '<input type="checkbox" class="dt-check"' + (clipFlip ? ' checked' : '') + '>flip sides';
-    fl.dataset.tip = 'keep the other side (L/P/I instead of R/A/S)';
-    fl.querySelector('input').addEventListener('change', e => setClip({ flip: e.target.checked }));
-    r.appendChild(fl);
   }
   // dimmed regions (sun off) of the parcellation and segmentation: glass, or hollow
   if (wantedLabelVol() || segVol) {
@@ -5609,6 +5743,54 @@ function buildClipPanel() {
 // panel follows (registered with the data store once that exists)
 function clipPanelFollow() {
   if (clipPartsShown().map(x => x[0]).join() !== _clipPanelKey) buildClipPanel();
+  if (smoothPartsKey() !== _smoothPanelKey) buildSmoothPanel();
+}
+
+// ── SURFACE SMOOTHING (a section of the 3D tab) ──
+// Per part: smooth surfaces (on) or every voxel step (off, cubes lit flat).
+//   volume render  LABEL mode only: the occupancy blur (σ 0.8) or the raw voxels
+//   parcellation, segmentation   region meshes 'smooth' or 'voxels' (their caps follow)
+//   isosurface     the level surface, or the voxels at or above the level
+const smoothing = { volume: true, parcellation: true, segmentation: true, isosurface: true };
+const SMOOTH_PARTS = [
+  ['volume', 'volume render', () => labelsShown(), 'the image volume in LABEL mode (label colors on)'],
+  ['parcellation', 'parcellation', () => !!wantedLabelVol(), 'the parcellation\'s regions in 3D'],
+  ['segmentation', 'segmentation', () => !!segVol, 'the segmentation\'s regions in 3D'],
+  ['isosurface', 'isosurface', () => !!overlayVol, 'the isosurface'],
+];
+let _smoothPanelKey = null;
+const smoothHas = has => { try { return has(); } catch { return false; } };   // (early: what it asks may not exist yet)
+const smoothPartsKey = () => SMOOTH_PARTS.map(([k, , has]) => (smoothHas(has) ? 1 : 0) + (smoothing[k] ? 2 : 0)).join();
+function applySmoothing(part) {
+  const on = smoothing[part];
+  if (part === 'volume') { OCC_SIGMA = on ? 0.8 : 0; _occKey = null; applyLabelVisibility(); }
+  else if (part === 'parcellation') { if (regionMeshes) regionMeshes.setSurface(on ? 'smooth' : 'voxels'); }
+  else if (part === 'segmentation') { if (segMeshes) segMeshes.setSurface(on ? 'smooth' : 'voxels'); }
+  else if (part === 'isosurface') { if (volumeSurfaces) volumeSurfaces.setVoxels(!on); }
+  render3D();
+}
+function setSmoothing(part, on) {
+  if (!(part in smoothing) || smoothing[part] === !!on) return;
+  smoothing[part] = !!on;
+  applySmoothing(part);
+  buildSmoothPanel();
+}
+function buildSmoothPanel() {
+  const p = document.getElementById('smooth-panel');
+  if (!p) return;
+  _smoothPanelKey = smoothPartsKey();
+  p.innerHTML = '';
+  const g = document.createElement('div'); g.className = 'smooth-grid';
+  for (const [key, name, has, what] of SMOOTH_PARTS) {
+    const shown = smoothHas(has);
+    const l = document.createElement('label'); l.className = 'chk' + (shown ? '' : ' clip-dim');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = smoothing[key];
+    cb.addEventListener('change', () => setSmoothing(key, cb.checked));
+    l.append(cb, document.createTextNode(name));
+    l.dataset.tip = what + ': ' + (smoothing[key] ? 'smooth — click: every voxel step' : 'every voxel step — click: smooth') + (shown ? '' : ' (none shown now)');
+    g.appendChild(l);
+  }
+  p.appendChild(g);
 }
 refreshClipSection();
 document.getElementById('shadow-slider').addEventListener('input', e => {
@@ -6707,7 +6889,20 @@ async function dispatchOpenedFiles(rawFiles){
     // has both, whatever the order of the files (a re-packed zip lists them
     // differently); the rest are listed, classified in the background, and
     // loaded when selected.
-    state.update({ 'anat.file': firstToShow(newVols).file });
+    // With a scan shown already, the drop's volumes are classified first and
+    // the first scan among them is shown; a drop of label volumes / masks
+    // only adds them (to PARCELLATION, SEGMENTATION, ROI sets).
+    let show = firstToShow(newVols);
+    if (activeVolume && activeVolume.category === 'anatomy' && !activeVolume.mask) {
+      show = null;
+      const order = [firstToShow(newVols), ...newVols.filter(v => v !== firstToShow(newVols))];
+      for (const v of order) {
+        if (v.category == null || !v.box) await classifyVolume(v);
+        if (v.category === 'anatomy' && !v.mask) { show = v; break; }
+      }
+    }
+    if (show) state.update({ 'anat.file': show.file });
+    else { registerVolumeItems(); classifyPendingVolumes(); }
     did = true;
   } else if (activeChanged) {
     applyActiveVolumeDisplay();
@@ -7046,12 +7241,13 @@ function buildLabelList(vol, el, rm = regionMeshes) {
     cb.addEventListener('click', e => e.stopPropagation());
     cb.addEventListener('change', () => { for (const x of vals) rm.setMember(x, on < vals.length); });
     head.appendChild(cb);
-    if (rm.size) {
-      const all = rm.allFocused;
-      const fb = makeFocusButton(all, () => rm.setAllFocus(!all), all ? 'all regions solid — click: all glass' : 'click: all regions solid');
-      if (!all && rm.anyFocused) fb.classList.add('mixed');
-      head.appendChild(fb);
-    }
+    // the sun is always there; greyed while no region is in 3D (a click then adds all, solid)
+    const all = rm.size > 0 && rm.allFocused;
+    const fb = makeFocusButton(all, () => { if (!rm.size) for (const x of vals) rm.setMember(x, true); else rm.setAllFocus(!all); },
+      !rm.size ? 'click: all regions in 3D' : all ? 'all regions solid — click: all glass' : 'click: all regions solid');
+    if (!rm.size) fb.classList.add('grey');
+    else if (!all && rm.anyFocused) fb.classList.add('mixed');
+    head.appendChild(fb);
   }
   const t = document.createElement('span'); t.className = 'dt-toolbar-lbl';
   t.textContent = 'all ' + vals.length.toLocaleString() + ' region' + (vals.length === 1 ? '' : 's');
@@ -7071,6 +7267,11 @@ function buildLabelList(vol, el, rm = regionMeshes) {
       c.addEventListener('click', e => e.stopPropagation());
       c.addEventListener('change', () => rm.setMember(v, c.checked));
       row.appendChild(c);
+      // its sun: solid ⇄ glass; greyed while it isn't in 3D (a click then adds it, solid)
+      const fb = makeFocusButton(rm.focused(v), () => rm.toggleFocus(v),
+        !rm.has(v) ? 'click: show in 3D' : rm.focused(v) ? 'solid — click: glass' : 'glass — click: solid');
+      if (!rm.has(v)) fb.classList.add('grey');
+      row.appendChild(fb);
     }
     const sw = labelSwatch(v, hex, vol);
     const nm = document.createElement('span'); nm.className = 'dt-label'; nm.textContent = name; nm.dataset.tip = name + ' (' + v + ')';
@@ -7135,6 +7336,7 @@ function fillLabelToolbar(bar, rm) {
 // which loaded lookup table names and colors a label volume (one that
 // belongs to another volume moves here)
 function buildLutChoice(vol, el) {
+  if (vol.roiSet) return;   // (an ROI set's colors: its own, edited per ROI)
   const options = [['', 'auto colors'], ...luts.map((l, i) => [String(i),
     l.name + (l.volume && l.volume !== vol ? '  (now on ' + l.volume.label + ')' : '')])];
   el.appendChild(makeChoiceRow('lookup table', options, vol.lut ? String(luts.indexOf(vol.lut)) : '', value => {
@@ -7158,6 +7360,11 @@ function volumeNameRow(vol, tag) {
   nm.className = 'dt-label'; nm.textContent = vol.label;
   nm.dataset.tip = vol.label === vol.file.name ? vol.file.name : vol.label + '\n' + vol.file.name;
   row.appendChild(nm);
+  if (vol.roiSet) {   // an ROI set: its masks, no header of its own
+    nm.dataset.tip = vol.label + ': ' + vol.members.map(m => m.label).join(', ');
+    const t = document.createElement('span'); t.className = 'dt-tag'; t.textContent = vol.members.length + ' masks'; row.appendChild(t);
+    return row;
+  }
   if (tag) { const t = document.createElement('span'); t.className = 'dt-tag'; t.textContent = tag; row.appendChild(t); }
   row.appendChild(makeInfoButton(() => showVolumeHeader(vol), 'header of ' + vol.file.name));
   return row;
@@ -7352,14 +7559,15 @@ function setSegmentation(vol) {
   registerVolumeItems();
 }
 async function ensureSegRef() {
-  const vol = segVol && volumes.includes(segVol) ? segVol : null;
+  const vol = segVol && (volumes.includes(segVol) || roiSets().includes(segVol)) ? segVol : null;
   if (segRef && segRef.vol === vol) return;
   if (!vol) { segRef = null; if (segMeshes) segMeshes.setRef(null); return; }
   if (_segLoading === vol) return;
   _segLoading = vol;
   try {
-    let raw, shape, invAb;
-    if (endLabelSrc && endLabelSrc.vol === vol) ({ raw, shape, invAb } = endLabelSrc);
+    let raw, shape, invAb, bits = false;
+    if (endLabelSrc && endLabelSrc.vol === vol) ({ raw, shape, invAb, bits } = endLabelSrc);
+    else if (vol.roiSet) ({ raw, shape, invAb, bits } = await roiRefOf(vol));
     else {
       const a = cropToContent(await parseVolumeFile(vol.file), { noisy: false });
       raw = new Int32Array(a.data.length);
@@ -7367,7 +7575,7 @@ async function ensureSegRef() {
       shape = a.shape.slice(); invAb = a.invAb;
     }
     if (segVol !== vol) return;
-    segRef = { vol, raw, shape, invAb };
+    segRef = { vol, raw, shape, invAb, bits: !!bits };
     if (segMeshes) segMeshes.setRef(segRef);
   } catch (e) { console.warn('could not read ' + vol.file.name + ' for its labels', e); }
   finally { if (_segLoading === vol) _segLoading = null; }
@@ -9559,6 +9767,7 @@ segMeshes = new RegionMeshes({
 });
 // Console: how dimmed regions are drawn — 'glass' (default) or 'inside'.
 window.setRegionDimMode = mode => regionMeshes.setDimMode(mode);
+buildSmoothPanel();
 if (endLabelSrc) regionMeshes.setRef(endLabelSrc);
 // Other volumes as surfaces at a level (js/volume-surfaces.js), lit as the region meshes.
 volumeSurfaces = new VolumeSurfaces({
