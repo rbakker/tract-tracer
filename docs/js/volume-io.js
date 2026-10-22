@@ -65,29 +65,92 @@ function readVolumeFloat32(buf, start, n, datatype) {
 }
 
 
-export async function parseNifti(file) {
-  let buf = await file.arrayBuffer();
+// The header's intensity scaling (scl_slope, scl_inter): stored value ×
+// slope + inter is the real value. Slope 0 or not a number: none (the
+// standard says so); null when there is nothing to apply.
+function sclOf(dv, le) {
+  const a = dv.getFloat32(112, le), b = dv.getFloat32(116, le);
+  if (!Number.isFinite(a) || a === 0) return null;
+  const inter = Number.isFinite(b) ? b : 0;
+  return a === 1 && inter === 0 ? null : [a, inter];
+}
+function applyScl(f, scl) {
+  if (!scl) return f;
+  const [a, b] = scl;
+  for (let i = 0; i < f.length; i++) f[i] = f[i] * a + b;
+  return f;
+}
 
-  // decompress gzip
-  const magic = new Uint8Array(buf, 0, 2);
-  if (magic[0]===0x1f && magic[1]===0x8b) {
-    const ds = new DecompressionStream('gzip');
-    const writer = ds.writable.getWriter();
-    writer.write(new Uint8Array(buf)); writer.close();
-    const chunks=[], reader=ds.readable.getReader();
-    while(true){ const {done,value}=await reader.read(); if(done) break; chunks.push(value); }
-    const total=chunks.reduce((a,c)=>a+c.length,0);
-    const out=new Uint8Array(total); let off=0;
-    for(const c of chunks){ out.set(c,off); off+=c.length; }
-    buf=out.buffer;
+// A NIfTI file as a byte stream: read(n) the next n bytes (an ArrayBuffer),
+// skip(n). A gzipped file is decompressed as it streams; a plain one is
+// read in slices. So no more than one frame is ever held: a large 4D
+// series (a DWI of several GB) needs neither the memory nor an ArrayBuffer
+// over 2 GB, which some browser APIs refuse.
+async function niftiStream(file) {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] === 0x1f && head[1] === 0x8b) {
+    const reader = file.stream().pipeThrough(new DecompressionStream('gzip')).getReader();
+    let chunk = new Uint8Array(0), off = 0;
+    const next = async () => { const { done, value } = await reader.read(); if (done) return false; chunk = value; off = 0; return true; };
+    return {
+      async read(n) {
+        const out = new Uint8Array(n); let p = 0;
+        while (p < n) {
+          if (off >= chunk.length && !(await next())) throw 'the file ends early (truncated?)';
+          const k = Math.min(n - p, chunk.length - off);
+          out.set(chunk.subarray(off, off + k), p); p += k; off += k;
+        }
+        return out.buffer;
+      },
+      async skip(n) {
+        while (n > 0) {
+          if (off >= chunk.length && !(await next())) throw 'the file ends early (truncated?)';
+          const k = Math.min(n, chunk.length - off); off += k; n -= k;
+        }
+      },
+      close() { reader.cancel().catch(() => {}); },
+    };
   }
+  let pos = 0;
+  return {
+    async read(n) { if (pos + n > file.size) throw 'the file ends early (truncated?)'; const b = await file.slice(pos, pos + n).arrayBuffer(); pos += n; return b; },
+    async skip(n) { pos += n; },
+    close() {},
+  };
+}
 
-  const dv = new DataView(buf);
+// A 4D NIfTI frame by frame: calls onFrame(v, Float32Array) for each of
+// its volumes (dim 4) in turn, without holding them all. Returns
+// { shape, nvol }. (For statistics over a series: a DWI, a time series.)
+export async function forEachNiftiFrame(file, onFrame) {
+  const src = await niftiStream(file);
+  try {
+    const dv = new DataView(await src.read(352));
+    const le = dv.getInt32(0, true) === 348;
+    const dims = Array.from({length:8},(_,i)=>dv.getInt16(40+i*2,le));
+    const shape = [dims[1], dims[2], dims[3]], nvol = dims[0] >= 4 ? Math.max(1, dims[4]) : 1;
+    const datatype = dv.getInt16(70,le), start = Math.round(dv.getFloat32(108,le));
+    const n = shape[0] * shape[1] * shape[2], bpe = bytesPerElementFor(datatype);
+    const scl = sclOf(dv, le);
+    await src.skip(start - 352);
+    for (let v = 0; v < nvol; v++) { const f = readVolumeFloat32(await src.read(n * bpe), 0, n, datatype, bpe); applyScl(f, scl); await onFrame(v, f); }
+    return { shape, nvol };
+  } finally { src.close(); }
+}
+
+// opts.frames: for a 4D scalar NIfTI, the volume(s) to read — one index,
+// or several (their voxel-wise mean); default the first.
+export async function parseNifti(file, opts = {}) {
+  const src = await niftiStream(file);
+  try { return await parseNiftiFrom(src, opts); } finally { src.close(); }
+}
+async function parseNiftiFrom(src, opts) {
+  const dv = new DataView(await src.read(352));   // the header (all a reader needs of it)
   const sizeof_hdr = dv.getInt32(0,true);
   const le = (sizeof_hdr===348);
   const dims = Array.from({length:8},(_,i)=>dv.getInt16(40+i*2,le));
   const shape = [ dims[1],dims[2],dims[3] ];
-  const nvol = dims[4] || 1;
+  const nvol = dims[0] >= 4 ? Math.max(1, dims[4] || 1) : 1;
   const datatype = dv.getInt16(70,le);
   const vox_offset=dv.getFloat32(108,le);
   const pixdim   = Array.from({length:8},(_,i)=>dv.getFloat32(76+i*4,le));
@@ -135,13 +198,17 @@ export async function parseNifti(file) {
   // `tensor2metric -vector -modulate FA`. mrview treats this as RGB
   // automatically, so we do too.
   const isVectorRGB = !isPackedRGB && nvol === 3;
+  // the frames, in file order: skip to frame v and read its bytes
+  await src.skip(start - 352);
+  let nextFrame = 0;
+  const frameBuf = async (v, bytes) => { await src.skip((v - nextFrame) * bytes); nextFrame = v + 1; return src.read(bytes); };
 
-  let data, channels, mn=Infinity, mx=-Infinity;
+  let data, channels, mn=Infinity, mx=-Infinity, framesRead = null;
 
   if (isPackedRGB) {
     channels = 3;
     const comps = datatype === 2304 ? 4 : 3; // discard alpha for RGBA32
-    const raw = new Uint8Array(buf, start, n*comps);
+    const raw = new Uint8Array(await frameBuf(0, n*comps), 0, n*comps);
     data = new Float32Array(n*3);
     for (let i=0;i<n;i++) {
       data[i*3+0] = raw[i*comps+0]/255;
@@ -157,7 +224,7 @@ export async function parseNifti(file) {
     // does above — float datatypes (MRtrix's native output) are left as-is.
     const intMax = integerRangeMax(datatype);
     for (let v=0; v<3; v++) {
-      const vol = readVolumeFloat32(buf, start + v*n*bytesPerElement, n, datatype, bytesPerElement);
+      const vol = readVolumeFloat32(await frameBuf(v, n*bytesPerElement), 0, n, datatype, bytesPerElement);
       for (let i=0;i<n;i++) {
         // abs(): eigenvector components are signed with an arbitrary sign
         // (the eigen-decomposition doesn't fix a direction along the
@@ -174,8 +241,17 @@ export async function parseNifti(file) {
     }
   } else {
     channels = 1;
-    if (nvol > 1) console.log(`NIfTI contains ${nvol} volumes, only the first one is read.`);
-    data = readVolumeFloat32(buf, start, n, datatype, bytesPerElement);
+    let frames = opts.frames == null ? [0] : [].concat(opts.frames).filter(v => Number.isInteger(v) && v >= 0 && v < nvol);
+    if (!frames.length) frames = [0];
+    frames = [...new Set(frames)].sort((a, b) => a - b);   // (read in file order)
+    if (frames.length === 1) data = readVolumeFloat32(await frameBuf(frames[0], n*bytesPerElement), 0, n, datatype, bytesPerElement);
+    else {   // the mean of these frames
+      data = new Float32Array(n);
+      for (const v of frames) { const f = readVolumeFloat32(await frameBuf(v, n*bytesPerElement), 0, n, datatype, bytesPerElement); for (let i=0;i<n;i++) data[i] += f[i]; }
+      for (let i=0;i<n;i++) data[i] /= frames.length;
+    }
+    framesRead = frames;
+    applyScl(data, sclOf(dv, le));   // the real values (the mean of scaled frames = the scaled mean)
     for (let i=0;i<data.length;i++) {
       if (data[i]<mn) mn=data[i];
       if (data[i]>mx) mx=data[i];
@@ -189,7 +265,16 @@ export async function parseNifti(file) {
   console.log('NIfTI sform='+sform_code+' qform='+qform_code, shape[0]+'×'+shape[1]+'×'+shape[2],
     channels===3?'colour (RGB)':'scalar', 'Ab', Ab);
 
-  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels };
+  // header facts for reports (a quality check, the volume's info)
+  const str = (o, len) => { let t = ''; for (let i = 0; i < len; i++) { const c = dv.getUint8(o + i); if (!c) break; t += String.fromCharCode(c); } return t.trim(); };
+  const dimInfo = dv.getUint8(39);
+  const header = {
+    datatype, nvol, tr: pixdim[4], xyztUnits: dv.getUint8(123), qformCode: qform_code, sformCode: sform_code,
+    freqDim: dimInfo & 3, phaseDim: (dimInfo >> 2) & 3, sliceDim: (dimInfo >> 4) & 3,
+    sliceDuration: dv.getFloat32(132, le), sclSlope: dv.getFloat32(112, le), sclInter: dv.getFloat32(116, le),
+    descrip: str(148, 80), auxFile: str(228, 24), intentName: str(328, 16),
+  };
+  return { shape, vox_mm, Ab, invAb, decomp, data, mn, mx, channels, nvol, frames: framesRead, header };
 }
 
 
@@ -657,4 +742,38 @@ export async function parseWebmCodecs(fileCombo) {
     mn: categorical ? mnOut : mn,
     mx: categorical ? mxOut : mx,
   };
+}
+
+// ── NIfTI-1 writer ────────────────────────────────────────
+// { data: Float32Array, shape: [nx,ny,nz], Ab (voxel → world, as parseNifti
+// returns it), nvol (default 1; frames one after the other in data),
+// description } → the bytes of a single-file NIfTI-1 (float32, sform).
+// Used to make volumes in memory (a derived map: FA, a mask) that then
+// load exactly like a dropped file.
+export function writeNifti({ data, shape, Ab, nvol = 1, description = '' }) {
+  const n = shape[0] * shape[1] * shape[2];
+  if (data.length !== n * nvol) throw 'writeNifti: data does not match the shape';
+  const buf = new ArrayBuffer(352 + 4 * n * nvol), dv = new DataView(buf);
+  dv.setInt32(0, 348, true);
+  const dims = [nvol > 1 ? 4 : 3, shape[0], shape[1], shape[2], nvol, 1, 1, 1];
+  dims.forEach((d, i) => dv.setInt16(40 + 2 * i, d, true));
+  dv.setInt16(70, 16, true);          // DT_FLOAT32
+  dv.setInt16(72, 32, true);          // bitpix
+  const col = c => Math.hypot(Ab[0][c], Ab[1][c], Ab[2][c]);
+  const det = Ab[0][0] * (Ab[1][1] * Ab[2][2] - Ab[1][2] * Ab[2][1]) - Ab[0][1] * (Ab[1][0] * Ab[2][2] - Ab[1][2] * Ab[2][0]) + Ab[0][2] * (Ab[1][0] * Ab[2][1] - Ab[1][1] * Ab[2][0]);
+  [det < 0 ? -1 : 1, col(0), col(1), col(2), 1, 1, 1, 1].forEach((v, i) => dv.setFloat32(76 + 4 * i, v, true));
+  dv.setFloat32(108, 352, true);      // vox_offset
+  dv.setFloat32(112, 1, true);        // scl_slope
+  dv.setUint8(123, 2 | 8);            // mm, s
+  for (let i = 0; i < Math.min(79, description.length); i++) dv.setUint8(148 + i, description.charCodeAt(i) & 0x7f);
+  dv.setInt16(252, 0, true);          // qform_code
+  dv.setInt16(254, 1, true);          // sform_code: scanner
+  const t = Ab[3] || [0, 0, 0];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) dv.setFloat32(280 + 16 * r + 4 * c, Ab[r][c], true);
+    dv.setFloat32(280 + 16 * r + 12, t[r], true);
+  }
+  [0x6e, 0x2b, 0x31, 0].forEach((c, i) => dv.setUint8(344 + i, c));   // "n+1\0"
+  new Float32Array(buf, 352, n * nvol).set(data);
+  return buf;
 }

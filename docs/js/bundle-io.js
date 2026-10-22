@@ -12,11 +12,15 @@
 export const MANIFEST_TYPE = 'tractogram.observer';
 export const MANIFEST_VERSION = 1;
 export const MANIFEST_FILENAME = 'index.json';
+// the manifest as a Data Package (graph-format.md): datapackage.json; index.json is still read
+export const PACKAGE_FILENAME = 'datapackage.json';
+export const isManifestName = name => { const l = String(name).toLowerCase(); return l === MANIFEST_FILENAME || l === PACKAGE_FILENAME; };
 
-const TRACT_EXTS = ['.tck', '.dqz', '.trk'];
+const TRACT_EXTS = ['.tck', '.dqz', '.trk', '.tt'];   // .tt: DSI Studio (also .tt.gz)
 const VOLUME_TYPES = ['anat', 'label', 'mask'];
 
 function extOf(name) {
+  if (/\.tt\.gz$/i.test(name)) return '.tt';
   const i = name.toLowerCase().lastIndexOf('.');
   return i === -1 ? '' : name.toLowerCase().slice(i);
 }
@@ -30,7 +34,7 @@ function extOf(name) {
 // "[object File]" the one time the fallback branch actually fired.
 export function stripPathExt(filename) {
   const base = String(filename).split(/[\\/]/).pop();
-  return base.replace(/\.(tck|tck\.dqz|dqz|trk)$/i, '');
+  return base.replace(/\.(tck|tck\.dqz|dqz|trk|tt|tt\.gz)$/i, '');
 }
 
 // Golden-angle hue rotation, same technique as index.html's
@@ -124,7 +128,56 @@ function parseManifestView(v) {
   return out;
 }
 
+// A Data Package (datapackage.json) as a manifest: its file resources are
+// the volumes and tractograms, in order —
+//   a volume: a path ending in .nii, .nii.gz, .mif, .webm; "role" (ours):
+//     "anat" (default), "label" or "mask" — "label" also when a region
+//     table of the package places its regions in it; "labels" (ours): the
+//     name of a lookup-table resource (.txt / .lut) for it; "title": its
+//     display name;
+//   a tractogram: a path ending in .tck, .trk, .dqz, .tt(.gz); "color" (ours), "title";
+//     "visible" (ours): false — starts off, and is only read when switched on;
+//   "role": "data" — a .dqz data file of a tractogram; "sidecar" — a
+//     volume's JSON sidecar: listed for completeness, paired by the app itself;
+//   "view" (ours, at the top): the opening view, as in index.json.
+// The tables (points, links, regions) are read by graph-io.js as for any
+// graph file.
+const VOL_RE = /\.(nii|nii\.gz|mif|mif\.gz|webm)$/i, TRACT_RE = /\.(tck|trk|dqz|tt|tt\.gz)$/i, LUT_RE = /\.(txt|lut)$/i;
+export function manifestFromPackage(obj) {
+  const res = obj.resources;
+  if (!Array.isArray(res)) throw 'datapackage.json: "resources" must be a list';
+  const base = p => String(p).split('/').pop();
+  const byName = new Map(res.filter(r => r && r.name).map(r => [r.name, r]));
+  const labelVols = new Set(res.filter(r => r && r.geometry && r.geometry.region && r.geometry.region.volume).map(r => r.geometry.region.volume));
+  const volumes = [], bundles = [];
+  res.forEach((r, i) => {
+    if (!r || typeof r !== 'object') throw `datapackage.json resources[${i}] is not an object`;
+    if (typeof r.path !== 'string') return;   // an inline table
+    if (r.role === 'data' || r.role === 'sidecar') return;   // a .dqz data file (paired with its tractogram by its uuid), a sidecar (paired by name)
+    const file = base(r.path), name = typeof r.title === 'string' ? r.title : null;
+    if (VOL_RE.test(file) || r.role === 'anat' || r.role === 'label' || r.role === 'mask') {
+      const type = r.role || (labelVols.has(r.name) ? 'label' : 'anat');
+      if (!VOLUME_TYPES.includes(type)) throw `datapackage.json resource "${r.name}": "role" must be one of ${VOLUME_TYPES.join(', ')}`;
+      let labels = null;
+      if (r.labels != null) {
+        const l = byName.get(r.labels);
+        if (!l || typeof l.path !== 'string') throw `datapackage.json resource "${r.name}": "labels" must name a lookup-table resource of the package`;
+        labels = base(l.path);
+      }
+      volumes.push({ file, type, name, labels });
+    } else if (TRACT_RE.test(file) || r.role === 'tractogram') {
+      let color = null;
+      if (r.color != null) { color = normalizeManifestColor(r.color); if (color === null) throw `datapackage.json resource "${r.name}": "color" must be "#rrggbb" or [r, g, b]`; }
+      bundles.push({ file, color, name, visible: r.visible !== false });
+    }
+  });
+  let view = null;
+  try { view = parseManifestView(obj.view); } catch (e) { throw String(e).replace(/^index\.json/, 'datapackage.json'); }
+  return { type: 'datapackage', version: 1, bundles, volumes, view, package: obj };
+}
+
 export function parseManifest(obj) {
+  if (obj && typeof obj === 'object' && Array.isArray(obj.resources)) return manifestFromPackage(obj);
   if (!obj || typeof obj !== 'object') throw 'index.json is not a JSON object';
   if (typeof obj.type !== 'string' || !obj.type.startsWith(MANIFEST_TYPE)) throw `index.json "type" must start with "${MANIFEST_TYPE}"`;
   if (typeof obj.version !== 'number') throw 'index.json missing numeric "version"';
@@ -139,7 +192,7 @@ export function parseManifest(obj) {
       color = normalizeManifestColor(b.color);
       if (color === null) throw `index.json bundles[${i}].color must be a "#rrggbb" string or a [r,g,b] array`;
     }
-    return { file: b.file, color, name: typeof b.name === 'string' ? b.name : null };
+    return { file: b.file, color, name: typeof b.name === 'string' ? b.name : null, visible: b.visible !== false };
   });
 
   // "labels" (optional) names another file in the same drop — a LUT to
@@ -169,7 +222,7 @@ export function parseManifest(obj) {
 // { tractFiles: File[], manifestFile: File|null }
 export function detectBundleDrop(files) {
   const tractFiles = files.filter(f => TRACT_EXTS.includes(extOf(f.name)));
-  const manifestFile = files.find(f => f.name.toLowerCase() === MANIFEST_FILENAME) || null;
+  const manifestFile = files.find(f => isManifestName(f.name)) || null;
   if (tractFiles.length === 0) return null;
   if (tractFiles.length === 1 && !manifestFile) return null; // ordinary single-file load
   return { tractFiles, manifestFile };
@@ -197,7 +250,7 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
   }
   const text = await manifestFile.text();
   let raw;
-  try { raw = JSON.parse(text); } catch (e) { throw 'index.json is not valid JSON: ' + e; }
+  try { raw = JSON.parse(text); } catch (e) { throw manifestFile.name + ' is not valid JSON: ' + e; }
   const manifest = parseManifest(raw);
   // Streamline files in the drop that the manifest doesn't list are loaded
   // too, after the listed ones, named after their file and colored from the
@@ -213,7 +266,7 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
     // itself (already a plain string) rather than assuming f exists;
     // the missing-file throw below still fires either way, this just
     // avoids a raw TypeError pre-empting that nicer, user-facing message.
-    return { file: f, color: b.color || autoColors[i], name: b.name || stripPathExt(f ? f.name : b.file) };
+    return { file: f, color: b.color || autoColors[i], name: b.name || stripPathExt(f ? f.name : b.file), visible: b.visible !== false };
   });
   if (missing.length) throw `index.json references file(s) not present in the drop: ${missing.join(', ')}`;
   extra.forEach((f, j) => entries.push({ file: f, color: autoColors[manifest.bundles.length + j], name: stripPathExt(f.name) }));

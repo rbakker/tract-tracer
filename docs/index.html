@@ -482,12 +482,28 @@ button.dt-menu-btn:hover{color:var(--accent);}
 .adv-open{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;padding:3px 0;flex-basis:100%;}
 .adv-open:hover{color:var(--bright);}
 .adv-chev{font-size:11px;letter-spacing:0;}
-.adv-panel{flex:1 1 100%;min-width:0;max-width:100%;box-sizing:border-box;margin:3px 0 2px;border:1px solid #838d9b;border-radius:4px;}
-.adv-head{display:flex;align-items:center;padding:4px 8px;background:#838d9b;color:#0a0e14;font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;user-select:none;border-radius:3px 3px 0 0;}
-.adv-head span:first-child{flex:1;}
-.adv-head:hover{background:#c1c9d4;}
-.adv-body{padding:6px 8px 4px;display:flex;flex-direction:column;gap:4px;}
+.adv-panel{flex:1 1 100%;min-width:0;max-width:100%;box-sizing:border-box;margin:0 0 2px;}
+/* open: the same text line as the opener (» → «), its settings indented below */
+.adv-head{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;user-select:none;padding:3px 0;}
+.adv-head:hover{color:var(--bright);}
+.adv-body{padding:2px 0 4px 12px;display:flex;flex-direction:column;gap:4px;}
 .adv-row{gap:6px;}
+/* QUALITY CONTROL: the report's lines (✓ fine, ! worth a look, ✗ a problem) */
+.qc-body{gap:3px;}
+.qc-line{display:flex;gap:6px;font-size:10px;line-height:1.35;color:var(--text);}
+.qc-st{flex:none;width:10px;text-align:center;font-weight:700;}
+.qc-0{color:#5fbf6f;} .qc-1{color:#e0b040;} .qc-2{color:#e5534b;} .qc-i{color:#7fa8d8;font-style:italic;}
+.qc-sum{margin-left:4px;font-weight:700;letter-spacing:0;}
+.qc-act{background:none;border:none;padding:0;margin:2px 0 0;color:var(--accent);font:inherit;font-size:10px;cursor:pointer;text-align:left;}
+.qc-act:hover{color:var(--bright);text-decoration:underline;}
+.qc-run{color:var(--dim);font-size:10px;font-style:italic;}
+.qc-made{color:var(--dim);margin-top:2px;}
+.qc-result{padding-left:12px;}
+.qc-copy{margin-left:8px !important;}
+.qc-methods{margin:2px 0 4px 16px;font-size:10px;line-height:1.45;color:var(--text);user-select:text;}
+.qc-mask-row{margin:4px 0 2px 16px;}
+.qc-made-item{padding-left:12px;}
+.qc-made-item .qc-act{margin:0;word-break:break-all;}
 .adv-row > label{min-width:62px;}
 .adv-body .chan-red > label{color:#e66;} .adv-body .chan-green > label{color:#6c6;} .adv-body .chan-blue > label{color:#79f;}
 .adv-row > label:empty{display:none;}   /* (the second foreground row: its choice under the first's) */
@@ -499,7 +515,8 @@ button.dt-menu-btn:hover{color:var(--accent);}
 .an-body{padding:5px 8px 8px;display:flex;flex-direction:column;gap:4px;}
 .an-select{width:100%;}
 .an-settings{padding:2px 0 0 12px;border:none;background:none;}
-.an-name{padding:2px 0;gap:6px;flex-basis:100%;}
+.an-name{padding:2px 0;gap:6px;flex-basis:100%;min-width:0;max-width:100%;box-sizing:border-box;}   /* (long names: the label shortens, the ⓘ stays) */
+.an-name > :not(.dt-label){flex:none;}
 .an-check{cursor:pointer;color:var(--dim);font-size:9px;letter-spacing:0.06em;}
 .an-check .dt-check{margin:0;}
 
@@ -550,8 +567,11 @@ a.accent-link:hover,button.accent-link:hover{color:var(--bright);}
    draggable, pins on drag — just wider, accent-bordered, and default-
    positioned near the top-left corner instead of under the top-btn row. */
 #hdr-panel{width:calc(430px * var(--ui));max-height:70vh;}
+#hdr-panel-links{display:flex;flex-wrap:wrap;gap:4px 12px;padding:6px 0 2px;border-top:1px solid var(--line, #2a3240);margin-top:6px;}
+#hdr-panel-links .hdr-link{background:none;border:none;padding:0;color:var(--accent);font:inherit;font-size:9px;cursor:pointer;}
+#hdr-panel-links .hdr-link:hover{color:var(--bright);text-decoration:underline;}
 #hdr-panel-pre{color:var(--text);font-size:9px;line-height:1.7;
-  white-space:pre-wrap;word-break:break-all;user-select:text;margin:0;cursor:text;outline:none;}
+  white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;margin:0;cursor:text;outline:none;}
 /* about.html ships as an unstyled fragment (text + logos) — give it
    sensible defaults here so it reads well without needing its own CSS. */
 #about-panel-content{color:var(--text);font-size:11px;line-height:1.7;}
@@ -799,6 +819,7 @@ input[type=file]{display:none;}
   <!-- Top-left buttons -->
   <div id="top-btns">
     <button class="top-btn" id="menu-btn" title="menu" aria-haspopup="true"><span class="icon">☰</span></button>
+    <button class="top-btn icon-only" id="hw-btn" title="hardware: the GPU and CPU tiers (3D › HARDWARE)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><path d="M12.6 8.8 10.4 12.2h3.2l-2.2 3.4"/></svg></button>
     <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
     <!-- the ☰ menu: Load…, the left column's tabs (see section 11b), About… -->
     <div id="main-menu" role="menu">
@@ -814,6 +835,7 @@ input[type=file]{display:none;}
       <button data-page="probe">Probe</button>
       <button data-page="markers">Markers</button>
       <button data-page="3d">3D</button>
+      <button class="mm-sub" data-page="3d" data-sec="HARDWARE">Hardware</button>
       <button class="mm-sub" data-page="3d" data-sec="CLIPPING PLANE">Clipping</button>
       <button class="mm-sub" data-page="3d" data-sec="SURFACE SMOOTHING">Surface smoothing</button>
       <button class="mm-sub" data-page="3d" data-sec="GLASS MODE|LIGHT">Light &amp; effects</button>
@@ -828,7 +850,7 @@ input[type=file]{display:none;}
   </div>
   <!-- LOAD… (the ☰ menu, the tabs' LOAD buttons) opens this; every load
        goes through dispatchOpenedFiles, as a drop does -->
-  <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.txt,.lut,.json,.zip" style="display:none">
+  <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.tt,.txt,.lut,.bval,.bvec,.json,.csv,.zip" style="display:none">
 
 
   <!-- PROBE (top of TRACTS), 3D, 2D and TOOLS: pages of the left column, moved there at start
@@ -841,8 +863,8 @@ input[type=file]{display:none;}
     <div class="ctl-row" data-tip="The probe.\noff: no probe, all streamlines shown (the probe panel is hidden).\nselect: show only the streamlines the probe hits.\nhighlight: show all streamlines, the hit ones solid and the rest dimmed (see dimming).">
       <label>probe</label>
       <div class="clip-radio-row" style="grid-template-columns:repeat(3,auto);justify-content:start;">
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="off" id="probe-mode-off"><span>off</span></label>
-        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="select" id="probe-mode-select" checked><span>select</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="off" id="probe-mode-off" checked><span>off</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="select" id="probe-mode-select"><span>select</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="probe-mode" value="highlight" id="probe-mode-highlight"><span>highlight</span></label>
       </div>
     </div>
@@ -908,12 +930,21 @@ input[type=file]{display:none;}
     </div>
     <!-- 3D: the 3D view -->
     <div id="panel-content-3d" class="panel-content">
+    <div class="cfg-section" data-tip="What this device can take: the GPU tier sets how much is drawn (and how finely), the CPU tier how much is read into memory. Auto-guessed on load (never ultra); change them here.">HARDWARE</div>
     <div class="ctl-row" data-tip="Raymarch quality ceiling: 75/150/300 steps for LOW/HIGH/ULTRA. LOW is safe on weak/mobile GPUs (some have been seen to crash the whole browser at higher settings); ULTRA is a deliberate step up meant for a 'settings are fixed, now screenshot' moment on capable hardware, not everyday interaction. Auto-guessed as LOW or HIGH from this device's GPU on load (ULTRA is never auto-selected); override here if the guess seems wrong.">
       <label>GPU·tier</label>
       <div class="clip-radio-row">
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="low" id="quality-low"><span>low</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="high" id="quality-high"><span>high</span></label>
         <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="quality-tier" value="ultra" id="quality-ultra"><span>ultra</span></label>
+      </div>
+    </div>
+    <div class="ctl-row" id="row-cpu-tier" data-tip="How many streamline points are read into memory: LOW 75 million, HIGH 300 million, ULTRA 1.2 billion (roughly 25 bytes each: ULTRA wants a machine with 32 GB). A load that holds more reads every n-th streamline (the count line then says “thinned”). Applies to what is loaded next. Auto-guessed LOW or HIGH from the device's memory (ULTRA is never auto-selected); LOW or HIGH chosen here is remembered on this device, ULTRA only for this visit.">
+      <label>CPU·tier</label>
+      <div class="clip-radio-row">
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="cpu-tier" value="low" id="cpu-low"><span>low</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="cpu-tier" value="high" id="cpu-high"><span>high</span></label>
+        <label class="clip-radio-opt cro-qual"><input type="radio" autocomplete="off" name="cpu-tier" value="ultra" id="cpu-ultra"><span>ultra</span></label>
       </div>
     </div>
     <div class="cfg-section" data-tip="The clipping plane: which parts of the scene it cuts (and the volume solid or glass), along which plane, as a slice or one side.">CLIPPING PLANE</div>
@@ -942,7 +973,17 @@ input[type=file]{display:none;}
   <input autocomplete="off" type="range" id="shadow-slider" min="0" max="100" step="1" value="0">
   <span class="slider-val" id="shadow-val">0%</span>
 </div>
-    <!-- per volume, shown in ANATOMY › IMAGE VOLUME › SHADER SETTINGS (moved there while open) -->
+    <div class="ctl-row" data-tip="Ambient: the light everything gets wherever it faces and whether in shadow or not — the rest comes from the direction of the light. Higher: flatter and brighter, shadows lighter. 0% = only the directional light (the sides facing away go black).">
+      <label>ambient</label>
+      <input autocomplete="off" type="range" id="ambient-slider" min="0" max="50" step="1" value="25">
+      <span class="slider-val" id="ambient-val">25%</span>
+    </div>
+    <div class="ctl-row" data-tip="Gloss: the highlights where a surface mirrors the light toward you — on the brain, the regions (parcellation, segmentation) and the isosurface. 0% = matte. The streamlines have their own: TRACTS › reflectance.">
+      <label>gloss</label>
+      <input autocomplete="off" type="range" id="gloss-slider" min="0" max="100" step="1" value="25">
+      <span class="slider-val" id="gloss-val">25%</span>
+    </div>
+    <!-- per volume, shown in ANATOMY › IMAGE VOLUME › VISIBLE RANGE (moved there while open) -->
     <div id="shader-rows">
     <div class="ctl-row" data-tip="What counts as real signal vs. background noise, for finding the brain's outer envelope — shown at right, 0 to 1. BELOW (default): background is DARKER than this bar, the usual case. ABOVE: background is BRIGHTER than this bar instead (e.g. some microscopy images). This is what the outer surface is found with in SOLID/GLASS mode, and is deliberately independent from FOREGROUND below, so narrowing FOREGROUND to hide a tissue type can never also erode this outer surface.">
       <label>background</label>
@@ -1151,6 +1192,7 @@ input[type=file]{display:none;}
     </div>
     <div class="app-panel-body">
       <pre id="hdr-panel-pre" class="selectable" tabindex="0"></pre>
+      <div id="hdr-panel-links"></div>
     </div>
   </div>
 
@@ -1227,15 +1269,15 @@ input[type=file]{display:none;}
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { parseNifti, parseMif, parseWebmCodecs as parseWebm } from './js/volume-io.js';
+import { parseNifti, parseMif, parseWebmCodecs as parseWebm, writeNifti } from './js/volume-io.js';
 import { parseLUT, buildLutRGBA } from './js/lut-io.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { parseTck, parseDqz, parseTrk, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
+import { parseTck, parseDqz, parseTrk, parseTt, countTract, thinDqzChild, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
          parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
 import { MultiFileOpener, isJunkPath } from './js/file-opener.js';
-import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
+import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, isManifestName, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
 import { LabelItem, LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
 import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
@@ -1246,13 +1288,14 @@ import { TrackballControls, buildGlassBrain, makePlaneMesh,
          makeRibbonLines, makeEndpointDots, makeClipUniforms, computeRibbonDensity, sortRibbonByDepth, setRibbonHighlight, hexToRgbRaw, makeColormapTexture,
          setColormap, setColormapRGB, colormapRowV, MAX_COLORMAP_ROWS, COLORMAP_SIZE,
          BUILTIN_COLORMAPS, writeColormapRow, colormapCSSGradient, sampleStops,
-         makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo, dimDensity, lightPosition, DEFAULT_LIGHT_FALLOFF, DEFAULT_AMBIENT } from './js/scene3d.js';
+         makeFileStyleTexture, setFileStyle, setRibbonFaintMode, gpuInfo, dimDensity, lightPosition, DEFAULT_LIGHT_FALLOFF, DEFAULT_AMBIENT, DEFAULT_GLOSS } from './js/scene3d.js';
 import { ReactiveState } from './js/reactive-state.js';
 import { LineShadows } from './js/line-shadows.js';
 import { SectionOutlines } from './js/section-outlines.js';
 import { RegionMeshes } from './js/region-meshes.js';
 import { VolumeSurfaces } from './js/volume-surfaces.js';
-import { parseMarkers, resolveMarkerStyle, markerFilterMask, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
+import { resolveMarkerStyle, resolveLinkStyle, markerFilterMask, sizeSpec, propertyRange, MARKER_SHAPES } from './js/markers-io.js';
+import { readPackage, pointSet, pointTables, regionTables, regionLut, treeFromNames, attributionOf, compareSpaces, GRAPH_PROFILE } from './js/graph-io.js';
 import { makeMarkerGroup, setMarkerDisplay, setMarkerHover, disposeMarkerGroup, markerBoundingSphere } from './js/markers-render.js';
 
 // ?timing in the page URL: logs to the browser console where the time of
@@ -1339,6 +1382,7 @@ const pipeline = [
   { tag: 'trck', fn: async () => {
 	const val = state.get('trck.file');
 	const isBundleDescriptor = val && val.__bundle;
+	if (!val || (!isBundleDescriptor && typeof val.name !== 'string')) return;   // cleared, or the name of what's loaded
     try {
 	  // A single file comes as a plain File; a bundle set (or a load
 	  // with mode 'add') as a descriptor — both go through the same loader.
@@ -1383,7 +1427,10 @@ function syncViewOOP(views, cursor) {
     views[key] = [vc[0]+d*n[0], vc[1]+d*n[1], vc[2]+d*n[2]];
   }
 }
-let radius=2, probeOn=true, probeMode='select', probeContext=0.15, probeEndsOnly=false, slabMm=3, endsPx=6;
+// probeOnLoad: a whole tractogram opens with the probe on — only for the demos
+// (?demo, ?MacBNA_M03); otherwise it opens off, as it hides what isn't selected
+let probeOnLoad = false;
+let radius=2, probeOn=false, probeMode='select', probeContext=0.15, probeEndsOnly=false, slabMm=3, endsPx=6;
 // RADIUS slider scaling. The slider's numeric max — reaching it (or a
 // value >= it) means "Show All", handled specially in updateProbe rather
 // than relying on radius happening to be numerically huge. Both get
@@ -1487,10 +1534,10 @@ function updateProbeRadiusRange(setDefault) {
   radius = Math.max(+slider.min, radius);
   slider.value = radius;
   updateRadiusLabel();
-  // Defaults for a new load: a whole tractogram opens with the probe on,
-  // selecting; a bundle set with the probe off, set to highlight for when
-  // it's switched on.
-  if (setDefault) { setProbeMode(isBundle ? 'highlight' : 'select', { update: false }); setProbeOn(!isBundle, { update: false }); }
+  // Defaults for a new load: the probe off — a whole tractogram set to
+  // select, a bundle set to highlight, for when it's switched on. The demos
+  // open a whole tractogram with it on (probeOnLoad).
+  if (setDefault) { setProbeMode(isBundle ? 'highlight' : 'select', { update: false }); setProbeOn(!isBundle && probeOnLoad, { update: false }); }
   if (gridIdx) updateProbe();
 }
 // The STREAMLINE PROBE switch. Off: every (visible) streamline is shown,
@@ -2352,7 +2399,7 @@ const _shLightPos = new THREE.Vector3();
 //   setLightFalloff(0.5)  direct light at the back of the data = 1 - this
 //   setAmbient(0.25)      the light every line and brain surface gets, lit or not
 //                         (all that's left in full shadow)
-let pointLightOn = true, lightFalloff = DEFAULT_LIGHT_FALLOFF, ambientLight = DEFAULT_AMBIENT;
+let pointLightOn = true, lightFalloff = DEFAULT_LIGHT_FALLOFF, ambientLight = DEFAULT_AMBIENT, glossLight = DEFAULT_GLOSS;
 function syncLightUniforms() {
   for (const m of [selMesh, glassBrainMesh]) {
     if (!m || !m.material || !m.material.uniforms || !m.material.uniforms.u_falloff) continue;
@@ -2360,11 +2407,13 @@ function syncLightUniforms() {
     u.u_pointLight.value = pointLightOn ? 1 : 0;
     u.u_falloff.value = lightFalloff;
     u.u_ambient.value = ambientLight;
+    if (u.u_gloss) u.u_gloss.value = glossLight;
     m.userData.depthTarget = controls.target;   // by reference: panning follows
     m.userData.sceneRadius = sceneRadius || 1;
   }
 }
 window.setPointLight = on => { pointLightOn = !!on; lineShadows._dirty = true; render3D(); return pointLightOn; };
+window.setGloss = v => { glossLight = Math.max(0, Math.min(1, +v)); render3D(); return glossLight; };
 window.setAmbient = v => { ambientLight = Math.max(0, Math.min(1, +v)); render3D(); return ambientLight; };
 window.setLightFalloff = v => { lightFalloff = Math.max(0, Math.min(1, +v)); render3D(); return lightFalloff; };
 const _shCamR = new THREE.Vector3(), _shCamU = new THREE.Vector3(), _shCamF = new THREE.Vector3(), _shLight = new THREE.Vector3();
@@ -4751,9 +4800,17 @@ function volumeWorldBox(shape, Ab) {
   return { min, max };
 }
 
+// A 4D NIfTI reads the frame(s) its volume record chose (vol.frames: one
+// index or the mean of several; default the first); the record learns its
+// number of frames and header facts (vol.nvol, vol.niiHeader).
 async function parseVolumeFile(f) {
   let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
-  if (ext == '.nii' || ext == '.nii.gz') return parseNifti(f);
+  if (ext == '.nii' || ext == '.nii.gz') {
+    const v = volumes.find(x => x.file === f);
+    const p = await parseNifti(f, { frames: v && v.frames });
+    if (v) { v.nvol = p.nvol || 1; v.niiHeader = p.header || null; v.Ab = p.Ab; v.gridShape = p.shape.slice(0, 3); }
+    return p;
+  }
   if (ext == '.mif') return parseMif(f);
   if (ext == '.webm') return parseWebm(f, { debugDumpFrame: 70 });
   throw `Unsupported format ${ext}`;
@@ -4911,6 +4968,7 @@ function applyActiveVolumeDisplay() {
 // volume: no region colors. A freshly loaded label volume is shown with
 // them (Label mode). activeAsAnatomy: how the active volume was chosen.
 let _showAsAnatomy = false, activeAsAnatomy = false;
+let _keepCursor = false;   // (another frame of the same volume: the cursor stays)
 async function loadAnat(f){
   const dzAnatP = document.getElementById('dz-anat-status');
   if (dzAnatP) { dzAnatP.textContent = 'loading…'; dzAnatP.className = 'is-loading'; }
@@ -4974,7 +5032,7 @@ async function loadAnat(f){
     return dom >= 0 ? N / 2 : N / 2 - 1; // higher index is more RAS when dom > 0
   };
   const probeCenter = mat3mulVec(Ab, [midIndex(0), midIndex(1), midIndex(2)]);
-  for (const k of ['sag','cor','axi']) {
+  if (!_keepCursor) for (const k of ['sag','cor','axi']) {
 	state.set('src.view.'+k,probeCenter), 
 	state.set('tgt.view.'+k,probeCenter)
   }
@@ -4992,7 +5050,8 @@ async function loadAnat(f){
   anatHeaderReady = true;
   checkShowHud();
   resizeAll();
-  state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter });
+  if (!_keepCursor) state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter });
+  updateSlicesA(); updateSlicesB();   // (now: an update made while a load runs draws nothing — the sections' index labels were stale)
   registerVolumeItems();
   setProgress('');
   //updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
@@ -5216,49 +5275,129 @@ function splitExt(fname) {
   return [base,ext]
 }
 
-async function parseStreamlineFile(f) {
-  let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
-  return ext=='.tck' ? parseTck(f) : ext=='.dqz' ? parseDqz(f) : parseTrk(f);
+// '.tck', '.trk', '.dqz' or '.tt' (also for .tt.gz)
+const tractExtOf = name => { const ext = splitExt(name)[1].toLowerCase(); return ext === '.tt.gz' ? '.tt' : ext; };
+async function parseStreamlineFile(f, every = 1) {
+  const ext = tractExtOf(f.name);
+  if (ext == '.tck') return parseTck(f, 0, every);
+  if (ext == '.dqz') return parseDqz(f, 0, every);
+  if (ext == '.tt') return parseTt(f, 0, every);
+  const r = await parseTrk(f, 0, every);
+  if (r.header.truncated) alert('"' + f.name + '" ends early: ' + r.header.streamlines_read.toLocaleString() + ' of the '
+    + r.header.truncated.toLocaleString() + ' streamlines its header promises are in the file (an incomplete download?). Loaded what is there.');
+  return r;
+}
+
+// ── How many streamline points fit in memory ─────────────────────────
+// Every loaded point costs roughly 25 bytes here (its coordinates, the
+// search index over them, the point → streamline lookup), so the points that are read at all are capped (the CPU tier,
+// below): when a load
+// holds more, every n-th streamline is read (the same n for all files of
+// the load, so bundles keep their relative densities), and the tract
+// header and the streamline count say so. Drawing has a budget of its own
+// (MAX_RENDER_POINTS), well below this.
+// The CPU tier (3D › HARDWARE): LOW 75 M, HIGH 300 M, ULTRA 1.2 G points
+// (ULTRA: a 12 GB .trk of a billion points on a 32 GB laptop; each tier a
+// quarter of the one above).
+const CPU_POINT_BUDGET = { low: 75e6, high: 300e6, ultra: 1.2e9 };
+let cpuTier = (() => {
+  try { const t = localStorage.getItem('cpuTier'); if (t === 'low' || t === 'high') return t; } catch (e) {}
+  const gb = navigator.deviceMemory;            // Chromium only; 8 at most
+  return gb >= 8 ? 'high' : 'low';   // (unknown — Firefox, Safari: low)
+})();
+const loadPointBudget = () => CPU_POINT_BUDGET[cpuTier];
+document.getElementById('cpu-' + cpuTier).checked = true;
+document.querySelectorAll('input[name="cpu-tier"]').forEach(r => r.addEventListener('change', () => {
+  cpuTier = r.value;
+  // remembered: low and high — not ultra (a load too large for the device could freeze it on every visit)
+  try { if (cpuTier === 'ultra') localStorage.removeItem('cpuTier'); else localStorage.setItem('cpuTier', cpuTier); } catch (e) {}
+}));
+const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+const loadedPointCount = sources => { let n = 0; for (const p of sources) for (const t of p.streamlines) n += t.length / 3; return n; };
+// The stride that brings `points` (more) within what is left of the budget.
+function strideFor(points, alreadyLoaded) {
+  const B = loadPointBudget(), room = Math.max(B - alreadyLoaded, B / 4);
+  return points > room ? Math.ceil(points / room) : 1;
+}
+// Reads entries ({file, …}) with one stride; returns [{ entry, parsed, every }].
+async function readTractEntries(entries, alreadyLoaded) {
+  let total = 0;
+  const counts = new Map();
+  for (const e of entries) {
+    setProgress(`counting ${e.file.name}…`); await tick();
+    const c = await countTract(e.file, tractExtOf(e.file.name));
+    counts.set(e, c); total += c.points;
+  }
+  const every = strideFor(total, alreadyLoaded);
+  const out = [];
+  for (const e of entries) {
+    setProgress(`reading ${e.file.name}${every > 1 ? ' (every ' + ordinal(every) + ' streamline)' : ''}…`); await tick();
+    const parsed = await parseStreamlineFile(e.file, every);
+    if (every > 1) parsed.header.loaded = `every ${ordinal(every)} streamline: ${parsed.streamlines.length.toLocaleString()} of ${(parsed.total ?? parsed.streamlines.length).toLocaleString()} (to fit in memory)`;
+    { let read = 0; for (const t of parsed.streamlines) read += t.length / 3;
+      const c = counts.get(e);
+      parsed.header.points = { in_file: Math.round(c.points), [c.exact ? 'counted' : 'estimated_from_file_size']: true,
+                               file_bytes: e.file.size, read, budget: loadPointBudget(), cpu_tier: cpuTier }; }
+    out.push({ entry: e, parsed, every });
+  }
+  return out;
+}
+const sourceOf = (entry, parsed, every) => ({
+  name: entry.file.name, label: entry.name || stripPathExt(entry.file.name),
+  color: entry.color || null, header: parsed ? parsed.header : { loaded: 'not yet — read when switched on' },
+  uuid: parsed ? parsed.header._dqz?.uuid ?? null : null, streamlines: parsed ? parsed.streamlines : [],
+  file: entry.file, pending: !parsed, every: every || 1, total: parsed ? parsed.total ?? parsed.streamlines.length : null,
+  firstStreamline: 0, split: undefined });
+
+// allStreamlines, streamlineLookup, trckHeader from trckParents.
+function rebuildTractArrays(manifest) {
+  allStreamlines = [];
+  for (const p of trckParents) {
+    p.firstStreamline = allStreamlines.length;
+    for (const t of p.streamlines) allStreamlines.push(t);
+  }
+  // streamlineLookup maps a flat point index -> its streamline index,
+  // same convention parseTck/parseTrk use — rebuilt over the whole set.
+  let totalPts = 0;
+  for (const t of allStreamlines) totalPts += t.length / 3;
+  streamlineLookup = new Int32Array(totalPts);
+  { let pi = 0; for (let si = 0; si < allStreamlines.length; si++) { const np = allStreamlines[si].length/3; streamlineLookup.fill(si, pi, pi + np); pi += np; } }
+  trckHeader = { indexJson: manifest, files: trckParents.map(p => ({ name: p.name, header: p.header })) };
+  trckFileName = trckParents.length === 1 ? splitExt(trckParents[0].name)[0] : trckParents.length + ' files';
 }
 
 // Loads streamline files — one, or a bundle set — as the tractogram
 // (mode 'replace') or appended to it (mode 'add'). descriptor: the
 // { manifest, entries } shape resolveBundleColors returns — entries[i] =
-// { file, color ('#rrggbb' or null), name }.
+// { file, color ('#rrggbb' or null), name, visible }. An entry with
+// visible false starts off and is read only when switched on (one is
+// always read, so there is something to show).
 async function loadTrckBundle(descriptor, mode = 'replace'){
   const { entries } = descriptor;
   const add = mode === 'add' && trckParents.length > 0;
   const dTrckP = document.getElementById('dz-trck-status');
   if (dTrckP) { dTrckP.textContent = 'loading…'; dTrckP.className = 'is-loading'; }
 
-  const parsedFiles = [];
-  for (const e of entries) {
-    const f = e.file;
-    let [ , ext ] = splitExt(f.name); ext = ext.toLowerCase();
-    setProgress(`parsing ${f.name}…`); await tick();
-    try {
-      const parsed = await parseStreamlineFile(f);
-      parsedFiles.push({ entry: e, parsed });
-    } catch(err) {
-      alert(`${ext.toUpperCase()} error in "${f.name}": `+err);
-      if (dTrckP) { dTrckP.textContent='drop or click'; dTrckP.className=''; }
-      setProgress('');
-      matchDqzChildren(); // a drop's data files still need placing (against whatever is still loaded)
-      return;
-    }
-  }
-
   const sources = add ? trckParents.slice() : [];
   // A re-added file with the same name replaces the earlier copy.
-  for (const { entry } of parsedFiles) {
-    const i = sources.findIndex(p => p.name === entry.file.name);
+  for (const e of entries) {
+    const i = sources.findIndex(p => p.name === e.file.name);
     if (i >= 0) sources.splice(i, 1);
   }
-  for (const { entry, parsed } of parsedFiles) {
-    sources.push({ name: entry.file.name, label: entry.name || stripPathExt(entry.file.name),
-                   color: entry.color || null, header: parsed.header,
-                   uuid: parsed.header._dqz?.uuid ?? null, streamlines: parsed.streamlines,
-                   firstStreamline: 0, split: undefined });
+  let now = entries.filter(e => e.visible !== false);
+  if (!now.length && !sources.some(p => !p.pending)) now = entries.slice(0, 1);
+  let read;
+  try { read = await readTractEntries(now, loadedPointCount(sources)); }
+  catch(err) {
+    alert('Error reading the streamlines: ' + err);
+    if (dTrckP) { dTrckP.textContent='drop or click'; dTrckP.className=''; }
+    setProgress('');
+    matchDqzChildren(); // a drop's data files still need placing (against whatever is still loaded)
+    return;
+  }
+  for (const e of entries) {
+    const r = read.find(x => x.entry === e);
+    sources.push(sourceOf(e, r && r.parsed, r && r.every));
   }
   if (!add) {
     groups = []; // nothing to carry over
@@ -5266,27 +5405,39 @@ async function loadTrckBundle(descriptor, mode = 'replace'){
     const old = new Set(trckParents);
     dqzChildRecords = dqzChildRecords.filter(r => !(r.parent && old.has(r.parent)));
   }
-
-  allStreamlines = [];
-  for (const p of sources) {
-    p.firstStreamline = allStreamlines.length;
-    for (const t of p.streamlines) allStreamlines.push(t);
-  }
   trckParents = sources;
-  // streamlineLookup maps a flat point index -> its streamline index,
-  // same convention parseTck/parseTrk use — rebuilt over the whole set.
-  let totalPts = 0;
-  for (const t of allStreamlines) totalPts += t.length / 3;
-  streamlineLookup = new Int32Array(totalPts);
-  { let pi = 0; for (let si = 0; si < allStreamlines.length; si++) { const np = allStreamlines[si].length/3; for (let k=0;k<np;k++) streamlineLookup[pi++] = si; } }
-
-  const manifest = add ? (trckHeader && trckHeader.indexJson) || null : descriptor.manifest || null;
-  trckHeader = { indexJson: manifest, files: sources.map(p => ({ name: p.name, header: p.header })) };
-  trckFileName = sources.length === 1 ? splitExt(sources[0].name)[0] : sources.length + ' files';
+  rebuildTractArrays(add ? (trckHeader && trckHeader.indexJson) || null : descriptor.manifest || null);
 
   const wasBundle = isBundle;
   if (!regroupStreamlines()) { setProgress(''); return; }
   await finishTrckLoad(dTrckP, { add, bundleModeChanged: isBundle !== wasBundle });
+}
+
+// Bundles switched on before they were read: read together (one stride,
+// one rebuild), shortly after the last switch — "all" switches many.
+let _pendingReads = new Set(), _pendingTimer = 0, _pendingBusy = null;
+function readPendingSource(p) {
+  _pendingReads.add(p);
+  clearTimeout(_pendingTimer);
+  _pendingTimer = setTimeout(async () => {
+    if (_pendingBusy) await _pendingBusy;
+    const batch = [..._pendingReads].filter(q => q.pending && trckParents.includes(q));
+    _pendingReads = new Set();
+    if (!batch.length) return;
+    _pendingBusy = (async () => {
+      try {
+        const read = await readTractEntries(batch.map(q => ({ file: q.file, q })), loadedPointCount(trckParents));
+        for (const { entry, parsed, every } of read) {
+          Object.assign(entry.q, { header: parsed.header, uuid: parsed.header._dqz?.uuid ?? null, streamlines: parsed.streamlines,
+                                   pending: false, every, total: parsed.total ?? parsed.streamlines.length });
+        }
+      } catch (err) { alert('Error reading the streamlines: ' + err); setProgress(''); return; }
+      rebuildTractArrays(trckHeader && trckHeader.indexJson || null);
+      if (!regroupStreamlines()) { setProgress(''); return; }
+      await finishTrckLoad(document.getElementById('dz-trck-status'), { add: true, bundleModeChanged: false });
+    })();
+    await _pendingBusy; _pendingBusy = null;
+  }, 50);
 }
 
 // Rebuilds `groups` and the per-streamline group index from trckParents
@@ -5302,7 +5453,7 @@ function regroupStreamlines() {
     const rec = p.split || null;
     const n = p.streamlines.length;
     if (!rec) {
-      const g = old.get(p.name + '\u0000') || { visible: true };
+      const g = old.get(p.name + '\u0000') || { visible: !p.pending };
       Object.assign(g, { source: p, code: null, name: p.label, sourceColor: p.color });
       const k = next.push(g) - 1;
       gid.fill(k, p.firstStreamline, p.firstStreamline + n);
@@ -5406,8 +5557,18 @@ function clearStreamlines() {
 async function finishTrckLoad(dTrckP, { add = false, bundleModeChanged = true } = {}){
   const np=streamlineLookup.length;
   setProgress(allStreamlines.length.toLocaleString()+' streamlines · building index…'); await tick();
-  allPts=new Float32Array(np*3); let off=0;
-  for(const t of allStreamlines){for(let i=0;i<t.length;i++)allPts[off+i]=+t[i];off+=t.length;}
+  // allPts: all points back to back. When the streamlines already are (one
+  // file, read into one buffer — the usual case), that buffer itself;
+  // else a copy. (Read-only either way.)
+  allPts = null;
+  { const f = allStreamlines[0];
+    if (f && f instanceof Float32Array) {
+      let at = f.byteOffset, ok = true;
+      for (const t of allStreamlines) { if (t.buffer !== f.buffer || t.byteOffset !== at) { ok = false; break; } at += t.byteLength; }
+      if (ok) allPts = new Float32Array(f.buffer, f.byteOffset, np * 3);
+    } }
+  if (!allPts) { allPts=new Float32Array(np*3); let off=0;
+    for(const t of allStreamlines){for(let i=0;i<t.length;i++)allPts[off+i]=+t[i];off+=t.length;} }
   gridIdx=new GridIndex(allPts,radius);
   setProgress('uploading geometry…'); await tick();
   let cx=0,cy=0,cz=0;
@@ -5461,7 +5622,9 @@ async function finishTrckLoad(dTrckP, { add = false, bundleModeChanged = true } 
     }
     state.update({ 'src.cursor': cursorPt, 'tgt.cursor': cursorPt });
   }
-  document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines'+(isBundle?' · '+bundlePaletteRGB.length+' bundles':'');
+  { const thin = trckParents.filter(p => p.every > 1);
+    document.getElementById('stat-total').textContent=allStreamlines.length.toLocaleString()+' streamlines'+(isBundle?' · '+bundlePaletteRGB.length+' bundles':'')
+      + (thin.length ? ' · thinned' : ''); }
   trckHeaderReady = true;
   setProgress(''); checkShowHud(); controls.update();
   probeEndsOnly = document.querySelector('input[name="probe-select"]:checked')?.value === 'ends';
@@ -5557,7 +5720,7 @@ function applyRenderModeUI() {
 }
 // The shader to come back to when the volume is switched on again (3D menu).
 let _shownRenderMode = 'glass';
-// ── Per-volume shader settings (ANATOMY › IMAGE VOLUME › SHADER SETTINGS) ──
+// ── Per-volume shader settings (ANATOMY › IMAGE VOLUME › VISIBLE RANGE) ──
 // background and foreground thresholds, and solid or glass, are kept per
 // volume (vol.shader / vol.shaderMode): stored when another volume is
 // rendered, restored when it is rendered again; a volume rendered for the
@@ -5584,7 +5747,7 @@ function restoreShaderControls() {
 }
 applyRenderModeUI(); // reflect the default MODE (glass) on load
 SHADER_DEFAULTS = captureShader();
-parkShaderRows();   // (shown in ANATOMY › IMAGE VOLUME › SHADER SETTINGS, not in 3D)
+parkShaderRows();   // (shown in ANATOMY › IMAGE VOLUME › VISIBLE RANGE, not in 3D)
 window.setRenderMode = mode => { setRenderMode(mode); return renderMode; }; // console: 'none' | 'glass' | 'solid' | 'translucent' (rim-lit)
 // CLIP: the box switches clipping on/off; the plane buttons pick the
 // plane (COR at start) and, picked while off, switch it on too.
@@ -5797,6 +5960,14 @@ document.getElementById('shadow-slider').addEventListener('input', e => {
   document.getElementById('shadow-val').textContent = e.target.value + '%';
   setShadowAmount(+e.target.value / 100);
   render3D();
+});
+document.getElementById('gloss-slider').addEventListener('input', e => {
+  document.getElementById('gloss-val').textContent = e.target.value + '%';
+  window.setGloss(+e.target.value / 100);
+});
+document.getElementById('ambient-slider').addEventListener('input', e => {
+  document.getElementById('ambient-val').textContent = e.target.value + '%';
+  window.setAmbient(+e.target.value / 100);
 });
 document.getElementById('light-slider').addEventListener('input', e=>{
   const v = +e.target.value;
@@ -6280,9 +6451,17 @@ document.getElementById('hdr-panel-pre').addEventListener('keydown', e => {
     const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
   }
 });
-function showHeaderPanel(title, text) {
+// links: [[label, onClick], …] shown below the text (sources, other views)
+function showHeaderPanel(title, text, links = []) {
   document.getElementById('hdr-panel-title').textContent = title;
   document.getElementById('hdr-panel-pre').textContent = text;
+  const el = document.getElementById('hdr-panel-links');
+  el.innerHTML = '';
+  for (const [label, fn] of links) {
+    const b = document.createElement('button'); b.className = 'hdr-link'; b.textContent = label;
+    b.addEventListener('click', fn); el.appendChild(b);
+  }
+  el.style.display = links.length ? '' : 'none';
   headerPanel.open();
 }
 
@@ -6323,8 +6502,12 @@ function showTrckHeaderPanel() {
   // trckHeader is { indexJson, files: [{name, header}] }; one file without
   // a manifest just shows that file's header.
   const one = trckHeader.files && trckHeader.files.length === 1 && !trckHeader.indexJson;
-  showHeaderPanel(one ? 'TRACTS HEADER · ' + trckHeader.files[0].name : 'TRACTS HEADER',
-                  JSON.stringify(one ? trckHeader.files[0].header : trckHeader, null, 2));
+  let text = JSON.stringify(one ? trckHeader.files[0].header : trckHeader, null, 2), links = [];
+  for (const f of trckHeader.files || []) {
+    const att = attributionText(fileMeta.get(String(f.name).split('/').pop()));
+    if (att.text) { text += '\n\n' + f.name + att.text; links.push(...att.links); }
+  }
+  showHeaderPanel(one ? 'TRACTS HEADER · ' + trckHeader.files[0].name : 'TRACTS HEADER', text, links);
 }
 document.getElementById('btn-show-indices').addEventListener('click', e => {
   e.stopPropagation();
@@ -6589,11 +6772,13 @@ function applyColorDefaultsForLoad() {
   // updateScene3d() themselves either.
   lineWidthPx = isBundle ? 1.5 : 2.0;
   endsPx      = isBundle ? 2.5 : 6.0;
+  if (_nextLoadEndsPx != null) { endsPx = _nextLoadEndsPx; _nextLoadEndsPx = null; }   // (a made tractogram's own choice)
   const lw = document.getElementById('line-width-slider');
   if (lw) { lw.value = lineWidthPx; document.getElementById('line-width-val').textContent = lineWidthPx.toFixed(1) + ' px'; }
   const es = document.getElementById('ends-size');
-  if (es) { es.value = endsPx; document.getElementById('ends-size-val').textContent = endsPx.toFixed(1) + ' px'; }
+  if (es) { es.value = endsPx; document.getElementById('ends-size-val').textContent = endsPx > 0 ? endsPx.toFixed(1) + ' px' : 'off'; }
 }
+let _nextLoadEndsPx = null;   // the ENDS size the next tractogram load opens with, instead of the default
 
 // ═══════════════════════════════════════════════════════════
 // 9.  FILE DROP / PICK
@@ -6738,11 +6923,11 @@ async function dispatchOpenedFiles(rawFiles){
     // the caller's own try/catch (fi-load's change handler / the
     // whole-page drop handler).
     const msg = String((e && e.message) || e);
-    if (!msg.startsWith('index.json')) throw e;
+    if (!/^(index|datapackage)\.json/.test(msg)) throw e;
     const isZipDrop = rawFiles.length === 1 && /\.zip$/i.test(rawFiles[0].name);
     if (isZipDrop) { confirmManifestError(e, false); return false; }
     if (!confirmManifestError(e, true)) return false; // cancelled — load nothing
-    const withoutManifest = rawFiles.filter(f => f.name.toLowerCase() !== MANIFEST_FILENAME);
+    const withoutManifest = rawFiles.filter(f => !isManifestName(f.name));
     r = await MultiFileOpener.open(withoutManifest);
   }
   const mode = await decideDropMode(r, rawFiles);
@@ -6789,6 +6974,7 @@ async function dispatchOpenedFiles(rawFiles){
     try {
       const raw = JSON.parse(await manifestEntry.file.text());
       const manifest = parseManifest(raw);
+      if (manifest.package) rememberPackage(manifest.package);
       manifestVolumes = resolveManifestVolumes(manifest, entries.map(e => e.file));
       const bf = manifest.view && manifest.view.boundsFile;
       if (bf && !entries.some(e => e.file.name === bf || e.file.name.split('/').pop() === bf.split('/').pop()))
@@ -6821,7 +7007,10 @@ async function dispatchOpenedFiles(rawFiles){
   } else {
     for (const e of anatEntries) newVols.push(makeVolume(e.file));
   }
+  // a volume's JSON sidecar (BIDS: phase encoding, readout time, …), paired by name in file-opener
+  for (const v of newVols) { const e = anatEntries.find(x => x.file === v.file); if (e && e.sidecar) v.sidecar = e.sidecar; }
   addVolumes(newVols);
+  resolveRegionLuts();   // (a region table that came before its label volume)
 
   // Lookup tables. Each one is attached to a volume by the first rule
   // that applies:
@@ -6883,6 +7072,29 @@ async function dispatchOpenedFiles(rawFiles){
     if (!target && lutEntries.length === 1 && newVols.length) pendingAutoLut = { lut, vols: newVols.slice() };
   }
   if (pendingAutoLut && resolveAutoLut() === activeVolume) activeChanged = true;
+
+  // Gradient tables (FSL .bval + .bvec): with the volume of the same name
+  // (sub-01_dwi.bval ↔ sub-01_dwi.nii.gz) — this drop's, then earlier
+  // ones; else, dropped without a match, with the drop's only volume or
+  // (dropped on their own) the shown one.
+  const gradEntries = entries.filter(e => e.kind === 'grad');
+  if (gradEntries.length) {
+    const groups = new Map();
+    for (const e of gradEntries) {
+      const base = e.file.name.replace(/\.(bval|bvec)$/i, ''), ext = /\.bval$/i.test(e.file.name) ? 'bval' : 'bvec';
+      if (!groups.has(base)) groups.set(base, {});
+      groups.get(base)[ext] = e.file;
+    }
+    for (const [base, g] of groups) {
+      const byName = v => volumeBaseName(v.file.name).toLowerCase() === base.toLowerCase();
+      const target = newVols.find(byName) || [...volumes].reverse().find(byName)
+        || (groups.size === 1 ? (newVols.length === 1 ? newVols[0] : !newVols.length ? activeVolume : null) : null);
+      if (!target) { console.warn('gradient table ' + base + ': no volume of that name'); continue; }
+      try { await attachGradients(target, g); did = true; }
+      catch (err) { alert('Gradient table "' + base + '": ' + err); }
+    }
+    registerVolumeItems();
+  }
 
   if (newVols.length) {
     // Load one new volume — a scan rather than a label volume when the drop
@@ -7059,7 +7271,7 @@ function customLutOf(vol) {
   let name = base + ' (custom)';
   for (let i = 2; luts.some(l => l.name === name); i++) name = base + ' (custom ' + i + ')';
   const maxIndex = vol === activeVolume ? lutMaxIndex : Math.max(0, ...map.keys());
-  const lut = { file: null, name, map, maxIndex, volume: null, uiSettingsOpen: false, custom: true };
+  const lut = { file: null, name, map, maxIndex, volume: null, uiSettingsOpen: false, custom: true, tree: vol.lut && vol.lut.tree || null };
   luts.push(lut);
   attachLut(lut, vol);
   if (vol === activeVolume) { lutMap = map; lutIsAutoGenerated = false; }
@@ -7256,7 +7468,9 @@ function buildLabelList(vol, el, rm = regionMeshes) {
   if (!open) { el.appendChild(box); return true; }
   const list = document.createElement('div');
   list.className = 'dt-scroll';
-  for (const v of vals.slice(0, LABEL_LIST_MAX)) {
+  const tree = labelTreeOf(vol);
+  if (tree) buildLabelTreeRows(vol, list, rm, vals, meshes, tree);
+  else for (const v of vals.slice(0, LABEL_LIST_MAX)) {
     const [name, hex] = labelEntry(v, vol);
     const row = document.createElement('div');
     row.className = 'dt-row dt-sub';
@@ -7279,7 +7493,7 @@ function buildLabelList(vol, el, rm = regionMeshes) {
     row.append(sw, nm, tg);
     list.appendChild(row);
   }
-  if (vals.length > LABEL_LIST_MAX) {
+  if (!tree && vals.length > LABEL_LIST_MAX) {
     const more = document.createElement('div');
     more.className = 'dt-note';
     more.textContent = '… ' + (vals.length - LABEL_LIST_MAX).toLocaleString() + ' more labels not listed';
@@ -7291,6 +7505,100 @@ function buildLabelList(vol, el, rm = regionMeshes) {
   box.appendChild(list);
   el.appendChild(box);
   return true;
+}
+
+// The region list as a tree (a region table's hierarchy, or one from the
+// lookup table's names): a group folds out (▸/▾), its [x] puts all its
+// regions in 3D (or none), its sun draws them all solid (or glass). Groups
+// without any region present in the volume are left out; values present
+// but in no group come last, under "other".
+function buildLabelTreeRows(vol, list, rm, vals, meshes, tree) {
+  const present = new Set(vals);
+  const open = vol._treeOpen || (vol._treeOpen = new Set());
+  const leaves = new Map();   // node → present indices in its subtree
+  const leavesOf = nd => {
+    if (leaves.has(nd)) return leaves.get(nd);
+    const out = [];
+    if (nd.index != null && present.has(nd.index)) out.push(nd.index);
+    for (const c of nd.children) out.push(...leavesOf(c));
+    leaves.set(nd, out); return out;
+  };
+  const inTree = new Set(tree.byIndex ? [...tree.byIndex.keys()] : []);
+  const other = vals.filter(v => !inTree.has(v));
+  const roots = tree.roots.filter(nd => leavesOf(nd).length);
+  if (other.length) roots.push({ key: '\u0000other', name: 'other (not in the table)', index: null, children: [], _vals: other });
+  const valsOf = nd => nd._vals || leavesOf(nd);
+  let rows = 0;
+  const groupRow = (nd, depth) => {
+    const vs = valsOf(nd), isOpen = open.has(nd.key);
+    const row = document.createElement('div');
+    row.className = 'dt-row dt-sub dt-group';
+    row.style.paddingLeft = (4 + 12 * depth) + 'px';
+    const caret = document.createElement('span'); caret.className = 'dt-caret'; caret.textContent = isOpen ? '▾' : '▸';
+    row.appendChild(caret);
+    row.addEventListener('click', e => { if (e.target.closest('input, button')) return; if (isOpen) open.delete(nd.key); else open.add(nd.key); dataStore.refresh(); });
+    if (meshes) {
+      const on = vs.filter(v => rm.has(v)).length;
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'dt-check';
+      cb.checked = on === vs.length; cb.indeterminate = on > 0 && on < vs.length;
+      cb.title = on === vs.length ? 'all its regions in 3D — click: none' : 'click: all its regions in 3D';
+      cb.addEventListener('click', e => e.stopPropagation());
+      cb.addEventListener('change', () => { const want = on < vs.length; for (const v of vs) rm.setMember(v, want); });
+      row.appendChild(cb);
+      const inSet = vs.filter(v => rm.has(v)), allFoc = inSet.length > 0 && inSet.every(v => rm.focused(v));
+      const fb = makeFocusButton(allFoc, () => {
+        if (!inSet.length) { for (const v of vs) rm.setMember(v, true); return; }
+        for (const v of inSet) if (rm.focused(v) === allFoc) rm.toggleFocus(v);
+      }, !inSet.length ? 'click: all its regions in 3D' : allFoc ? 'its regions solid — click: glass' : 'click: its regions solid');
+      if (!inSet.length) fb.classList.add('grey'); else if (!allFoc && inSet.some(v => rm.focused(v))) fb.classList.add('mixed');
+      row.appendChild(fb);
+    }
+    const nm = document.createElement('span'); nm.className = 'dt-label'; nm.textContent = nd.name; nm.dataset.tip = nd.name + ' — ' + vs.length + ' region' + (vs.length > 1 ? 's' : '');
+    const tg = document.createElement('span'); tg.className = 'dt-tag'; tg.textContent = !tree.fromNames && !nd._vals ? nd.key : String(vs.length);   // (a table's group: its key, as CTX_L)
+    row.append(nm, tg);
+    list.appendChild(row); rows++;
+    if (!isOpen) return;
+    if (nd._vals) { for (const v of nd._vals) leafRow(v, null, depth + 1); return; }
+    if (nd.index != null && present.has(nd.index)) leafRow(nd.index, nd, depth + 1);   // (a group with a value of its own)
+    for (const c of nd.children) node(c, depth + 1);
+  };
+  const leafRow = (v, nd, depth) => {
+    if (rows >= LABEL_LIST_MAX) return;
+    const [name, hex] = labelEntry(v, vol);
+    const row = document.createElement('div');
+    row.className = 'dt-row dt-sub';
+    row.style.paddingLeft = (4 + 12 * depth + 14) + 'px';   // (lined up under a group's caret)
+    if (meshes) {
+      const c = document.createElement('input');
+      c.type = 'checkbox'; c.className = 'dt-check'; c.checked = rm.has(v);
+      c.title = c.checked ? 'in 3D — click: remove' : 'click: show in 3D';
+      c.addEventListener('click', e => e.stopPropagation());
+      c.addEventListener('change', () => rm.setMember(v, c.checked));
+      row.appendChild(c);
+      const fb = makeFocusButton(rm.focused(v), () => rm.toggleFocus(v),
+        !rm.has(v) ? 'click: show in 3D' : rm.focused(v) ? 'solid — click: glass' : 'glass — click: solid');
+      if (!rm.has(v)) fb.classList.add('grey');
+      row.appendChild(fb);
+    }
+    const sw = labelSwatch(v, hex, vol);
+    const shown = nd ? nd.name : name;
+    const nm = document.createElement('span'); nm.className = 'dt-label'; nm.textContent = shown; nm.dataset.tip = name + ' (' + v + ')' + (nd && nd.key !== String(v) ? ' · ' + nd.key : '');
+    const tg = document.createElement('span'); tg.className = 'dt-tag'; tg.textContent = nd && nd.key !== String(v) && !tree.fromNames ? nd.key : String(v);
+    row.append(sw, nm, tg);
+    list.appendChild(row); rows++;
+  };
+  const node = (nd, depth) => {
+    if (rows >= LABEL_LIST_MAX) return;
+    if (nd._vals) { groupRow(nd, depth); return; }
+    if (!leavesOf(nd).length) return;
+    if (nd.children.some(c => leavesOf(c).length)) groupRow(nd, depth);
+    else leafRow(nd.index, nd, depth);
+  };
+  for (const r of roots) node(r, 0);
+  if (rows >= LABEL_LIST_MAX) {
+    const more = document.createElement('div'); more.className = 'dt-note'; more.textContent = '… the list stops at ' + LABEL_LIST_MAX + ' rows: fold groups in';
+    list.appendChild(more);
+  }
 }
 
 // ── The ANATOMY tab: one section per role ──────────────────
@@ -7366,7 +7674,7 @@ function volumeNameRow(vol, tag) {
     return row;
   }
   if (tag) { const t = document.createElement('span'); t.className = 'dt-tag'; t.textContent = tag; row.appendChild(t); }
-  row.appendChild(makeInfoButton(() => showVolumeHeader(vol), 'header of ' + vol.file.name));
+  row.appendChild(makeInfoButton(() => showVolumeInfo(vol), 'about ' + vol.file.name + ': acquisition, geometry, diffusion — and its headers'));
   return row;
 }
 // Frees what a volume holds once it plays no role: its surface field (also
@@ -7446,9 +7754,11 @@ function renderAnatomyPane(el) {
           on => { activeAsAnatomy = !on; applyActiveVolumeDisplay(); registerVolumeItems(); });
         if (modality === 'seg') buildLutChoice(vol, d);
       }
+      if (vol.nvol > 1 && !vol.isColor) buildFrameRow(vol, d);
       if (intensityApplies(vol)) buildIntensityRow(vol, d);
       if (!vol.isColor) buildMaskRow(vol, d);
       buildShaderPanel(d);
+      if (vol.grad) buildQcPanel(vol, d);
     });
 
   // PARCELLATION
@@ -7485,9 +7795,858 @@ function renderAnatomyPane(el) {
     });
 }
 
-// SHADER SETTINGS: the advanced settings of the rendered volume, behind an
-// opener; open, a box that stands out (its title bar as the tabs), closed
-// by a click anywhere on its title bar, or by rendering another volume.
+// ── 4D VOLUMES: which frame is shown ─────────────────────────
+// Any 4D scalar NIfTI: the image volume shows one frame or the mean of a
+// set (vol.frames, read by parseVolumeFile). With a gradient table the
+// choices name each frame's b-value, and the default is the mean b=0.
+const B0_MAX = 50;   // s/mm²: at or below counts as a b=0 volume
+function frameChoices(vol) {
+  const n = vol.nvol || 1, g = vol.grad, out = [];
+  if (g && g.bvals.length === n) {
+    const b0 = g.bvals.map((b, i) => b <= B0_MAX ? i : -1).filter(i => i >= 0);
+    if (b0.length > 1) out.push(['b0', 'mean b=0 (' + b0.length + ')']);
+    for (const sh of shellsOf(g.bvals)) if (sh.b > B0_MAX && sh.idx.length > 1) out.push(['b' + sh.b, 'mean b=' + sh.b + ' (' + sh.idx.length + ')']);
+  }
+  out.push(['all', 'mean of all ' + n]);
+  for (let i = 0; i < n; i++) out.push([String(i), 'frame ' + i + (g && g.bvals.length === n ? ' · b=' + Math.round(g.bvals[i]) : '')]);
+  return out;
+}
+function framesOf(vol, sel) {
+  const n = vol.nvol || 1, g = vol.grad;
+  if (sel === 'all') return Array.from({ length: n }, (_, i) => i);
+  if (/^\d+$/.test(sel)) return [+sel];
+  if (g && sel === 'b0') return g.bvals.map((b, i) => b <= B0_MAX ? i : -1).filter(i => i >= 0);
+  if (g && /^b\d+$/.test(sel)) { const sh = shellsOf(g.bvals).find(s => 'b' + s.b === sel); if (sh) return sh.idx; }
+  return [0];
+}
+async function setFrames(vol, sel) {
+  vol.frameSel = sel; vol.frames = framesOf(vol, sel);
+  if (vol !== activeVolume) { registerVolumeItems(); return; }
+  _keepCursor = true;
+  try { await loadAnat(vol.file); }
+  catch (e) { alert('Error reading "' + vol.file.name + '":\n' + ((e && e.message) || e)); console.error(e); }
+  finally { _keepCursor = false; }
+  registerVolumeItems();
+}
+function buildFrameRow(vol, el) {
+  const ch = frameChoices(vol);
+  const cur = vol.frameSel && ch.some(c => c[0] === vol.frameSel) ? vol.frameSel : vol.frames && vol.frames.length === 1 ? String(vol.frames[0]) : vol.frames ? 'all' : '0';
+  const row = makeChoiceRow('frame', ch, cur, v => setFrames(vol, v));
+  row.dataset.tip = 'a 4D volume (' + vol.nvol + ' frames): the frame shown, or the mean of a set';
+  el.appendChild(row);
+}
+
+// ── GRADIENT TABLES (FSL .bval / .bvec) ──────────────────────
+// Shells: b-values grouped (within 5% or 50 s/mm²), b=0 as one shell.
+function shellsOf(bvals) {
+  const order = bvals.map((b, i) => [b, i]).sort((a, c) => a[0] - c[0]);
+  const shells = [];
+  for (const [b, i] of order) {
+    const last = shells[shells.length - 1];
+    const same = last && (b <= B0_MAX ? last.b0 : !last.b0 && Math.abs(b - last.sum / last.idx.length) <= Math.max(50, 0.05 * b));
+    if (same) { last.idx.push(i); last.sum += b; }
+    else shells.push({ b0: b <= B0_MAX, sum: b, idx: [i] });
+  }
+  for (const s of shells) { s.b = s.b0 ? 0 : Math.round(s.sum / s.idx.length / 10) * 10; s.idx.sort((a, c) => a - c); }
+  return shells;
+}
+function numbersOf(text) {
+  return text.trim().split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#')).map(l => l.split(/[\s,]+/).map(Number));
+}
+async function attachGradients(vol, { bval, bvec }) {
+  const g = vol.grad || { bvals: null, bvecs: null, files: {} };
+  if (bval) {
+    const rows = numbersOf(await bval.text());
+    const flat = rows.length === 1 ? rows[0] : rows.every(r => r.length === 1) ? rows.map(r => r[0]) : null;
+    if (!flat || flat.some(x => !isFinite(x))) throw bval.name + ': not a list of b-values';
+    g.bvals = flat; g.files.bval = bval.name;
+  }
+  if (bvec) {
+    let rows = numbersOf(await bvec.text());
+    if (rows.length !== 3 && rows.every(r => r.length === 3)) rows = [0, 1, 2].map(k => rows.map(r => r[k]));   // one direction per line: transposed
+    if (rows.length !== 3 || rows.some(r => r.length !== rows[0].length || r.some(x => !isFinite(x)))) throw bvec.name + ': not 3 rows of directions';
+    g.bvecs = rows[0].map((_, i) => [rows[0][i], rows[1][i], rows[2][i]]); g.files.bvec = bvec.name;
+  }
+  vol.grad = g;
+  if (g.bvals && vol.frameSel == null) {   // first time: show the mean b=0
+    vol.frameSel = 'b0'; vol.frames = g.bvals.map((b, i) => b <= B0_MAX ? i : -1).filter(i => i >= 0);
+    if (!vol.frames.length) { vol.frameSel = '0'; vol.frames = [0]; }
+    if (vol === activeVolume) await setFrames(vol, vol.frameSel);
+  }
+}
+async function sidecarJsonOf(vol) {
+  if (!vol.sidecar) return null;
+  if (vol._sidecarJson === undefined) {
+    try { vol._sidecarJson = JSON.parse(await vol.sidecar.text()); } catch { vol._sidecarJson = null; }
+  }
+  return vol._sidecarJson;
+}
+
+// ── QUALITY CONTROL (a 4D volume with a gradient table) ──────
+// A fold-out below VISIBLE RANGE: a report of what can be checked
+// without processing — counts, shells, directions, the sidecar's
+// acquisition facts, header notes. ✓ fine · ! worth a look · ✗ a problem ·
+// i information (can't be judged from what is loaded).
+let qcPanelOpen = false;
+function qcReport(vol) {
+  const L = [];   // [status, text]
+  const g = vol.grad, n = vol.nvol || 1, h = vol.niiHeader || {};
+  const nb = g.bvals ? g.bvals.length : null, nv = g.bvecs ? g.bvecs.length : null;
+  // counts
+  if (nb == null) L.push(['✗', 'no .bval (b-values) file']);
+  if (nv == null) L.push(['✗', 'no .bvec (directions) file']);
+  const cnt = [n + ' frames', nb != null ? nb + ' b-values' : null, nv != null ? nv + ' directions' : null].filter(Boolean).join(' · ');
+  L.push([(nb == null || nb === n) && (nv == null || nv === n) ? '✓' : '✗', cnt]);
+  if (nb == null) return L;
+  // shells
+  const shells = shellsOf(g.bvals);
+  L.push(['✓', 'shells: ' + shells.map(s => 'b=' + s.b + ' ×' + s.idx.length).join(' · ')]);
+  const b0 = shells.find(s => s.b0);
+  if (!b0) L.push(['✗', 'no b=0 volume']);
+  else {
+    const pos = b0.idx;
+    const spread = pos.length > 1 && pos[pos.length - 1] - pos[0] > n / 2;
+    L.push([pos.length === 1 ? '!' : '✓', 'b=0 at frame' + (pos.length > 1 ? 's ' : ' ') + compactList(pos)
+      + (pos.length === 1 ? ' — only one: no check of signal drift' : spread ? ' — spread through the series' : ' — not spread through the series (drift is harder to correct)')]);
+  }
+  // directions
+  if (nv != null && nv === nb) {
+    let bad = 0, zero = 0;
+    g.bvecs.forEach((d, i) => {
+      const len = Math.hypot(d[0], d[1], d[2]);
+      if (g.bvals[i] <= B0_MAX) { if (len > 0.01 && Math.abs(len - 1) > 0.01) bad++; }
+      else if (len < 0.01) zero++; else if (Math.abs(len - 1) > 0.01) bad++;
+    });
+    if (zero) L.push(['✗', zero + ' diffusion-weighted frame' + (zero > 1 ? 's have' : ' has') + ' no direction (zero vector)']);
+    L.push([bad ? '!' : '✓', bad ? bad + ' direction' + (bad > 1 ? 's are' : ' is') + ' not of unit length (scaled b-values?)' : 'directions of unit length']);
+    for (const s of shells) if (!s.b0) {
+      const dirs = s.idx.map(i => g.bvecs[i]).map(d => { const l = Math.hypot(...d) || 1; return d.map(x => x / l); });
+      let dup = 0, minAng = 180;
+      for (let a = 0; a < dirs.length; a++) for (let c = a + 1; c < dirs.length; c++) {
+        const cos = Math.min(1, Math.abs(dirs[a][0] * dirs[c][0] + dirs[a][1] * dirs[c][1] + dirs[a][2] * dirs[c][2]));
+        const ang = Math.acos(cos) * 180 / Math.PI;
+        if (ang < 1) dup++; if (ang < minAng) minAng = ang;
+      }
+      const uniq = dirs.length - dup;
+      L.push([dup ? '!' : uniq < 6 ? '✗' : uniq < 15 ? '!' : '✓', 'b=' + s.b + ': ' + uniq + ' distinct direction' + (uniq > 1 ? 's' : '') + (dup ? ' (' + dup + ' repeated)' : '')
+        + ' · closest pair ' + minAng.toFixed(1) + '°' + (uniq < 6 ? ' — too few for a tensor' : uniq < 15 ? ' — few: a tensor fit only' : '')
+        + (dup ? ' — directions should be evenly spread' : '')]);
+      // how well the directions pin down a tensor: the condition number of
+      // its design matrix (rows x², y², z², 2xy, 2xz, 2yz); ≈1.3–1.6 for evenly spread directions
+      if (uniq >= 6) {
+        const c = tensorCondition(dirs);
+        L.push([c <= 2.5 ? '✓' : c <= 5 ? '!' : '✗', 'b=' + s.b + ': condition number ' + (isFinite(c) ? c.toFixed(2) : '∞')
+          + (c <= 2.5 ? ' — evenly spread' : c <= 5 ? ' — unevenly spread: some tensor orientations are poorly measured' : ' — directions cluster: a tensor is poorly determined')]);
+      }
+    }
+  }
+  // the sidecar (BIDS JSON)
+  const js = vol._sidecarJson;
+  if (!vol.sidecar) L.push(['!', 'no JSON sidecar: phase encoding and readout time unknown (needed by topup / eddy)']);
+  else if (js === null) L.push(['✗', vol.sidecar.name + ': not readable JSON']);
+  else if (js) {
+    const pe = js.PhaseEncodingDirection, trt = js.TotalReadoutTime, es = js.EffectiveEchoSpacing;
+    L.push([pe ? '✓' : '!', 'phase encoding: ' + (pe || 'not given') + (js.PhaseEncodingAxis && !pe ? ' (axis ' + js.PhaseEncodingAxis + ', polarity unknown)' : '')]);
+    L.push([trt || es ? '✓' : '!', trt ? 'total readout time ' + trt + ' s' : es ? 'effective echo spacing ' + es + ' s' : 'no readout time (TotalReadoutTime / EffectiveEchoSpacing)']);
+    if (js.SliceTiming) L.push(['✓', 'slice timing given (' + js.SliceTiming.length + ' slices)' + (js.MultibandAccelerationFactor ? ' · multiband ×' + js.MultibandAccelerationFactor : '')]);
+    // A reverse phase-encoded b=0 is a separate file (BIDS: fmap/…_dir-…_epi.nii.gz, its
+    // IntendedFor naming this series): only the LOADED volumes can be checked — their
+    // sidecars give the polarity. Not finding one is information, not a fault: the
+    // session may have it unloaded, and fieldmap-less correction (QSIPrep's SyN-SDC) exists.
+    if (pe) {
+      const opp = pe.endsWith('-') ? pe.slice(0, -1) : pe + '-';
+      const me = vol.file.name;
+      const intended = j => [].concat(j.IntendedFor || []).some(x => String(x).split('/').pop() === me);
+      const rev = volumes.filter(v => v !== vol && v._sidecarJson && v._sidecarJson.PhaseEncodingDirection === opp);
+      const fmap = volumes.filter(v => v !== vol && v._sidecarJson && intended(v._sidecarJson) && !rev.includes(v));
+      if (rev.length) L.push(['✓', 'reverse phase encoding (' + opp + '): ' + rev.map(v => v.label + (intended(v._sidecarJson) ? ' (intended for this series)' : '')).join(', ')]);
+      else if (fmap.length) L.push(['✓', 'field map intended for this series: ' + fmap.map(v => v.label).join(', ')]);
+      else L.push(['i', 'no reverse phase-encoded b=0 (' + opp + ') or field map among the loaded files — if the session has one (BIDS: fmap/), load it to include it here. Without one, correction is fieldmap-less (e.g. SyN-SDC) and less accurate']);
+    }
+  }
+  // header notes
+  // free text in the header: scanner notes ("TE=84;Time=…") are harmless, anything else may name someone
+  const htext = [h.descrip, h.auxFile].filter(Boolean).join(' / ');
+  if (htext) {
+    // notes: key=value pairs, or no words at all (a version number, a date)
+    const notes = !h.auxFile && (/^\s*([A-Za-z][\w.]*\s*=\s*[^;=]*;?\s*)+$/.test(h.descrip || '') || !/[A-Za-z]{3,}/.test(h.descrip || ''));
+    L.push(notes ? ['i', 'header notes "' + htext + '"'] : ['!', 'header text "' + htext + '" — check it identifies no one']);
+  }
+  return L;
+}
+// eigenvalues of a symmetric matrix (Jacobi rotations; small n)
+function symEigenvalues(M) {
+  const n = M.length, a = M.map(r => r.slice());
+  for (let sweep = 0; sweep < 60; sweep++) {
+    let off = 0;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += a[p][q] * a[p][q];
+    if (off < 1e-22) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      if (Math.abs(a[p][q]) < 1e-300) continue;
+      const th = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+      const t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < n; k++) { const x = a[k][p], y = a[k][q]; a[k][p] = c * x - s * y; a[k][q] = s * x + c * y; }
+      for (let k = 0; k < n; k++) { const x = a[p][k], y = a[q][k]; a[p][k] = c * x - s * y; a[q][k] = s * x + c * y; }
+    }
+  }
+  return a.map((r, i) => r[i]);
+}
+function tensorCondition(dirs) {
+  const B = dirs.map(([x, y, z]) => [x * x, y * y, z * z, 2 * x * y, 2 * x * z, 2 * y * z]);
+  const BtB = [0, 1, 2, 3, 4, 5].map(i => [0, 1, 2, 3, 4, 5].map(j => B.reduce((s, r) => s + r[i] * r[j], 0)));
+  const ev = symEigenvalues(BtB).map(v => Math.max(0, v));
+  const mx = Math.max(...ev), mn = Math.min(...ev);
+  return mn > 1e-12 * mx ? Math.sqrt(mx / mn) : Infinity;
+}
+
+// The gradient directions in world (RAS) space. FSL's convention: bvecs
+// are along the image's voxel axes, as if stored radiologically — when
+// the voxel → world matrix has a positive determinant (neurological
+// storage) the x component is negated first.
+function gradientDirsWorld(vol) {
+  const A = vol.Ab, g = vol.grad;
+  if (!A || !g || !g.bvecs) return null;
+  const det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+  const col = c => Math.hypot(A[0][c], A[1][c], A[2][c]) || 1;
+  const vs = [col(0), col(1), col(2)];
+  return g.bvecs.map(d => {
+    const v = [det > 0 ? -d[0] : d[0], d[1], d[2]];
+    const w = [0, 1, 2].map(r => A[r][0] * v[0] / vs[0] + A[r][1] * v[1] / vs[1] + A[r][2] * v[2] / vs[2]);
+    const l = Math.hypot(...w);
+    return l > 1e-6 ? w.map(x => x / l) : null;
+  });
+}
+
+// Markers made in memory: any graph package (graph-format.md) added as
+// if it were a dropped file (a real File, so it can be saved as well).
+async function addMarkersFromJson(name, json) {
+  const file = new File([JSON.stringify(json, null, 1)], name + '.json', { type: 'application/json' });
+  await addMarkerFiles([{ file, json }]);
+  return markerSets.find(m => m.file === file) || null;
+}
+// Region tables of a graph file: each becomes a lookup table with a
+// hierarchy (graph-io regionLut), listed with the others, and attached to
+// its label volume — the package's resource named in geometry.region.volume,
+// found among the loaded volumes by its file name (now, or when it comes in
+// a later drop: pendingRegionLuts).
+let pendingRegionLuts = [];   // [{ lut, fileName }]
+function graphRegionTablesLoaded(pkg, file) {
+  for (const t of regionTables(pkg)) {
+    let r;
+    try { r = regionLut(pkg, t); } catch (e) { alert(file.name + ':\n' + ((e && e.message) || e)); continue; }
+    const name = (pkg.title || stripPathExt(file.name)) + (regionTables(pkg).length > 1 ? ' · ' + t.name : '');
+    const old = luts.find(l => l.name === name);
+    const lut = { file, name, map: r.map, maxIndex: r.maxIndex, tree: r.tree, volume: null, uiSettingsOpen: false, graph: { pkg, table: t.name } };
+    if (old) { const v = old.volume; detachLut(old); luts = luts.filter(l => l !== old); if (v) attachLut(lut, v); }
+    luts.push(lut);
+    const res = t.geometry.region.volume ? pkg.files.get(t.geometry.region.volume) : null;
+    const fileName = res && typeof res.path === 'string' ? res.path.split('/').pop() : null;
+    if (!lut.volume && fileName) pendingRegionLuts.push({ lut, fileName });
+  }
+  resolveRegionLuts();
+}
+function resolveRegionLuts() {
+  let changed = false;
+  pendingRegionLuts = pendingRegionLuts.filter(({ lut, fileName }) => {
+    if (!luts.includes(lut)) return false;
+    const vol = [...volumes].reverse().find(v => v.file.name === fileName);
+    if (!vol) return true;
+    attachLut(lut, vol); changed = true;
+    if (vol === activeVolume) useVolumeLut(vol);
+    return false;
+  });
+  if (changed) { setTimeout(() => { ensureLabelRef(); ensureSegRef(); }, 0); registerVolumeItems(); }
+}
+// A label volume's hierarchy: its region table's, or one made from the names
+// of its lookup table (sides, "A|B|C" paths); null: a flat list.
+function labelTreeOf(vol) {
+  const lut = vol && !vol.roiSet ? vol.lut : null;
+  if (!lut) return null;
+  if (lut.tree) return lut.tree;
+  if (lut._nameTreeOf !== lut.map) { lut._nameTree = treeFromNames(lut.map); lut._nameTreeOf = lut.map; }
+  return lut._nameTree;
+}
+const SHELL_COLORS = [[255, 140, 40], [80, 170, 255], [120, 220, 110], [235, 90, 200], [250, 230, 80], [160, 120, 255]];
+
+// Convex hull of points (incremental; for points on a sphere: its
+// Delaunay triangulation). Returns triangles as index triples. Points
+// closer than 1e-6 count once (the first).
+function convexHull3(P) {
+  const n = P.length, sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const EPS = 1e-9;
+  // a first tetrahedron
+  let i0 = 0, i1 = -1, i2 = -1, i3 = -1;
+  for (let i = 1; i < n && i1 < 0; i++) if (Math.hypot(...sub(P[i], P[i0])) > 1e-6) i1 = i;
+  for (let i = 1; i < n && i2 < 0 && i1 >= 0; i++) if (Math.hypot(...cross(sub(P[i1], P[i0]), sub(P[i], P[i0]))) > 1e-6) i2 = i;
+  for (let i = 1; i < n && i3 < 0 && i2 >= 0; i++) if (Math.abs(dot(cross(sub(P[i1], P[i0]), sub(P[i2], P[i0])), sub(P[i], P[i0]))) > 1e-6) i3 = i;
+  if (i3 < 0) return [];
+  const faces = [];
+  const addFace = (a, b, c) => { const nrm = cross(sub(P[b], P[a]), sub(P[c], P[a])); faces.push({ v: [a, b, c], n: nrm, d: dot(nrm, P[a]), live: true }); };
+  const cen = [0, 1, 2].map(k => (P[i0][k] + P[i1][k] + P[i2][k] + P[i3][k]) / 4);
+  for (const [a, b, c] of [[i0, i1, i2], [i0, i1, i3], [i0, i2, i3], [i1, i2, i3]]) {
+    const nrm = cross(sub(P[b], P[a]), sub(P[c], P[a]));
+    if (dot(nrm, sub(cen, P[a])) > 0) addFace(a, c, b); else addFace(a, b, c);
+  }
+  const used = new Set([i0, i1, i2, i3]);
+  for (let p = 0; p < n; p++) {
+    if (used.has(p)) continue;
+    if ([...used].some(q => Math.hypot(...sub(P[p], P[q])) < 1e-6)) continue;   // a repeat
+    const vis = faces.filter(f => f.live && dot(f.n, P[p]) - f.d > EPS);
+    if (!vis.length) continue;
+    const edges = new Map();
+    for (const f of vis) { f.live = false; for (let k = 0; k < 3; k++) { const a = f.v[k], b = f.v[(k + 1) % 3]; edges.set(a + ',' + b, [a, b]); } }
+    for (const [key, [a, b]] of edges) if (!edges.has(b + ',' + a)) addFace(a, b, p);
+    used.add(p);
+  }
+  return faces.filter(f => f.live).map(f => f.v);
+}
+
+// The diffusion directions on a sphere around the brain (per shell a
+// sphere of its own, radius ∝ √b: q-space), one marker per measured
+// direction, colored per shell; frame and b-value as properties (color by
+// frame: the acquisition order). The sphere's triangulation as links: a
+// direction and its opposite measure the same, so the triangulation is
+// that of the directions AND their antipodes — the antipodes get no
+// marker, only the mesh reaches them. Even triangles: even coverage; a
+// large one: a gap; a repeat: no new vertex.
+function gradientMarkersJson(vol) {
+  const dirs = gradientDirsWorld(vol), g = vol.grad;
+  if (!dirs || !g.bvals || g.bvals.length !== dirs.length || !vol.box) return null;
+  const c = [0, 1, 2].map(k => (vol.box.min[k] + vol.box.max[k]) / 2);
+  const R0 = 0.42 * Math.max(...[0, 1, 2].map(k => vol.box.max[k] - vol.box.min[k]));   // just around the brain
+  const shells = shellsOf(g.bvals).filter(s => !s.b0);
+  const bmax = Math.max(...shells.map(s => s.b), 1);
+  const rows = [], links = [];
+  shells.forEach(sh => {
+    const R = R0 * Math.sqrt(sh.b / bmax), name = 'b=' + sh.b;
+    const idx = sh.idx.filter(i => dirs[i]);
+    const at = (d, sg) => [0, 1, 2].map(k => +(c[k] + sg * R * d[k]).toFixed(3));
+    // vertices: each direction (+) and its antipode (−)
+    const verts = [];
+    for (const i of idx) for (const sg of [1, -1]) {
+      const id = i + (sg > 0 ? '' : ' (antipode)');
+      verts.push({ id, p: dirs[i].map(x => sg * x) });
+      rows.push([id, ...at(dirs[i], sg), i, Math.round(g.bvals[i]), name, sg > 0 ? 'measured' : 'antipode']);
+    }
+    // the triangulation's edges; an edge's length against the shell's mean
+    // ("stretch") shows the coverage: > 1 a gap, < 1 a cluster. Edges to an
+    // antipode are drawn neutral: they are not measured directions.
+    const seen = new Set(), edges = [];
+    for (const t of convexHull3(verts.map(v => v.p))) for (let k = 0; k < 3; k++) {
+      const a = t[k], b = t[(k + 1) % 3], key = Math.min(a, b) + ',' + Math.max(a, b);
+      if (seen.has(key)) continue; seen.add(key);
+      edges.push([a, b, Math.hypot(...[0, 1, 2].map(q => verts[a].p[q] - verts[b].p[q]))]);
+    }
+    const mean = edges.reduce((s, e) => s + e[2], 0) / (edges.length || 1);
+    for (const [a, b, len] of edges) {
+      const measured = !verts[a].id.includes('antipode') && !verts[b].id.includes('antipode');
+      const st = +(len / mean).toFixed(3);
+      links.push([verts[a].id, verts[b].id, measured ? st : null, measured ? +Math.abs(st - 1).toFixed(3) : 0, measured ? 'measured' : 'to an antipode']);
+    }
+  });
+  // a graph package (graph-format.md): the directions as a point table, the edges as a link table
+  const stem = vol.label.replace(/\.(nii\.gz|nii)$/i, '');
+  return {
+    $schema: GRAPH_PROFILE,
+    name: (stem + '-gradient-directions').toLowerCase().replace(/[^a-z0-9._-]+/g, '-'),
+    title: stem + ' · gradient directions',
+    description: 'The diffusion directions of ' + vol.label + ' on a sphere around the brain (one per shell, radius ∝ √b), with the triangulation of the directions and their antipodes. Made by the quality control.',
+    resources: [
+      { name: 'directions', type: 'table',
+        data: [['id', 'x', 'y', 'z', 'frame', 'b', 'shell', 'kind'], ...rows],
+        schema: {
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'x', type: 'number' }, { name: 'y', type: 'number' }, { name: 'z', type: 'number' },
+            { name: 'frame', type: 'integer', description: 'the frame (acquisition order)' },
+            { name: 'b', type: 'number', unit: 's/mm²', description: 'b-value' },
+            { name: 'shell', type: 'string', description: 'the shell', categoriesOrdered: true,
+              categories: shells.map((s, k) => ({ value: 'b=' + s.b, color: SHELL_COLORS[k % SHELL_COLORS.length] })) },
+            { name: 'kind', type: 'string', description: 'a measured direction, or the opposite point (the same measurement: no marker, only the mesh)',
+              categories: [{ value: 'measured', size: 1 }, { value: 'antipode', size: 0.001 }] },
+          ],
+          primaryKey: ['id'],
+        },
+        geometry: { point: ['x', 'y', 'z'], space: 'the world space of ' + vol.label, units: 'mm' },
+        style: { color_by: 'shell', size_by: 'kind', size_mm: +(R0 * 0.06).toFixed(2) } },
+      { name: 'edges', type: 'table',
+        data: [['from', 'to', 'stretch', 'deviation', 'edge'], ...links],
+        schema: {
+          fields: [
+            { name: 'from', type: 'string' }, { name: 'to', type: 'string' },
+            { name: 'stretch', type: 'number', range: [0.3, 1.7], description: 'edge length / the shell\'s mean edge length: > 1 a gap in the coverage, < 1 directions bunched together' },
+            { name: 'deviation', type: 'number', range: [0.1, 0.7], description: '|stretch − 1|: how far from even' },
+            { name: 'edge', type: 'string', description: 'between two measured directions, or to an antipode (not a measurement)', categories: ['measured', 'to an antipode'] },
+          ],
+          foreignKeys: [{ fields: ['from'], reference: { resource: 'directions', fields: ['id'] } },
+                        { fields: ['to'], reference: { resource: 'directions', fields: ['id'] } }],
+        },
+        style: { color_by: 'stretch', colormap: 'coolwarm', color: [110, 128, 155], width_by: 'deviation', width_px: [1, 5], opacity: 0.8 } },
+    ],
+  };
+}
+function showGradientMarkers(vol) {
+  const json = gradientMarkersJson(vol);
+  if (!json) { alert('The gradient directions need the volume\'s .bval and .bvec, and the volume read once.'); return; }
+  const old = markerSets.find(m => m.dwiOf === vol);
+  if (old) removeMarkerSet(old, false);
+  addMarkersFromJson(json.title, json).then(rec => { if (rec) rec.dwiOf = vol; registerVolumeItems(); });
+}
+
+// ── MADE IN MEMORY: volumes and tractograms ─────────────────
+// Derived data (a fitted map, direction lines) is written to an in-memory
+// file of a format the app reads (NIfTI, .tck) and then added exactly like
+// a dropped file: it is listed, chosen, styled, saved like any other.
+function addVolumeFromData(name, { data, shape, Ab, nvol = 1, category = 'anatomy', description = '' }) {
+  const file = new File([writeNifti({ data, shape, Ab, nvol, description })], name, { type: 'application/octet-stream' });
+  const v = makeVolume(file, { category, source: 'derived' });
+  addVolumes([v]);
+  registerVolumeItems(); classifyPendingVolumes();
+  return v;
+}
+// opts.ends false: no end dots (short segments are all end) — sets ENDS to off
+function addTractogramFromStreamlines(name, streamlines, note = '', { ends = true } = {}) {
+  if (!ends) {   // now (an added tractogram keeps the settings) and for the load's defaults
+    _nextLoadEndsPx = 0;
+    const sl = document.getElementById('ends-size'); if (sl && +sl.value > 0) { sl.value = 0; sl.dispatchEvent(new Event('input')); }
+  }
+  const buf = writeTck(streamlines, { datatype: 'Float32LE' }, 'tractogram.observer' + (note ? ': ' + note : ''));
+  const file = new File([buf], name, { type: 'application/octet-stream' });
+  state.update({ 'trck.file': { __bundle: true, manifest: null, entries: [{ file, color: null, name: stripPathExt(name) }], mode: trckParents.length ? 'add' : 'replace' } });
+  return file;
+}
+
+// ── TENSOR FIT (quality control: the orientation check) ──────
+// In its own worker (js/tensor-worker.js), started only when asked for.
+// Results: FA, MD and DEC volumes, the principal directions as short line
+// segments (a tractogram), and the orientation check in the report.
+async function fitTensors(vol) {
+  const g = vol.grad;
+  if (!g || !g.bvals || !g.bvecs || !vol.Ab) return;
+  const A = vol.Ab;
+  const det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+  const vs = [0, 1, 2].map(c => Math.hypot(A[0][c], A[1][c], A[2][c]) || 1);
+  const w = new Worker(new URL('./js/tensor-worker.js', import.meta.url), { type: 'module' });
+  vol.tensorFit = { running: true, progress: 0 };
+  registerVolumeItems();
+  w.onmessage = e => {
+    const m = e.data;
+    if ('progress' in m) { vol.tensorFit.progress = m.progress; const el = document.getElementById('qc-fit-progress'); if (el) el.textContent = 'fitting tensors… ' + Math.round(100 * m.progress) + '%'; return; }
+    w.terminate();
+    if (m.error) { vol.tensorFit = { error: m.error }; registerVolumeItems(); return; }
+    const { shape, fa, md, v1, mask, scores, nFit, nSeeds, bShell, nUsed, nb0 } = m;
+    const n = fa.length, stem = volumeBaseName(vol.file.name);
+    // V1 in world space (for the colors and the lines)
+    const W = new Float32Array(3 * n);
+    for (let i = 0; i < n; i++) {
+      if (!mask[i]) continue;
+      const u = [v1[3 * i] / vs[0], v1[3 * i + 1] / vs[1], v1[3 * i + 2] / vs[2]];
+      const x = A[0][0] * u[0] + A[0][1] * u[1] + A[0][2] * u[2], y = A[1][0] * u[0] + A[1][1] * u[1] + A[1][2] * u[2], z = A[2][0] * u[0] + A[2][1] * u[1] + A[2][2] * u[2];
+      const l = Math.hypot(x, y, z) || 1;
+      W[3 * i] = x / l; W[3 * i + 1] = y / l; W[3 * i + 2] = z / l;
+    }
+    const dec = new Float32Array(3 * n);   // three frames: |V1| per world axis × FA
+    for (let i = 0; i < n; i++) { dec[i] = Math.abs(W[3 * i]) * fa[i]; dec[n + i] = Math.abs(W[3 * i + 1]) * fa[i]; dec[2 * n + i] = Math.abs(W[3 * i + 2]) * fa[i]; }
+    const made = [
+      addVolumeFromData(stem + '_FA.nii', { data: fa, shape, Ab: A, description: 'FA (tensor fit, quality control)' }),
+      addVolumeFromData(stem + '_MD.nii', { data: md, shape, Ab: A, description: 'MD um2/ms = 1e-3 mm2/s (tensor fit, quality control)' }),
+      addVolumeFromData(stem + '_DEC.nii', { data: dec, shape, Ab: A, nvol: 3, description: 'DEC: |V1| x FA (tensor fit, quality control)' }),
+    ];
+    // the principal directions: a short line through each voxel with FA ≥ 0.2
+    const half = 0.45 * Math.min(...vs), lines = [];
+    const [nx, ny] = shape;
+    for (let i = 0; i < n; i++) {
+      if (!mask[i] || fa[i] < 0.2) continue;
+      const x = i % nx, y = Math.floor(i / nx) % ny, z = Math.floor(i / (nx * ny));
+      const c = [0, 1, 2].map(r => A[r][0] * x + A[r][1] * y + A[r][2] * z + A[3][r]);
+      const d = [W[3 * i] * half, W[3 * i + 1] * half, W[3 * i + 2] * half];
+      lines.push(new Float32Array([c[0] - d[0], c[1] - d[1], c[2] - d[2], c[0] + d[0], c[1] + d[1], c[2] + d[2]]));
+    }
+    if (lines.length) addTractogramFromStreamlines(stem + '_V1.tck', lines, 'tensor V1, FA >= 0.2', { ends: false });
+    let faSum = 0, faN = 0; for (let i = 0; i < n; i++) if (mask[i]) { faSum += fa[i]; faN++; }
+    vol.tensorFit = { maskName: w._maskName, scores, nFit, nSeeds, bShell, nUsed, nb0, nLines: lines.length, meanFa: faN ? faSum / faN : 0, made: made.map(v => v.label), tck: lines.length ? stem + '_V1.tck' : null };
+    registerVolumeItems();
+  };
+  w.onerror = e => { vol.tensorFit = { error: e.message || 'the worker failed' }; registerVolumeItems(); };
+  let mask = null;
+  try { mask = await qcMaskData(vol); } catch (err) { w.terminate(); vol.tensorFit = { error: String(err) }; registerVolumeItems(); return; }
+  w._maskName = vol.qcMask ? vol.qcMask.label : null;
+  w.postMessage({ file: vol.file, bvals: g.bvals, bvecs: g.bvecs, voxMm: vs, flipX: det > 0, si: siAxisOf(vol), mask });
+}
+// ── SIGNAL CHECK (quality control, on the raw series) ──────
+// In its own worker (js/signal-worker.js): per frame and slice the mean
+// brain signal against the rest of its shell; dropout slices and frames
+// whose signal is off. Results: report lines, a clickable list (shows that
+// frame at that slice) and a volume of the signal lost in those slices, per
+// voxel (%): where in the slice it went.
+// the voxel axis most along inferior–superior, and whether its index grows upward (for the brain mask's neck cut)
+function siAxisOf(vol) {
+  const A = vol.Ab; if (!A) return null;
+  let best = 2, bv = -1;
+  for (let c = 0; c < 3; c++) { const v = Math.abs(A[2][c]) / (Math.hypot(A[0][c], A[1][c], A[2][c]) || 1); if (v > bv) { bv = v; best = c; } }
+  return { axis: best, up: A[2][best] > 0 };
+}
+function sliceAxisOf(vol) {
+  const h = vol.niiHeader || {}, A = vol.Ab;
+  if (h.sliceDim >= 1 && h.sliceDim <= 3) return h.sliceDim - 1;
+  if (!A) return 2;
+  let best = 2, bv = -1;   // the voxel axis most along S–I (axial slices, the usual)
+  for (let c = 0; c < 3; c++) { const v = Math.abs(A[2][c]) / (Math.hypot(A[0][c], A[1][c], A[2][c]) || 1); if (v > bv) { bv = v; best = c; } }
+  return best;
+}
+// The chosen precomputed mask on the series' grid (nearest voxel; above 0 is
+// brain), or null (the workers then make their own).
+async function qcMaskData(vol) {
+  const mv = vol.qcMask;
+  if (!mv || !vol.Ab || !vol.gridShape) return null;
+  const p = await parseVolumeFile(mv.file);
+  const [nx, ny, nz] = vol.gridShape, A = vol.Ab, B = p.invAb, [mx, my, mz] = p.shape;
+  const out = new Uint8Array(nx * ny * nz);
+  let any = 0;
+  for (let z = 0, i = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
+    const w = [0, 1, 2].map(r => A[r][0] * x + A[r][1] * y + A[r][2] * z + A[3][r]);
+    const q = [0, 1, 2].map(r => Math.round(B[r][0] * w[0] + B[r][1] * w[1] + B[r][2] * w[2] + B[3][r]));
+    if (q[0] < 0 || q[1] < 0 || q[2] < 0 || q[0] >= mx || q[1] >= my || q[2] >= mz) continue;
+    if (p.data[q[0] + mx * (q[1] + my * q[2])] > 0) { out[i] = 1; any++; }
+  }
+  if (!any) throw 'the mask "' + mv.label + '" has no voxel inside this series';
+  return out;
+}
+async function checkSignal(vol) {
+  const g = vol.grad;
+  if (!g || !g.bvals || !vol.Ab) return;
+  const axis = sliceAxisOf(vol);
+  const w = new Worker(new URL('./js/signal-worker.js', import.meta.url), { type: 'module' });
+  vol.signalCheck = { running: true, progress: 0 };
+  registerVolumeItems();
+  w.onmessage = e => {
+    const m = e.data;
+    if ('progress' in m) { vol.signalCheck.progress = m.progress; const el = document.getElementById('qc-sig-progress'); if (el) el.textContent = 'checking the signal… ' + Math.round(100 * m.progress) + '%'; return; }
+    w.terminate();
+    if (m.error) { vol.signalCheck = { error: m.error }; registerVolumeItems(); return; }
+    const { shape, nSlices, mask, loss, slices, frames, groups, nChecked } = m;
+    // the volume: per voxel of a flagged slice, the signal lost there, in % (the largest over the frames)
+    const data = new Float32Array(loss.length);
+    for (let i = 0; i < loss.length; i++) data[i] = Math.round(1000 * loss[i]) / 10;
+    const made = slices.length ? [addVolumeFromData(volumeBaseName(vol.file.name) + '_dropout.nii', { data, shape, Ab: vol.Ab, description: 'signal lost in dropout slices, % (quality control)' }).label] : [];
+    vol.signalCheck = { slices, frames, groups, nChecked, nSlices, axis, made, maskName: w._maskName };
+    registerVolumeItems();
+  };
+  w.onerror = e => { vol.signalCheck = { error: e.message || 'the worker failed' }; registerVolumeItems(); };
+  let mask = null;
+  try { mask = await qcMaskData(vol); } catch (err) { w.terminate(); vol.signalCheck = { error: String(err) }; registerVolumeItems(); return; }
+  vol.signalCheck.maskName = vol.qcMask ? vol.qcMask.label : null;
+  const maskName = vol.signalCheck.maskName;
+  w.postMessage({ file: vol.file, bvals: g.bvals, sliceAxis: axis, si: siAxisOf(vol), mask });
+  w._maskName = maskName;
+}
+// show frame v at slice z (the cursor moved to that slice, through the brain's middle otherwise)
+async function showFrameSlice(vol, v, z, axis) {
+  if (vol !== activeVolume) await selectVolume(vol);
+  await setFrames(vol, String(v));
+  const A = vol.Ab, cur = (state.get('tgt.cursor') || [0, 0, 0]).slice();
+  const inv = invertAffineAb(A), idx = [0, 1, 2].map(r => inv[r][0] * cur[0] + inv[r][1] * cur[1] + inv[r][2] * cur[2] + inv[3][r]);
+  idx[axis] = z;
+  const p = [0, 1, 2].map(r => A[r][0] * idx[0] + A[r][1] * idx[1] + A[r][2] * idx[2] + A[3][r]);
+  state.update({ 'tgt.cursor': p });
+  updateSlicesB();
+}
+function invertAffineAb(Ab) {
+  const [a, b, c] = Ab, det = a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
+  const I = [[(b[1] * c[2] - b[2] * c[1]) / det, (a[2] * c[1] - a[1] * c[2]) / det, (a[1] * b[2] - a[2] * b[1]) / det],
+             [(b[2] * c[0] - b[0] * c[2]) / det, (a[0] * c[2] - a[2] * c[0]) / det, (a[2] * b[0] - a[0] * b[2]) / det],
+             [(b[0] * c[1] - b[1] * c[0]) / det, (a[1] * c[0] - a[0] * c[1]) / det, (a[0] * b[1] - a[1] * b[0]) / det]];
+  const t = Ab[3] || [0, 0, 0];
+  return [...I, [0, 1, 2].map(r => -(I[r][0] * t[0] + I[r][1] * t[1] + I[r][2] * t[2]))];
+}
+function signalReportLines(vol) {
+  const s = vol.signalCheck, L = [];
+  if (!s || s.running) return L;
+  if (s.error) { L.push(['✗', 'signal check: ' + s.error]); return L; }
+  L.push(['i', 'brain mask: ' + (s.maskName ? s.maskName : 'its own (from the series)')]);
+  for (const g of s.groups) if (!g.checked) L.push(['i', (g.b ? 'b=' + g.b : 'b=0') + ': ' + g.n + ' frame' + (g.n > 1 ? 's' : '') + ' — too few to compare (4 needed)']);
+  const nFr = new Set(s.slices.map(x => x.frame)).size, strong = s.slices.filter(x => x.loss >= 0.4).length;
+  if (!s.slices.length) L.push(['✓', 'no slice lost signal (' + s.nChecked.toLocaleString() + ' slices compared)']);
+  else L.push([strong ? '✗' : '!', s.slices.length + ' slice' + (s.slices.length > 1 ? 's' : '') + ' in ' + nFr + ' frame' + (nFr > 1 ? 's' : '') + ' lost signal'
+    + (strong ? ' (' + strong + ' by 40% or more)' : ' (20–40%)') + ':']);
+  for (const f of s.frames.slice(0, 8)) {
+    const g = s.groups.find(x => x.idx ? x.idx.includes(f.frame) : false);
+    L.push(['!', 'frame ' + f.frame + ': its whole brain ' + Math.abs(Math.round(100 * f.dev)) + '% ' + (f.dev > 0 ? 'brighter' : 'darker') + ' than the other frames of its shell' + (g ? ' (b=' + g.b + ')' : ''), 'frame']);
+  }
+  return L;
+}
+
+function tensorReportLines(vol) {
+  const t = vol.tensorFit, L = [];
+  if (!t || t.running) return L;
+  if (t.error) { L.push(['✗', 'tensor fit: ' + t.error]); return L; }
+  const s = t.scores, given = s.find(x => x.name === 'as given'), best = s[0], next = s.find(x => x !== best);
+  if (!given || !best) return L;
+  // a fit that found (almost) no anisotropy: nothing to check orientations with
+  if (t.meanFa < 0.05) L.push(['✗', 'the fit finds almost no anisotropy (mean FA ' + t.meanFa.toFixed(3) + ' in the brain) — check the b-values and the scale of the data']);
+  if (!t.nSeeds || best.score < 1) {
+    L.push(['✗', 'orientation check not possible: ' + (t.nSeeds ? 'no tracks could be followed' : 'no white matter found (no voxel with FA > 0.4)')]);
+  } else if (best === given) {
+    const ratio = next ? given.score / Math.max(next.score, 1e-6) : Infinity;
+    L.push([ratio >= 1.15 ? '✓' : '!', 'orientation check: the table as given gives the longest tracks (' + given.score.toFixed(1) + ' mm; next "' + next.name + '" ' + next.score.toFixed(1) + ' mm)'
+      + (ratio < 1.15 ? ' — a narrow margin: look at the DEC map and the direction lines' : '')]);
+  } else {
+    L.push(['✗', 'orientation check: "' + best.name + '" gives longer tracks than the table as given (' + best.score.toFixed(1) + ' vs ' + given.score.toFixed(1) + ' mm) — the .bvec looks ' + (best.name.includes('swap') || best.name.includes('→') ? 'swapped' : 'flipped') + '; check the DEC map and the direction lines']);
+  }
+  if (!t.nLines) L.push(['!', 'no direction lines: no voxel with FA ≥ 0.2']);
+  L.push(['i', 'tensor fit of ' + t.nFit.toLocaleString() + ' brain voxels (mask: ' + (t.maskName || 'its own') + ')' + (t.bShell ? ' from b=0 ×' + t.nb0 + ' and b=' + t.bShell + ' ×' + t.nUsed + (shellsOf(vol.grad.bvals).filter(x => !x.b0).length > 1 ? ' (the lowest shell)' : '') : '')
+    + (t.nLines ? ', ' + t.nLines.toLocaleString() + ' direction lines (FA ≥ 0.2)' : '')]);
+  return L;
+}
+
+// showing what a quality check made: a marker set, a volume (as the image volume), streamline groups
+function showMarkerRec(rec) {
+  rec.visible = true; if (rec.group) rec.group.visible = true;
+  registerMarkerItems(); render3D();
+}
+function showVolume(v) {
+  if (v === activeVolume) { if (renderMode === 'none') setRenderMode(_shownRenderMode || 'solid'); registerVolumeItems(); return; }
+  selectVolume(v).then(() => { if (renderMode === 'none') setRenderMode(_shownRenderMode || 'solid'); registerVolumeItems(); });
+}
+function showTractGroups(gs) {
+  let any = false;
+  for (const g of gs) if (g.item && !g.item.visible) { g.item.visible = true; any = true; }
+  if (any) dataStore.refresh();
+}
+
+// A description of the acquisition as one would write it in a methods
+// section: from the JSON sidecar (BIDS fields), the NIfTI header and the
+// gradient table — what is known; nothing is guessed.
+function methodsSummary(vol) {
+  const j = vol._sidecarJson || {}, g = vol.grad || {}, A = vol.Ab, sh = vol.gridShape;
+  const num = (x, d = 0) => (typeof x === 'number' && isFinite(x) ? +x.toFixed(d) : null);
+  const parts = [];
+  // scanner
+  const field = num(j.MagneticFieldStrength, 1), maker = j.Manufacturer, model = j.ManufacturersModelName;
+  const scanner = [field != null ? field + ' T' : null, maker, model].filter(Boolean).join(' ');
+  const coil = j.ReceiveCoilName || j.ReceiveCoilActiveElements;
+  const seq = j.PulseSequenceDetails || j.SequenceName || j.ScanningSequence;
+  const params = [
+    j.RepetitionTime != null ? 'TR = ' + num(j.RepetitionTime * 1000) + ' ms' : null,
+    j.EchoTime != null ? 'TE = ' + num(j.EchoTime * 1000, 1) + ' ms' : null,
+    j.MultibandAccelerationFactor ? 'multiband factor ' + j.MultibandAccelerationFactor : null,
+    j.ParallelReductionFactorInPlane ? 'in-plane acceleration ' + j.ParallelReductionFactorInPlane : null,
+    j.PartialFourier ? 'partial Fourier ' + j.PartialFourier : null,
+  ].filter(Boolean);
+  let first = 'Diffusion-weighted images were acquired' + (scanner ? ' on a ' + scanner + ' scanner' : '') + (coil ? ' with a ' + coil + ' receive coil' : '')
+    + (seq ? ' using ' + seq : (scanner ? ' using single-shot echo-planar imaging' : ''))
+    + (params.length ? ' (' + params.join(', ') + ')' : '');
+  // geometry
+  if (A && sh) {
+    const vs = [0, 1, 2].map(c => +Math.hypot(A[0][c], A[1][c], A[2][c]).toFixed(2));
+    first += ', with ' + vs.join(' × ') + ' mm³ voxels (matrix ' + sh[0] + ' × ' + sh[1] + ' × ' + sh[2] + ')';
+  }
+  parts.push(first + '.');
+  // diffusion weighting
+  if (g.bvals) {
+    const shells = shellsOf(g.bvals), dw = shells.filter(x => !x.b0), b0 = shells.find(x => x.b0);
+    if (dw.length) {
+      const bs = dw.map(x => x.b), ns = dw.map(x => x.idx.length);
+      const list = a => a.length === 1 ? String(a[0]) : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+      parts.push('Diffusion weighting was applied at b = ' + list(bs) + ' s/mm² along ' + list(ns) + ' directions' + (dw.length > 1 ? ' respectively' : '')
+        + (b0 ? ', with ' + b0.idx.length + ' b = 0 volume' + (b0.idx.length > 1 ? 's' : '') : '') + ' (' + g.bvals.length + ' volumes in total).');
+    }
+  }
+  // phase encoding
+  if (j.PhaseEncodingDirection) {
+    const pe = j.PhaseEncodingDirection, ax = 'ijk'.indexOf(pe[0]);
+    let anat = '';
+    if (A && ax >= 0) { const col = [A[0][ax], A[1][ax], A[2][ax]].map(Math.abs); anat = ['left–right', 'anterior–posterior', 'superior–inferior'][col.indexOf(Math.max(...col))]; }
+    const trt = num(j.TotalReadoutTime * 1000, 1);
+    parts.push('Phase encoding was along the ' + (anat ? anat + ' axis' : 'axis ' + pe[0]) + ' (' + pe + ')' + (trt != null ? ', total readout time ' + trt + ' ms' : '') + '.');
+  }
+  return parts.join(' ');
+}
+
+// ── ATTRIBUTION ──────────────────────────────────────────────
+// Where loaded data came from and on what terms (graph-format.md ›
+// Attribution): the standard sources / licenses / contributors of a data
+// package and its resources, remembered per file name, shown in the ⓘ
+// panels of volumes, tractograms and marker sets.
+const fileMeta = new Map();   // file base name → { res, pkg } (attributionOf results; either may be null)
+// The spaces of the packages read so far: [{ title, space, files }] — a
+// package in a space that doesn't line up with one still loaded is warned
+// about.
+const knownSpaces = [];
+const fileBase = n => String(n || '').split('/').pop();
+function loadedFileNames() {
+  return new Set([...trckParents.map(p => fileBase(p.name)), ...volumes.map(v => fileBase(v.file && v.file.name)),
+                  ...markerSets.map(r => fileBase(r.file && r.file.name))]);
+}
+function rememberPackage(obj, ownName = null) {
+  const pkg = attributionOf(obj);
+  if (pkg && !pkg.title) pkg.title = typeof obj.name === 'string' ? obj.name : null;
+  const title = (pkg && pkg.title) || (typeof obj.name === 'string' ? obj.name : 'a package');
+  const spaces = new Set(pkg && pkg.space ? [pkg.space] : []);
+  const files = new Set(ownName ? [fileBase(ownName)] : []);
+  for (const r of obj.resources || []) {
+    if (!r || typeof r.path !== 'string') continue;
+    const res = attributionOf(r);
+    if (res && res.space) spaces.add(res.space);
+    files.add(fileBase(r.path));
+    if (res || pkg) fileMeta.set(fileBase(r.path), { res, pkg });
+  }
+  const loaded = loadedFileNames(), clash = [];
+  for (const sp of spaces) for (const k of knownSpaces)
+    if (k.title !== title && [...k.files].some(f => loaded.has(f)) && compareSpaces(sp, k.space) === 'different' && !clash.some(c => c.space === k.space)) clash.push(k);
+  for (let i = knownSpaces.length - 1; i >= 0; i--) if (knownSpaces[i].title === title) knownSpaces.splice(i, 1);
+  for (const sp of spaces) knownSpaces.push({ title, space: sp, files });
+  if (clash.length) alert('"' + title + '" is in ' + [...spaces].join(', ') + ', but ' + clash.map(c => '"' + c.title + '" is in ' + c.space).join(' and ')
+    + '. Positions in different spaces don\'t line up unless one is transformed to the other.');
+}
+// text lines and links for one item's attribution (its own, then its package's)
+function attributionText({ res, pkg } = {}) {
+  const L = [], links = [];
+  const one = (m, head) => {
+    if (!m || !(m.sources.length || m.licenses.length || m.contributors.length || m.id || m.citation || m.homepage || m.version)) return;
+    L.push('', '— ' + head + ' —');
+    if (m.citation) L.push('cite        ' + m.citation);
+    for (const s of m.sources) { L.push('source      ' + [s.title, s.version ? 'v' + s.version : null].filter(Boolean).join(' ') + (s.path ? '  ' + s.path : '')); if (s.path && /^https?:/.test(s.path)) links.push(['source: ' + (s.title || s.path), () => window.open(s.path, '_blank', 'noopener')]); }
+    for (const l of m.licenses) { L.push('license     ' + [l.name, l.title].filter(Boolean).join(' · ') + (l.path ? '  ' + l.path : '')); if (l.path && /^https?:/.test(l.path)) links.push(['license: ' + (l.name || l.title || l.path), () => window.open(l.path, '_blank', 'noopener')]); }
+    for (const c of m.contributors) L.push('contributor ' + [c.title || [c.givenName, c.familyName].filter(Boolean).join(' '), c.organization, (c.roles || []).join(', ')].filter(Boolean).join(' · '));
+    if (m.id) { L.push('id          ' + m.id); if (/^https?:/.test(m.id)) links.push(['id: ' + m.id, () => window.open(m.id, '_blank', 'noopener')]); }
+    if (m.version) L.push('version     ' + m.version);
+    if (m.homepage) { L.push('homepage    ' + m.homepage); links.push(['homepage', () => window.open(m.homepage, '_blank', 'noopener')]); }
+  };
+  const space = (res && res.space) || (pkg && pkg.space);
+  if (space) L.push('', 'space       ' + space + (/^(MNI|OASIS|NKI|PNC|UNC|WHS|Fischer|MouseIn|fs)/i.test(space) ? '  (TemplateFlow)' : ''));
+  one(res, 'source and license');
+  one(pkg, 'package' + (pkg && pkg.title ? ': ' + pkg.title : ''));
+  return { text: L.length ? L.join('\n') : '', links };
+}
+
+function compactList(a) {   // 0,1,2,5,9,10 → 0–2, 5, 9–10
+  const out = [];
+  for (let i = 0; i < a.length; i++) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i ? a[i] + '–' + a[j] : String(a[i])); i = j; }
+  return out.join(', ');
+}
+function buildQcPanel(vol, d) {
+  // the sidecars (this one's, and the others' for a reverse phase-encoded b=0): read once, then redrawn
+  const unread = volumes.filter(v => v.sidecar && v._sidecarJson === undefined);
+  if (unread.length) Promise.all(unread.map(sidecarJsonOf)).then(() => registerVolumeItems());
+  const toggle = () => { qcPanelOpen = !qcPanelOpen; registerVolumeItems(); };
+  const head = document.createElement('div');
+  head.className = qcPanelOpen ? 'adv-head' : 'adv-open';
+  const worst = [...qcReport(vol), ...signalReportLines(vol), ...tensorReportLines(vol)].reduce((w, [st]) => st === '✗' ? 2 : st === '!' ? Math.max(w, 1) : w, 0);   // ('i': information only)
+  head.innerHTML = '<span>quality control</span><span class="adv-chev">' + (qcPanelOpen ? '«' : '»') + '</span>'
+    + (qcPanelOpen ? '' : '<span class="qc-sum qc-' + worst + '">' + ['✓', '!', '✗'][worst] + '</span>');
+  head.dataset.tip = 'checks of the DWI series and its gradient table before processing';
+  head.addEventListener('click', toggle);
+  if (!qcPanelOpen) { d.appendChild(head); return; }
+  const p = document.createElement('div'); p.className = 'adv-panel';
+  const body = document.createElement('div'); body.className = 'adv-body qc-body';
+  const lines = (L, cls = '') => { for (const [st, text] of L) {
+    const r = document.createElement('div'); r.className = 'qc-line' + cls;
+    const i = document.createElement('span'); i.className = 'qc-st qc-' + (st === '✗' ? 2 : st === '!' ? 1 : st === 'i' ? 'i' : 0); i.textContent = st;
+    const t = document.createElement('span'); t.textContent = text;
+    r.append(i, t); body.appendChild(r);
+  } };
+  lines(qcReport(vol));
+  // what can be made from it, as ordinary items. Once made, the link shows
+  // them again (it doesn't make them twice); below it, what was created —
+  // each name shows that item.
+  if (vol.grad.bvecs && vol.grad.bvals) {
+    const actRow = (label, tip, onClick) => {
+      const r = document.createElement('div'); r.className = 'qc-line qc-act-row';
+      const bt = document.createElement('button'); bt.className = 'qc-act';
+      bt.textContent = label; bt.dataset.tip = tip; bt.addEventListener('click', onClick);
+      r.append(Object.assign(document.createElement('span'), { className: 'qc-st' }), bt);
+      body.appendChild(r);
+    };
+    const created = items => {   // [[kind, name, show]]
+      if (!items.length) return;
+      const r = document.createElement('div'); r.className = 'qc-line qc-made';
+      r.append(Object.assign(document.createElement('span'), { className: 'qc-st' }), Object.assign(document.createElement('span'), { textContent: 'created:' }));
+      body.appendChild(r);
+      for (const [kind, name, show] of items) {
+        const it = document.createElement('div'); it.className = 'qc-line qc-made-item';
+        const bt = document.createElement('button'); bt.className = 'qc-act';
+        bt.textContent = kind + ' ' + name; bt.dataset.tip = 'show ' + name;
+        bt.addEventListener('click', show);
+        it.append(Object.assign(document.createElement('span'), { className: 'qc-st' }), bt);
+        body.appendChild(it);
+      }
+    };
+    // the gradient directions
+    const mrec = markerSets.find(m => m.dwiOf === vol);
+    actRow('gradient directions → markers',
+      'each diffusion direction as a marker on a sphere around the brain (one per shell), colored per shell, with the sphere\'s triangulation: even triangles, even coverage — color by frame to see the acquisition order'
+      + (mrec ? ' (made: a click shows it)' : ''),
+      () => mrec ? showMarkerRec(mrec) : showGradientMarkers(vol));
+    if (mrec) created([['markers', mrec.set.name, () => showMarkerRec(mrec)]]);
+    // the brain mask for the checks below: their own (---), or a volume (a
+    // mask from HD-BET, the T1, the pipeline) — chosen here, so it's clear
+    // which one a result was made with
+    {
+      const cands = volumes.filter(v => v !== vol && !v.isColor);
+      if (vol.qcMask && !cands.includes(vol.qcMask)) vol.qcMask = null;
+      const row = makeChoiceRow('precomputed mask', [['', '---'], ...cands.map((v, i) => [String(i), v.label])],
+        vol.qcMask ? String(cands.indexOf(vol.qcMask)) : '', val => { vol.qcMask = val === '' ? null : cands[+val]; registerVolumeItems(); });
+      row.classList.add('qc-mask-row');
+      row.dataset.tip = 'the brain mask the signal check and the tensor fit use: --- makes one from the series itself; or a precomputed mask (any volume: voxels above 0 count as brain), resampled to this grid';
+      body.appendChild(row);
+    }
+    // the signal check: outlier slices (clickable) and the dropout volume
+    const sc = vol.signalCheck;
+    if (sc && sc.running) {
+      const r0 = document.createElement('div'); r0.className = 'qc-line qc-act-row';
+      const el = document.createElement('span'); el.id = 'qc-sig-progress'; el.className = 'qc-run'; el.textContent = 'checking the signal… ' + Math.round(100 * (sc.progress || 0)) + '%';
+      r0.append(Object.assign(document.createElement('span'), { className: 'qc-st' }), el); body.appendChild(r0);
+    } else {
+      const dv = sc && sc.made ? volumes.find(v => v.label === sc.made[0]) : null;
+      actRow('signal check → dropout slices', 'per frame and slice the brain signal against the other frames of its shell: slices that lost signal (motion during the diffusion gradient, spikes) — on the raw data, before processing'
+        + (sc && !sc.error ? ' (done: a click shows the worst)' : ''),
+        () => { if (!sc || sc.error) { checkSignal(vol); return; } if (sc.slices.length) showFrameSlice(vol, sc.slices[0].frame, sc.slices[0].slice, sc.axis); });
+      const sl = signalReportLines(vol);
+      lines(sl.filter(l => l[2] !== 'frame'), ' qc-result');
+      if (sc && sc.slices && sc.slices.length) {
+        const ax = 'ijk'[sc.axis];
+        for (const x of sc.slices.slice(0, 10)) {
+          const it = document.createElement('div'); it.className = 'qc-line qc-made-item';
+          const bt = document.createElement('button'); bt.className = 'qc-act';
+          bt.textContent = 'frame ' + x.frame + ' · ' + ax + '=' + x.slice + ' · −' + Math.round(100 * x.loss) + '%' + (x.local ? ' in ' + Math.round(100 * x.area) + '% of the slice' : '');
+          bt.dataset.tip = 'show frame ' + x.frame + ' at slice ' + ax + '=' + x.slice;
+          bt.addEventListener('click', () => showFrameSlice(vol, x.frame, x.slice, sc.axis));
+          it.append(Object.assign(document.createElement('span'), { className: 'qc-st qc-' + (x.loss >= 0.4 ? 2 : 1), textContent: '•' }), bt);
+          body.appendChild(it);
+        }
+        if (sc.slices.length > 10) { const more = document.createElement('div'); more.className = 'qc-line qc-made-item qc-run'; more.textContent = '… and ' + (sc.slices.length - 10) + ' more'; body.appendChild(more); }
+      }
+      lines(sl.filter(l => l[2] === 'frame'), ' qc-result');   // whole frames off: after the slices
+      if (dv) created([['volume', dv.label, () => showVolume(dv)]]);
+    }
+    // the tensor fit: FA, MD, DEC, direction lines and the orientation check
+    const t = vol.tensorFit;
+    const madeVols = t && t.made ? t.made.map(l => volumes.find(v => v.label === l)).filter(Boolean) : [];
+    const tckGroups = t && t.tck ? groups.filter(g => g.source && g.source.name === t.tck) : [];
+    const done = t && t.made && (madeVols.length || tckGroups.length);
+    if (t && t.running) {
+      const r2 = document.createElement('div'); r2.className = 'qc-line qc-act-row';
+      const el = document.createElement('span'); el.id = 'qc-fit-progress'; el.className = 'qc-run'; el.textContent = 'fitting tensors… ' + Math.round(100 * (t.progress || 0)) + '%';
+      r2.append(Object.assign(document.createElement('span'), { className: 'qc-st' }), el); body.appendChild(r2);
+    } else {
+      const dec = madeVols.find(v => /_DEC\.nii$/.test(v.file.name));
+      actRow('tensor fit → FA, MD, DEC, direction lines + orientation check',
+        'fits a diffusion tensor per voxel (in the background): FA, MD and direction-encoded color volumes, the principal directions as short lines, and a check of the .bvec orientation (flips/swaps)'
+        + (done ? ' (made: a click shows the DEC volume and the direction lines)' : ''),
+        () => { if (!done) { fitTensors(vol); return; } if (dec) showVolume(dec); showTractGroups(tckGroups); });
+      lines(tensorReportLines(vol), ' qc-result');
+      if (done) created([...madeVols.map(v => ['volume', v.label, () => showVolume(v)]), ...(tckGroups.length ? [['streamlines', t.tck, () => showTractGroups(tckGroups)]] : [])]);
+    }
+  }
+  p.append(head, body); d.appendChild(p);
+}
+
+// VISIBLE RANGE (formerly SHADER SETTINGS): the advanced settings of the rendered volume, behind an
+// opener (»); open, the same line (« ) with the settings indented below,
+// closed by a click on it, or by rendering another volume.
 // Its values are the rendered volume's (see restoreShader); the old
 // SETTINGS controls for them (#shader-rows) stay hidden.
 let shaderPanelOpen = false;
@@ -7502,7 +8661,7 @@ function buildShaderPanel(d) {
   if (!shaderPanelOpen) {
     const o = document.createElement('div');
     o.className = 'adv-open';
-    o.innerHTML = '<span>shader settings</span><span class="adv-chev">»</span>';
+    o.innerHTML = '<span>visible range</span><span class="adv-chev">»</span>';
     o.dataset.tip = 'background and foreground: what the surface is made of — kept for this volume';
     o.addEventListener('click', toggle);
     d.appendChild(o);
@@ -7512,7 +8671,7 @@ function buildShaderPanel(d) {
   p.className = 'adv-panel';
   const h = document.createElement('div');
   h.className = 'adv-head';
-  h.innerHTML = '<span>shader settings</span><span class="adv-chev">«</span>';
+  h.innerHTML = '<span>visible range</span><span class="adv-chev">«</span>';
   h.addEventListener('click', toggle);
   const body = document.createElement('div');
   body.className = 'adv-body';
@@ -7600,11 +8759,84 @@ function setOverlay(vol) {
 }
 
 // The header of any listed volume (the shown one: as loaded; others: read now).
+// ⓘ of a volume: what one would report about the scan — the file, its
+// geometry, the acquisition (JSON sidecar), the diffusion scheme — as a
+// list, then the same as a methods sentence; below it, links to the
+// sources it was read from (the NIfTI header, the sidecar, the gradient
+// table).
+async function showVolumeInfo(vol) {
+  if (!vol.Ab || !vol.gridShape) { try { await parseVolumeFile(vol.file); } catch (e) { showVolumeHeader(vol); return; } }
+  if (vol.sidecar && vol._sidecarJson === undefined) await sidecarJsonOf(vol);
+  const j = vol._sidecarJson || {}, h = vol.niiHeader || {}, g = vol.grad, A = vol.Ab, sh = vol.gridShape;
+  const L = [];
+  const row = (k, v) => { if (v != null && v !== '') L.push([k, String(v)]); };
+  const sec = t => L.push(['', ''], ['— ' + t + ' —', '']);
+  const num = (x, d = 0) => (typeof x === 'number' && isFinite(x) ? +x.toFixed(d) : null);
+  row('file', vol.file.name);
+  row('kind', (vol.isColor ? 'colour' : vol.category === 'parcellation' ? (vol.mask ? 'mask' : 'labels') : 'scan') + (vol.nvol > 1 && !vol.isColor ? ' · 4D series' : ''));
+  if (sh) row('matrix', sh.join(' × ') + (vol.nvol > 1 ? ' × ' + vol.nvol + ' frames' : ''));
+  if (A) {
+    const vs = [0, 1, 2].map(c => +Math.hypot(A[0][c], A[1][c], A[2][c]).toFixed(3));
+    row('voxel size', vs.join(' × ') + ' mm');
+    // orientation: per voxel axis the anatomical direction it runs toward
+    const code = [0, 1, 2].map(c => { const col = [A[0][c], A[1][c], A[2][c]], k = col.map(Math.abs).indexOf(Math.max(...col.map(Math.abs))); return (col[k] > 0 ? 'RAS' : 'LPI')[k]; }).join('');
+    row('orientation', code + ' (i, j, k run toward ' + code.split('').join(', ') + ')');
+  }
+  const DT = { 2: 'uint8', 4: 'int16', 8: 'int32', 16: 'float32', 64: 'float64', 256: 'int8', 512: 'uint16', 768: 'uint32', 128: 'rgb24', 2304: 'rgba32' };
+  if (h.datatype) row('datatype', (DT[h.datatype] || h.datatype) + (h.sclSlope && isFinite(h.sclSlope) && (h.sclSlope !== 1 || h.sclInter) ? ' · scaled × ' + +h.sclSlope.toPrecision(5) + (h.sclInter ? ' + ' + h.sclInter : '') + ' (applied)' : ''));
+  if (vol.sidecar) {
+    sec('acquisition (JSON sidecar)');
+    const field = num(j.MagneticFieldStrength, 1);
+    row('scanner', [field != null ? field + ' T' : null, j.Manufacturer, j.ManufacturersModelName].filter(Boolean).join(' '));
+    row('software', j.SoftwareVersions);
+    row('receive coil', j.ReceiveCoilName || j.ReceiveCoilActiveElements);
+    row('sequence', j.PulseSequenceDetails || j.SequenceName || j.ScanningSequence);
+    row('TR', j.RepetitionTime != null ? num(j.RepetitionTime * 1000) + ' ms' : null);
+    row('TE', j.EchoTime != null ? num(j.EchoTime * 1000, 1) + ' ms' : null);
+    row('flip angle', j.FlipAngle != null ? j.FlipAngle + '°' : null);
+    row('multiband', j.MultibandAccelerationFactor);
+    row('in-plane acceleration', j.ParallelReductionFactorInPlane);
+    row('partial Fourier', j.PartialFourier);
+    if (j.PhaseEncodingDirection) {
+      const pe = j.PhaseEncodingDirection, ax = 'ijk'.indexOf(pe[0]);
+      let anat = '';
+      if (A && ax >= 0) { const col = [A[0][ax], A[1][ax], A[2][ax]].map(Math.abs); anat = ['left–right', 'anterior–posterior', 'superior–inferior'][col.indexOf(Math.max(...col))]; }
+      row('phase encoding', pe + (anat ? ' (' + anat + ')' : ''));
+    }
+    row('total readout time', j.TotalReadoutTime != null ? num(j.TotalReadoutTime * 1000, 2) + ' ms' : null);
+    row('echo spacing', j.EffectiveEchoSpacing != null ? num(j.EffectiveEchoSpacing * 1000, 3) + ' ms' : null);
+    row('slice timing', j.SliceTiming ? j.SliceTiming.length + ' slices' : null);
+  }
+  if (g && g.bvals) {
+    sec('diffusion (' + [g.files.bval, g.files.bvec].filter(Boolean).join(', ') + ')');
+    const shells = shellsOf(g.bvals);
+    for (const x of shells) row(x.b0 ? 'b = 0' : 'b = ' + x.b + ' s/mm²', x.idx.length + (x.b0 ? ' volume' + (x.idx.length > 1 ? 's' : '') : ' directions'));
+    row('volumes', g.bvals.length);
+  }
+  const w = Math.max(...L.filter(([, v]) => v).map(([k]) => k.length));   // (section titles don't widen the columns)
+  let text = L.map(([k, v]) => (v ? k.padEnd(w + 2) + v : k)).join('\n');
+  const att = attributionText(fileMeta.get(vol.file.name));
+  if (att.text) text += '\n' + att.text;
+  text += '\n\n— as text —\n' + methodsSummary(vol);
+  const links = [...att.links, ['NIfTI header', () => showVolumeHeader(vol)]];
+  if (vol.sidecar) links.push(['JSON sidecar', () => showHeaderPanel('JSON SIDECAR · ' + vol.sidecar.name, JSON.stringify(vol._sidecarJson, null, 2), [['← about the scan', () => showVolumeInfo(vol)]])]);
+  if (g && g.bvals) links.push(['gradient table', () => showHeaderPanel('GRADIENT TABLE · ' + [g.files.bval, g.files.bvec].filter(Boolean).join(', '),
+    'frame      b    x        y        z\n' + g.bvals.map((b, i) => String(i).padStart(5) + String(Math.round(b)).padStart(7) + (g.bvecs && g.bvecs[i] ? g.bvecs[i].map(x => x.toFixed(4).padStart(9)).join('') : '')).join('\n'),
+    [['← about the scan', () => showVolumeInfo(vol)]])]);
+  showHeaderPanel('ABOUT · ' + vol.file.name, text, links);
+}
 async function showVolumeHeader(vol) {
-  if (vol === activeVolume) { showAnatHeaderPanel(); return; }
+  const back = [['← about the scan', () => showVolumeInfo(vol)]];
+  const extra = j => (vol.niiHeader ? { ...j, nifti: vol.niiHeader } : j);   // (the header's own fields: datatype, frames, TR, descrip, …)
+  if (vol === activeVolume && anatHeaderReady && state.get('anat.file')) {
+    const g = k => state.get('anat.' + k);
+    showHeaderPanel('NIFTI HEADER · ' + vol.file.name, JSON.stringify(extra(volumeHeaderJson({ shape: g('shape'), vox_mm: g('vox_mm'), mn: g('mn'), mx: g('mx'),
+      Ab: g('Ab'), cropOffset: g('cropOffset'), origShape: g('origShape'), cropThreshold: g('cropThreshold') })), null, 2), back);
+    return;
+  }
   try {
     const a = cropToContent(await parseVolumeFile(vol.file), { noisy: isWebmName(vol.file.name) });
-    showHeaderPanel('NIFTI HEADER · ' + vol.file.name, JSON.stringify(volumeHeaderJson(a), null, 2));
+    showHeaderPanel('NIFTI HEADER · ' + vol.file.name, JSON.stringify(extra(volumeHeaderJson(a)), null, 2), back);
   } catch (e) { alert('Could not read ' + vol.file.name + ': ' + ((e && e.message) || e)); }
 }
 
@@ -7801,7 +9033,7 @@ function buildSurfaceRows(vol, el) {
     if (s.rgb) buildChannelPanel(vol, el);
   }
 }
-// COLOR CHANNEL CONTRIBUTIONS: an expert panel (as SHADER SETTINGS) below
+// COLOR CHANNEL CONTRIBUTIONS: an expert panel (as VISIBLE RANGE) below
 // the level, for a colour volume
 function buildChannelPanel(vol, el) {
   const s = vol.surface;
@@ -8027,13 +9259,15 @@ function registerTrckItem() {
     g.item = bi;
     bi._visible = g.visible;
     bi.tooltip = g.name + (g.name !== g.source.name ? '\n' + g.source.name : '')
-               + (g.code !== null ? '\n' + fieldName(g.source.split) + ' = ' + g.code : '');
+               + (g.code !== null ? '\n' + fieldName(g.source.split) + ' = ' + g.code : '')
+               + (g.source.pending ? '\nnot read yet: switch it on to read it' : g.source.every > 1 ? '\nevery ' + ordinal(g.source.every) + ' streamline read (to fit in memory)' : '');
     // On/off filters allStreamlines by group before the probe selection/
     // thinning step (see updateProbe) and rebuilds the mesh.
     bi.onVisibilityChange = (_, visible) => {
       g.visible = visible;
       const k = groups.indexOf(g);
       if (visible) hiddenBundleIndices.delete(k); else hiddenBundleIndices.add(k);
+      if (visible && g.source.pending) readPendingSource(g.source);
       scheduleUpdateProbe(); // batched: "all"/"none" switch every group at once — one rebuild, not N
     };
     // updateProbe() rebuilds selMesh/dots from bundlePaletteRGB, so
@@ -8073,7 +9307,45 @@ const fieldRecsOf = p => dqzChildRecords.filter(r => r.status === 'matched' && r
 const hasBundleSettings = g => splitCandidates(g.source).length > 0 || fieldRecsOf(g).length > 0;
 // A bundle's file header (the info icon before its color swatch).
 function showBundleHeader(g) {
-  showHeaderPanel('TRACTS HEADER · ' + g.source.name, JSON.stringify(g.source.header, null, 2));
+  const p = g.source;
+  const att = attributionText(fileMeta.get(String(p.name).split('/').pop()));
+  // MIRROR: for a file whose orientation was written wrongly — its
+  // streamlines mirrored along one axis, about the centre of its grid
+  // (.trk, .tt) or else of its own extent; again undoes it.
+  const mirrorLinks = p.pending ? [] : [['L–R', 0], ['A–P', 1], ['S–I', 2]].map(([n, a]) =>
+    ['mirror ' + n + ((p.mirrored || []).includes(n) ? ' ✓' : ''), () => { mirrorSource(p, a, n); showBundleHeader(g); }]);
+  showHeaderPanel('TRACTS HEADER · ' + p.name, JSON.stringify(p.header, null, 2) + att.text, [...mirrorLinks, ...att.links]);
+}
+// The centre of a tract file's grid in RAS mm (null without one).
+function gridCentreOf(h) {
+  const c3 = d => d.map(n => (n - 1) / 2);
+  if (Array.isArray(h.trans_to_mni) && h.trans_to_mni.length === 16 && Array.isArray(h.dimension)) {
+    const T = h.trans_to_mni, c = c3(h.dimension);
+    return [0, 1, 2].map(r => T[4 * r] * c[0] + T[4 * r + 1] * c[1] + T[4 * r + 2] * c[2] + T[4 * r + 3]);
+  }
+  const M = h.vox_to_ras;
+  if (M && M[3] && M[3][3] !== 0 && h.dim) {
+    const c = c3(Array.from(h.dim));
+    return [0, 1, 2].map(r => M[r][0] * c[0] + M[r][1] * c[1] + M[r][2] * c[2] + M[r][3]);
+  }
+  return null;
+}
+async function mirrorSource(p, axis, name) {
+  let c = gridCentreOf(p.header);
+  if (!c) {
+    let lo = Infinity, hi = -Infinity;
+    for (const t of p.streamlines) for (let i = axis; i < t.length; i += 3) { if (t[i] < lo) lo = t[i]; if (t[i] > hi) hi = t[i]; }
+    c = [0, 0, 0]; c[axis] = (lo + hi) / 2;
+  }
+  const two = 2 * c[axis];
+  for (const t of p.streamlines) for (let i = axis; i < t.length; i += 3) t[i] = two - t[i];
+  const m = new Set(p.mirrored || []);
+  if (m.has(name)) m.delete(name); else m.add(name);
+  p.mirrored = [...m];
+  if (p.mirrored.length) p.header.mirrored = p.mirrored.map(n => n + ' (about ' + c[axis].toFixed(1) + ' mm)'); else delete p.header.mirrored;
+  rebuildTractArrays(trckHeader && trckHeader.indexJson || null);
+  if (!regroupStreamlines()) return;
+  await finishTrckLoad(document.getElementById('dz-trck-status'), { add: true, bundleModeChanged: false });
 }
 // FOCUS: every bundle has a sun icon — lit: drawn solid (focused), unlit:
 // dimmed (3D › dimming). All bundles start focused. The sun is a
@@ -8166,16 +9438,20 @@ async function matchDqzChildren() {
       rec.reason = `parent .dqz (uuid ${h.parent}) is not loaded`;
       continue;
     }
-    if (h.n_streamlines !== p.streamlines.length) {
+    if (p.pending) { rec.status = 'unmatched'; rec.reason = `parent "${p.name}" is not read yet (switch it on)`; continue; }
+    const nFile = p.total ?? p.streamlines.length;
+    if (h.n_streamlines !== nFile) {
       rec.status = 'mismatch';
-      rec.reason = `parent "${p.name}" has matching uuid but ${p.streamlines.length} streamlines, file says ${h.n_streamlines}`;
+      rec.reason = `parent "${p.name}" has matching uuid but ${nFile} streamlines, file says ${h.n_streamlines}`;
       continue;
     }
-    if (!rec.parsed) {
-      try { rec.parsed = await parseDqzChild(rec.file); }
+    if (!rec.parsedFull) {
+      try { rec.parsedFull = await parseDqzChild(rec.file); }
       catch (e) { rec.status = 'invalid'; rec.reason = String((e && e.message) || e); continue; }
       if (run !== _dqzMatchRun) return; // a newer tractogram load superseded this pass
     }
+    // a parent read thinned: its data thinned the same way
+    if (!rec.parsed || rec.parsedEvery !== (p.every || 1)) { rec.parsed = thinDqzChild(rec.parsedFull, p.every || 1); rec.parsedEvery = p.every || 1; }
     const bad = checkDqzChildAgainst(rec.parsed, p.streamlines);
     if (bad) { rec.status = 'mismatch'; rec.reason = `parent "${p.name}": ${bad}`; continue; }
     rec.status = 'matched'; rec.reason = null; rec.parent = p;
@@ -8825,8 +10101,8 @@ function showDqzChildHeaderPanel(rec) {
   showHeaderPanel('DATA FILE HEADER', JSON.stringify({ ...info, header }, null, 2));
 }
 
-// ── Markers (markers-format.md) ───────────────────────────
-// Each loaded markers file: { file, set (parseMarkers), style (the style in
+// ── Markers: the point tables of graph files (graph-format.md) ──
+// Each loaded markers file: { file, pkg (graph-io readPackage), set (pointSet: one point table), style (the style in
 // use: the file's, later changeable in the FILE panel), group (the 3D
 // instanced meshes), visible, sizeScale, opacity, uiSettingsOpen }.
 let markerSets = [];
@@ -8836,24 +10112,34 @@ function markerColormap(id = 'viridis') {
   return t => sampleStops(stops, t).map(v => v / 255);
 }
 
-function addMarkerFiles(list) {
+// Graph files (graph-format.md): each point table of a package becomes a
+// marker set (with the link tables that connect its rows). The package
+// itself is kept (rec.pkg) for its other tables.
+async function addMarkerFiles(list) {
   const errors = [];
-  for (const { file, json, error } of list) {
-    let set;
+  for (const { file, json, error, files } of list) {
+    let pkg, sets;
     try {
       if (error) throw new Error(error);
-      set = parseMarkers(json, stripPathExt(file.name));
+      // a table's CSV: a file of the drop, by name (folders inside a zip don't count)
+      const getText = async path => { const base = String(path).split('/').pop(); const f = (files || []).find(x => x.name === base || x.name.split('/').pop() === base); return f ? f.text() : null; };
+      pkg = await readPackage(json, { name: stripPathExt(file.name), getText });
+      rememberPackage(json, file.name);   // (its file resources' sources and licenses, for their ⓘ)
+      sets = pointTables(pkg).map(t => pointSet(pkg, t));
+      if (!sets.length && !regionTables(pkg).length) throw new Error('no table with a point geometry');
     } catch (e) { errors.push(file.name + ':\n' + ((e && e.message) || e)); continue; }
-    if (set.warnings.length) console.warn(file.name + ':\n' + set.warnings.join('\n'));
+    if (pkg.warnings.length) console.warn(file.name + ':\n' + pkg.warnings.join('\n'));
     // Re-dropping a file with the same name replaces it.
-    const old = markerSets.find(m => m.file.name === file.name);
-    if (old) removeMarkerSet(old, false);
-    const rec = { file, set, style: { ...set.style.markers }, filters: [], mask: null, group: null,
-                  visible: true, sizeScale: 1, opacity: 1, uiSettingsOpen: false };
-    markerSets.push(rec);
-    buildMarkerGroup(rec);
+    for (const old of markerSets.filter(m => m.file.name === file.name)) removeMarkerSet(old, false);
+    for (const set of sets) {
+      const rec = { file, pkg, set, style: { ...set.style.markers }, filters: [], mask: null, group: null,
+                    visible: true, sizeScale: 1, opacity: 1, uiSettingsOpen: false };
+      markerSets.push(rec);
+      buildMarkerGroup(rec);
+    }
+    if (regionTables(pkg).length) graphRegionTablesLoaded(pkg, file, files);
   }
-  if (errors.length) alert('Could not read ' + (errors.length === 1 ? 'this markers file' : 'these markers files') + ':\n\n' + errors.join('\n\n'));
+  if (errors.length) alert('Could not read ' + (errors.length === 1 ? 'this graph file' : 'these graph files') + ':\n\n' + errors.join('\n\n'));
   // Markers frame the view only when nothing else is loaded (recomputeView).
   recomputeView();
   checkShowHud();
@@ -8878,7 +10164,10 @@ function buildMarkerGroup(rec) {
     resolved.dim = Uint8Array.from({ length: rec.set.markers.n }, (_, i) => (vals[i] === ov.highlight.value ? 0 : 1));
   }
   rec.resolved = resolved;
-  rec.group = makeMarkerGroup(rec.set, resolved, materials && { material: materials.material, baseMaterial: materials.baseMaterial });
+  // the links (graph-format.md: the link tables of the point table): drawn between shown markers
+  const ls = rec.set.style.links || {};
+  const linkResolved = rec.set.links.n ? resolveLinkStyle(rec.set, ls, markerColormap(ls.colormap), resolved) : null;
+  rec.group = makeMarkerGroup(rec.set, resolved, materials && { material: materials.material, baseMaterial: materials.baseMaterial, linkMaterial: materials.linkMaterial }, linkResolved);
   setMarkerHover(rec.group, markerHover && markerHover.rec === rec ? markerHover.index : null);
   rec.group.visible = rec.visible;
   setMarkerDisplay(rec.group, rec);
@@ -9646,7 +10935,8 @@ function showMarkersHeaderPanel(rec) {
   const info = { file: rec.file.name, name: set.name, space: set.space, coordinate_system: set.coordinateSystem,
                  markers: set.markers.n, links: set.links.n, properties: props, style: set.style };
   if (set.warnings.length) info.warnings = set.warnings;
-  showHeaderPanel('MARKERS · ' + rec.file.name, JSON.stringify(info, null, 2));
+  const att = attributionText({ res: set.table && set.table.meta, pkg: rec.pkg && rec.pkg.meta ? { ...rec.pkg.meta, title: rec.pkg.meta.title || rec.pkg.title } : null });
+  showHeaderPanel('MARKERS · ' + rec.file.name, JSON.stringify(info, null, 2) + (att.text ? '\n' + att.text : ''), att.links);
 }
 
 document.body.addEventListener('dragover',e=>e.preventDefault());
@@ -9695,6 +10985,8 @@ document.body.addEventListener('drop',async e=>{
   set('line-width-slider',   lineWidthPx,      ['line-width-val',  lineWidthPx.toFixed(1) + ' px']);
   set('reflectance-slider',  reflectance,      ['reflectance-val', reflectance.toFixed(2)]);
   set('shadow-slider',       Math.round(shadowAmount * 100), ['shadow-val', Math.round(shadowAmount * 100) + '%']);
+  set('ambient-slider',      Math.round(ambientLight * 100), ['ambient-val', Math.round(ambientLight * 100) + '%']);
+  set('gloss-slider',        Math.round(glossLight * 100), ['gloss-val', Math.round(glossLight * 100) + '%']);
   set('pitch-slider',        0,                ['pitch-val',       '0°']);
   set('yaw-slider',          0,                ['yaw-val',         '0°']);
   set('roll-slider',         0,                ['roll-val',        '0°']);
@@ -9752,7 +11044,7 @@ regionMeshes = new RegionMeshes({
   onChange: () => labelUiChanged(),
   getLight: () => ({
     lightCam: _rmLightCam.set(...lightCamFromBias(lightBias)).normalize(),
-    point: pointLightOn, falloff: lightFalloff, ambient: ambientLight,
+    point: pointLightOn, falloff: lightFalloff, ambient: ambientLight, gloss: glossLight,
     target: controls.target, radius: sceneRadius || 1,
     rimPow: glassBrainRimPow, alphaMult: glassOpacityMult,
   }),
@@ -9978,10 +11270,10 @@ resizeAll();
   }
   const tractsProbe = document.getElementById('panel-content-probe');
   listPane('streamlines', { categories: ['streamlines'], flat: true, top: tractsProbe, empty: emptyFill(
-    '<p><b>Load a streamlines file</b> to get started. Supported formats are .tck (MRtrix), .trk (TrackVis) and <a href="doc.html?dqz-format" target="_blank" rel="noopener">.dqz</a> (a compressed .tck).</p>') });
+    '<p><b>Load a streamlines file</b> to get started. Supported formats are .tck (MRtrix), .trk (TrackVis), .tt (DSI Studio) and <a href="doc.html?dqz-format" target="_blank" rel="noopener">.dqz</a> (a compressed .tck).</p>') });
   listPane('markers', { categories: ['markers'], flat: true, empty: emptyFill(
-    '<p><b>Load a markers file</b> to place points (and links between them) in the view, with their properties shown on mouse-over: ' +
-    'a .json file in the <a href="doc.html?markers-format" target="_blank" rel="noopener">markers format</a>.</p>') });
+    '<p><b>Load a graph file</b> to place points (and links between them) in the view, with their properties shown on mouse-over: ' +
+    'a .json file in the <a href="doc.html?graph-format" target="_blank" rel="noopener">graph format</a> (a Data Package).</p>') });
   for (const key of ['3d', '2d', 'tools']) {   // the settings' pages
     const body = document.createElement('div');
     body.className = 'lp-body';
@@ -10139,6 +11431,12 @@ resizeAll();
     else { open(b.dataset.page); if (b.dataset.sec) highlight(b.dataset.page, b.dataset.sec.split('|')); else clearHighlight(); }
   });
   document.addEventListener('pointerdown', e => { if (!menu.contains(e.target) && e.target !== menuBtn && !menuBtn.contains(e.target)) closeMenu(); });
+  // the chip button: 3D › HARDWARE (a second click folds the column again)
+  document.getElementById('hw-btn').addEventListener('click', e => {
+    e.stopPropagation(); closeMenu();
+    if (current === '3d' && !folded && hl && hl.titles.includes('HARDWARE')) { clearHighlight(); folded = true; show(); return; }
+    open('3d'); highlight('3d', ['HARDWARE']);
+  });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
   for (const t of tabs) {
     t.addEventListener('click', () => pick(t.dataset.page));
@@ -10355,6 +11653,7 @@ async function loadFromUrls(urls) {
 }
 
 if (new URLSearchParams(location.search).has('demo')) {
+  probeOnLoad = true;
   const demoAnat = 'M01_T2w.nii.gz';
   const demoTck = 'sub-M01_ses-1_wholebrain_10k_1.tck'
   async function tryDemoLoad() {
@@ -10372,6 +11671,7 @@ if (new URLSearchParams(location.search).has('demo')) {
 // lookup tables (CHARM, SARM, D99, tissue), tractogram and index.json —
 // loaded exactly as ?load=<its URL> would.
 if (new URLSearchParams(location.search).has('MacBNA_M03'))
+  probeOnLoad = true,
   loadFromUrls(['https://data.tractogram.observer/MacBNA/M03/2026aug18a/M03.zip']);
 
 

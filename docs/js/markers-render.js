@@ -1,7 +1,7 @@
 // ── markers-render.js ─────────────────────────────────────
 // Draws a parsed markers set (see markers-io.js) as instanced 3D glyphs —
 // one instanced mesh per shape (sphere, cube, diamond, cross) — with a
-// per-marker center, color and size.
+// per-marker center, color and size; and its links as tapered tubes.
 //
 // Sizes are in mm (world) or in screen pixels: for pixels the vertex
 // shader scales each glyph by its distance to the camera, so it covers the
@@ -81,6 +81,92 @@ void main() {
   gl_FragColor = vec4(col, vAlpha);
 }`;
 
+// LINKS: one instanced open tube per link, from its "from" marker to its
+// "to" marker, tapering from one end's width to the other's and blending
+// one end's color into the other's (see resolveLinkStyle). Widths in mm or
+// CSS pixels, as marker sizes. 3D view only.
+export const LINK_VS = `
+attribute vec3  iA;
+attribute vec3  iB;
+attribute float iWA;
+attribute float iWB;
+attribute vec3  iCA;
+attribute vec3  iCB;
+uniform float u_widthInPx;
+uniform float u_pxScale;
+uniform vec2  u_resolution;
+uniform float u_sizeScale;
+varying vec3  vColor;
+varying vec3  vNormalV;
+void main() {
+  float t = position.y + 0.5;                 // 0 at A, 1 at B
+  vec3 axis = iB - iA;
+  float len = length(axis);
+  if (len < 1e-6 || (iWA <= 0.0 && iWB <= 0.0)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec3 d = axis / len;
+  vec3 h = abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 u = normalize(cross(d, h)), v = cross(d, u);
+  vec3 p = mix(iA, iB, t);
+  float w = mix(iWA, iWB, t) * u_sizeScale;
+  if (u_widthInPx > 0.5) {
+    vec4 c = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    w = w * u_pxScale * c.w / (projectionMatrix[1][1] * 0.5 * u_resolution.y);
+  }
+  vec3 radial = u * (position.x / 0.5) + v * (position.z / 0.5);
+  vColor = mix(iCA, iCB, t);
+  vNormalV = normalize(normalMatrix * radial);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p + radial * 0.5 * w, 1.0);
+}`;
+export const LINK_FS = `
+precision highp float;
+uniform float u_opacity;
+varying vec3 vColor;
+varying vec3 vNormalV;
+void main() {
+  vec3 n = normalize(vNormalV);
+  if (!gl_FrontFacing) n = -n;
+  vec3 L = normalize(vec3(-0.35, 0.45, 1.0));
+  float diff = abs(dot(n, L));
+  gl_FragColor = vec4(vColor * (0.55 + 0.45 * diff), u_opacity);
+}`;
+let _tube = null;
+function tubeGeometry() { return _tube || (_tube = new THREE.CylinderGeometry(0.5, 0.5, 1, 10, 1, true)); }
+function makeLinkMesh(set, lr, material) {
+  const L = set.links, pos = set.markers.pos, m = L.n;
+  const A = new Float32Array(3 * m), B = new Float32Array(3 * m);
+  for (let i = 0; i < m; i++) { A.set(pos.subarray(3 * L.from[i], 3 * L.from[i] + 3), 3 * i); B.set(pos.subarray(3 * L.to[i], 3 * L.to[i] + 3), 3 * i); }
+  const g = new THREE.InstancedBufferGeometry(), base = tubeGeometry();
+  g.index = base.index;
+  g.setAttribute('position', base.attributes.position);
+  g.setAttribute('normal', base.attributes.normal);
+  g.setAttribute('iA', new THREE.InstancedBufferAttribute(A, 3));
+  g.setAttribute('iB', new THREE.InstancedBufferAttribute(B, 3));
+  g.setAttribute('iWA', new THREE.InstancedBufferAttribute(lr.widthA, 1));
+  g.setAttribute('iWB', new THREE.InstancedBufferAttribute(lr.widthB, 1));
+  g.setAttribute('iCA', new THREE.InstancedBufferAttribute(lr.colorA, 3));
+  g.setAttribute('iCB', new THREE.InstancedBufferAttribute(lr.colorB, 3));
+  g.instanceCount = m;
+  g.boundingSphere = markerBoundingSphere(pos);
+  material.uniforms.u_widthInPx.value = lr.widthUnit === 'px' ? 1 : 0;
+  material.uniforms.u_opacity.value = lr.opacity;
+  material.transparent = lr.opacity < 0.999; material.depthWrite = !material.transparent; material.needsUpdate = true;
+  const mesh = new THREE.Mesh(g, material);
+  mesh.frustumCulled = false;
+  mesh.userData.isLinks = true;
+  mesh.onBeforeRender = renderer => {
+    renderer.getDrawingBufferSize(material.uniforms.u_resolution.value);
+    material.uniforms.u_pxScale.value = renderer.getPixelRatio();
+  };
+  return mesh;
+}
+function makeLinkMaterial() {
+  return new THREE.ShaderMaterial({
+    vertexShader: LINK_VS, fragmentShader: LINK_FS, side: THREE.DoubleSide,
+    uniforms: { u_widthInPx: { value: 1 }, u_pxScale: { value: 1 }, u_resolution: { value: new THREE.Vector2(1, 1) },
+                u_sizeScale: { value: 1 }, u_opacity: { value: 1 } },
+  });
+}
+
 // Unit-diameter base glyphs (centered on the origin).
 let _baseGeometries = null;
 function baseGeometries() {
@@ -123,7 +209,7 @@ export function makeMarkerMaterial(defines = { FULL_PASS: 1 }, uniforms = null) 
 // Returns the group; group.userData.material is the shared material (its
 // uniforms: u_sizeScale, u_opacity, ... — see setMarkerDisplay), and each
 // mesh's userData.markerIndex maps instance → marker index (for picking).
-export function makeMarkerGroup(set, resolved, materials = null) {
+export function makeMarkerGroup(set, resolved, materials = null, linkResolved = null) {
   const { n, pos } = set.markers;
   // Two materials sharing one set of uniforms: markers in their own color
   // (always opaque) and markers in the base color (get the opacity). They
@@ -139,6 +225,11 @@ export function makeMarkerGroup(set, resolved, materials = null) {
   const base = baseGeometries();
   const isBase = i => (resolved.base ? resolved.base[i] : 1) === 1;
   MARKER_SHAPES.forEach((shapeName, s) => addShapeMeshes(s, shapeName));
+  if (linkResolved && set.links && set.links.n) {
+    const lm = (materials && materials.linkMaterial) || makeLinkMaterial();
+    group.userData.linkMaterial = lm;
+    group.add(makeLinkMesh(set, linkResolved, lm));
+  }
   // One mesh per shape for own-colored markers, one for base-colored ones.
   function addShapeMeshes(s, shapeName) {
     for (const wantBase of [false, true]) {
@@ -198,6 +289,7 @@ export function setMarkerDisplay(group, { sizeScale = 1, opacity = 1 } = {}) {
   const m = group.userData.material, bm = group.userData.baseMaterial;
   m.uniforms.u_sizeScale.value = sizeScale;
   m.uniforms.u_opacity.value = opacity;
+  if (group.userData.linkMaterial) group.userData.linkMaterial.uniforms.u_sizeScale.value = sizeScale;
   const transparent = opacity < 0.999;
   if (bm.transparent !== transparent) {
     bm.transparent = transparent;
@@ -217,7 +309,7 @@ export function disposeMarkerGroup(group, keepMaterial = false) {
     mesh.geometry.index = null;
     mesh.geometry.dispose();
   }
-  if (!keepMaterial) { group.userData.material.dispose(); group.userData.baseMaterial.dispose(); }
+  if (!keepMaterial) { group.userData.material.dispose(); group.userData.baseMaterial.dispose(); if (group.userData.linkMaterial) group.userData.linkMaterial.dispose(); }
 }
 
 export function markerBoundingSphere(pos) {

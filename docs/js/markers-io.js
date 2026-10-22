@@ -1,39 +1,28 @@
 // ── markers-io.js ─────────────────────────────────────────
-// Reader for the markers format (markers-format.md): markers (points) at
-// brain locations, optional links between them, and a declared list of
-// typed properties whose values drive shape/color/size/width.
+// The drawing side of point and link tables (graph-format.md; read by
+// graph-io.js): field helpers shared with the reader, and the resolution of
+// a table's style into per-row colors, shapes and sizes (markers) and
+// per-end colors and widths (links).
 //
 // Pure data code — no three.js, no DOM — so it can be tested on its own.
-// parseMarkers() validates a parsed JSON object and returns plain arrays;
-// resolveMarkerStyle() turns a style (from the file, or the user's
-// choice in the FILE panel) into per-marker colors/shapes/sizes.
 
-export const MARKERS_TYPE = 'tractogram.observer.markers';
-export const MARKERS_VERSION = 1;
 export const MARKER_SHAPES = ['sphere', 'cube', 'diamond', 'cross'];
 export const DEFAULT_MARKER_SIZE_PX = 10;
 export const DEFAULT_LINK_WIDTH_PX = 2;
 const DEFAULT_RGB = [1, 1, 1];
-const PROPERTY_TYPES = ['number', 'integer', 'categorical', 'text'];
 
-// Cheap test on raw text: is this (meant to be) a markers file? Used by the
-// file opener before parsing, so a markers file with a JSON syntax error is
-// still recognized — and reported — as one.
-export function looksLikeMarkersText(text) {
-  return /"type"\s*:\s*"tractogram\.observer\.markers"/.test(text);
-}
+export const fail = msg => { throw new Error(msg); };
+export const isNum = v => typeof v === 'number' && Number.isFinite(v);
 
-const fail = msg => { throw new Error(msg); };
-const isNum = v => typeof v === 'number' && Number.isFinite(v);
-
-// A [r,g,b] 0-255 array → [r,g,b] 0-1, or null.
-function rgb255(c) {
+// A [r,g,b] 0-255 array, or "#rrggbb" → [r,g,b] 0-1, or null.
+export function rgb255(c) {
+  if (typeof c === 'string' && /^#?[0-9a-f]{6}$/i.test(c)) { const h = c.replace('#', ''); return [0, 2, 4].map(k => parseInt(h.slice(k, k + 2), 16) / 255); }
   if (!Array.isArray(c) || c.length !== 3 || !c.every(isNum)) return null;
   return c.map(v => Math.max(0, Math.min(255, v)) / 255);
 }
 
 // Golden-angle hues: automatic colors for categories without one.
-function autoColor(i) {
+export function autoColor(i) {
   const h = ((i * 137.50776405003785) % 360) / 360, s = 0.65, l = 0.55;
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
   const f = t => { if (t < 0) t += 1; if (t > 1) t -= 1;
@@ -41,55 +30,8 @@ function autoColor(i) {
   return [f(h + 1/3), f(h), f(h - 1/3)];
 }
 
-// Table → { columns: [...], rows: [[...]] }, from either the compact form
-// or a list of objects.
-function normalizeTable(t, what) {
-  if (Array.isArray(t)) {
-    const cols = [];
-    for (const o of t) {
-      if (!o || typeof o !== 'object' || Array.isArray(o)) fail(`${what}: every entry must be an object`);
-      for (const k of Object.keys(o)) if (!cols.includes(k)) cols.push(k);
-    }
-    return { columns: cols, rows: t.map(o => cols.map(k => (k in o ? o[k] : null))) };
-  }
-  if (!t || typeof t !== 'object' || !Array.isArray(t.columns) || !Array.isArray(t.rows))
-    fail(`${what} must be { "columns": [...], "rows": [[...], ...] } or a list of objects`);
-  const n = t.columns.length;
-  t.rows.forEach((r, i) => {
-    if (!Array.isArray(r) || r.length !== n) fail(`${what}: row ${i + 1} has ${Array.isArray(r) ? r.length : 'no'} values, the columns say ${n}`);
-  });
-  return t;
-}
-
-function parseProperty(name, d) {
-  if (!d || typeof d !== 'object') fail(`property "${name}": declaration must be an object`);
-  if (!PROPERTY_TYPES.includes(d.type)) fail(`property "${name}": type must be one of ${PROPERTY_TYPES.join(', ')}`);
-  const p = { name, type: d.type, description: typeof d.description === 'string' ? d.description : '',
-              unit: typeof d.unit === 'string' ? d.unit : '', declared: true };
-  if ((d.type === 'number' || d.type === 'integer') && d.range != null) {
-    if (!Array.isArray(d.range) || d.range.length !== 2 || !d.range.every(isNum) || d.range[1] <= d.range[0])
-      fail(`property "${name}": range must be [min, max] with min < max`);
-    p.range = d.range.slice();
-  }
-  if (d.type === 'categorical') {
-    p.ordered = d.ordered === true;
-    p.legend = [];
-    if (d.legend != null) {
-      if (!Array.isArray(d.legend)) fail(`property "${name}": legend must be a list`);
-      for (const e of d.legend) {
-        if (!e || typeof e !== 'object' || !('value' in e)) fail(`property "${name}": every legend entry needs a "value"`);
-        if (p.legend.some(x => x.value === e.value)) fail(`property "${name}": legend value ${JSON.stringify(e.value)} appears twice`);
-        p.legend.push({ value: e.value, name: typeof e.name === 'string' ? e.name : String(e.value),
-                        color: rgb255(e.color), shape: MARKER_SHAPES.includes(e.shape) ? e.shape : null,
-                        size: isNum(e.size) && e.size >= 0 ? e.size : null });
-      }
-    }
-  }
-  return p;
-}
-
-// A column not declared in "properties": guess its type from the values.
-function guessProperty(name, values) {
+// A column not declared: guess its type from the values.
+export function guessProperty(name, values) {
   const present = values.filter(v => v != null);
   if (present.length && present.every(isNum))
     return { name, type: present.every(Number.isInteger) ? 'integer' : 'number', description: '', unit: '', declared: false };
@@ -99,7 +41,7 @@ function guessProperty(name, values) {
 }
 
 // Column values → typed array per property type.
-function columnValues(prop, raw, where) {
+export function columnValues(prop, raw, where) {
   if (prop.type === 'number' || prop.type === 'integer') {
     const out = new Float64Array(raw.length);
     raw.forEach((v, i) => {
@@ -115,7 +57,7 @@ function columnValues(prop, raw, where) {
 
 // Categorical: legend order first, then values found in the data (added to
 // the legend with automatic colors).
-function completeLegend(prop, arrays) {
+export function completeLegend(prop, arrays) {
   if (prop.type !== 'categorical') return;
   for (const arr of arrays) for (const v of arr) {
     if (v == null || prop.legend.some(e => e.value === v)) continue;
@@ -133,111 +75,6 @@ function completeLegend(prop, arrays) {
   if (!L.some(e => e.shape) && m >= 2 && m <= MARKER_SHAPES.length) L.forEach((e, i) => { e.shape = MARKER_SHAPES[i]; });
   prop.hasShapes = L.some(e => e.shape);
   prop.index = new Map(prop.legend.map((e, i) => [e.value, i]));
-}
-
-// Parses a markers file (already JSON.parse'd). Throws Error with a
-// user-facing message on anything invalid. Returns:
-//  { name, space, props: Map name→prop, warnings: [],
-//    markers: { n, ids: [], index: Map id→i, pos: Float32Array(3n), values: {prop: array} },
-//    links:   { n, from: Int32Array, to: Int32Array,
-//               values: {prop: {both?, fwd?, bwd?}} }  (fwd = >>, bwd = <<)
-//    style:   { markers: {...}, links: {...} } }
-export function parseMarkers(obj, fileName = 'markers') {
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) fail('not a JSON object');
-  if (obj.type !== MARKERS_TYPE) fail(`"type" must be "${MARKERS_TYPE}"`);
-  if (!Number.isInteger(obj.version)) fail('"version" is missing');
-  if (obj.version > MARKERS_VERSION) fail(`this is a version ${obj.version} markers file; this viewer reads version ${MARKERS_VERSION}`);
-  const cs = obj.coordinate_system == null ? 'RAS' : obj.coordinate_system;
-  if (cs !== 'RAS' && cs !== 'LPS') fail('"coordinate_system" must be "RAS" or "LPS"');
-  if (obj.units != null && obj.units !== 'mm') fail('"units" must be "mm"');
-  const warnings = [];
-
-  const props = new Map();
-  if (obj.properties != null) {
-    if (typeof obj.properties !== 'object' || Array.isArray(obj.properties)) fail('"properties" must be an object');
-    for (const [k, d] of Object.entries(obj.properties)) {
-      if (/^(>>|<<)/.test(k)) fail(`property "${k}": names can't start with >> or <<`);
-      props.set(k, parseProperty(k, d));
-    }
-  }
-
-  // ── markers
-  if (obj.markers == null) fail('"markers" is missing');
-  const mt = normalizeTable(obj.markers, 'markers');
-  const col = name => mt.columns.indexOf(name);
-  for (const c of ['id', 'x', 'y', 'z']) if (col(c) < 0) fail(`markers: column "${c}" is missing`);
-  const n = mt.rows.length;
-  const ids = [], index = new Map(), pos = new Float32Array(3 * n);
-  const flip = cs === 'LPS' ? -1 : 1;
-  const [ci, cx, cy, cz] = ['id', 'x', 'y', 'z'].map(col);
-  mt.rows.forEach((r, i) => {
-    const id = r[ci];
-    if (id == null || id === '') fail(`markers: row ${i + 1} has no id`);
-    const key = String(id);
-    if (index.has(key)) fail(`markers: id "${key}" appears twice`);
-    index.set(key, i); ids.push(key);
-    const x = r[cx], y = r[cy], z = r[cz];
-    if (![x, y, z].every(isNum)) fail(`markers: row ${i + 1} ("${key}") needs numeric x, y and z`);
-    pos[3 * i] = flip * x; pos[3 * i + 1] = flip * y; pos[3 * i + 2] = z;
-  });
-  const mValues = {};
-  mt.columns.forEach((c, k) => {
-    if (['id', 'x', 'y', 'z'].includes(c)) return;
-    if (/^(>>|<<)/.test(c)) fail(`markers: column "${c}": direction prefixes are only for links`);
-    const raw = mt.rows.map(r => r[k]);
-    if (!props.has(c)) { props.set(c, guessProperty(c, raw)); warnings.push(`markers column "${c}" isn't declared in "properties"; treated as ${props.get(c).type}`); }
-    mValues[c] = columnValues(props.get(c), raw, 'markers');
-  });
-
-  // ── links
-  const lv = {}; let from = new Int32Array(0), to = new Int32Array(0), m = 0;
-  if (obj.links != null) {
-    const lt = normalizeTable(obj.links, 'links');
-    const fi = lt.columns.indexOf('from'), ti = lt.columns.indexOf('to');
-    if (fi < 0 || ti < 0) fail('links: columns "from" and "to" are required');
-    m = lt.rows.length;
-    from = new Int32Array(m); to = new Int32Array(m);
-    const unknown = new Set();
-    lt.rows.forEach((r, i) => {
-      const a = index.get(String(r[fi])), b = index.get(String(r[ti]));
-      if (a === undefined) unknown.add(String(r[fi]));
-      if (b === undefined) unknown.add(String(r[ti]));
-      from[i] = a ?? -1; to[i] = b ?? -1;
-    });
-    if (unknown.size) fail(`links refer to marker id(s) that don't exist: ${[...unknown].slice(0, 10).join(', ')}${unknown.size > 10 ? ', …' : ''}`);
-    lt.columns.forEach((c, k) => {
-      if (k === fi || k === ti) return;
-      const dir = c.startsWith('>>') ? 'fwd' : c.startsWith('<<') ? 'bwd' : 'both';
-      const name = dir === 'both' ? c : c.slice(2);
-      const raw = lt.rows.map(r => r[k]);
-      if (!props.has(name)) { props.set(name, guessProperty(name, raw)); warnings.push(`links column "${c}" isn't declared in "properties"; treated as ${props.get(name).type}`); }
-      (lv[name] || (lv[name] = {}))[dir] = columnValues(props.get(name), raw, 'links');
-    });
-  }
-
-  for (const p of props.values()) {
-    const arrays = [];
-    if (mValues[p.name]) arrays.push(mValues[p.name]);
-    if (lv[p.name]) arrays.push(...Object.values(lv[p.name]));
-    completeLegend(p, arrays);
-    // Data range for numbers (used when no "range" is declared).
-    if (p.type === 'number' || p.type === 'integer') {
-      let lo = Infinity, hi = -Infinity;
-      for (const a of arrays) for (const v of a) if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
-      p.dataRange = lo <= hi ? [lo, hi] : [0, 1];
-    }
-  }
-
-  const style = obj.style && typeof obj.style === 'object' ? obj.style : {};
-  return {
-    name: typeof obj.name === 'string' && obj.name ? obj.name : fileName,
-    space: typeof obj.space === 'string' ? obj.space : null,
-    coordinateSystem: cs,
-    props, warnings,
-    markers: { n, ids, index, pos, values: mValues },
-    links: { n: m, from, to, values: lv },
-    style: { markers: { ...(style.markers || {}) }, links: { ...(style.links || {}) } },
-  };
 }
 
 // The scale a numeric property is mapped over: its declared range, else
@@ -325,9 +162,12 @@ export function resolveMarkerStyle(set, st, colormap, mask = null) {
   const cv = cp && values[cp.name];
   const win = cp && (cp.type === 'number' || cp.type === 'integer')
     ? (Array.isArray(st.window) && st.window.length === 2 && st.window.every(isNum) ? st.window : propertyRange(cp)) : null;
+  // color_column: each row's own color (an atlas region's), unless color_by is set
+  const rc = !cp && st.color_column && set.markers.rowColor ? set.markers.rowColor : null;
   for (let i = 0; i < n; i++) {
     let c = fixed, isBase = 1;
-    if (cp && cp.type === 'categorical') {
+    if (rc && Number.isFinite(rc[3 * i])) { c = [rc[3 * i], rc[3 * i + 1], rc[3 * i + 2]]; isBase = 0; }
+    else if (cp && cp.type === 'categorical') {
       const v = cv ? cv[i] : null;
       if (v != null) { c = cp.legend[cp.index.get(v)].color; isBase = 0; } // no value: base color
     } else if (win) {
@@ -359,4 +199,71 @@ export function resolveMarkerStyle(set, st, colormap, mask = null) {
     size[i] = mask && !mask[i] ? 0 : s;
   }
   return { color, shape, size, sizeUnit: spec.unit, base };
+}
+
+// Resolves the link style into per-link arrays, one value per END (a: the
+// "from" end, b: the "to" end), so lines can taper and blend:
+//   colorA/colorB Float32Array(3m), widthA/widthB Float32Array(m) (in
+//   widthUnit 'mm'|'px'), widthUnit, opacity.
+// A link is drawn only when both its markers are (markerResolved.size > 0);
+// otherwise its widths are 0. Per the format:
+//   color: fixed `color`; `color_by` "ends" (default) — the markers'
+//   colors; "from.<p>" / "to.<p>" — that marker's value of p; or a link
+//   property — with directional columns each end gets the value arriving
+//   there (to-end ← ">>", from-end ← "<<").
+//   width: `width_mm` / `width_px` ([min, max] with a numeric `width_by`);
+//   `width_by` a link property, directional the same way; a missing
+//   direction gives width 0 at that end.
+export function resolveLinkStyle(set, st, colormap, markerResolved) {
+  st = st || {};
+  const L = set.links, m = L.n;
+  const prop = k => (k && set.props.has(k) ? set.props.get(k) : null);
+  const colorA = new Float32Array(3 * m), colorB = new Float32Array(3 * m);
+  const widthA = new Float32Array(m), widthB = new Float32Array(m);
+  const fixed = rgb255(st.color) || DEFAULT_RGB;
+  const colorOf = (p, v) => {
+    if (!p || v == null || (typeof v === 'number' && !Number.isFinite(v))) return null;
+    if (p.type === 'categorical') { const e = p.legend[p.index.get(v)]; return e ? e.color : null; }
+    if (p.type === 'number' || p.type === 'integer') { const t = norm01(p, v); return Number.isNaN(t) ? null : colormap(t); }
+    return null;
+  };
+  // the values arriving at each end of a link property: [atFrom, atTo]
+  const endValues = (name, i) => {
+    const v = L.values[name]; if (!v) return [null, null];
+    if (v.both) return [v.both[i], v.both[i]];
+    return [v.bwd ? v.bwd[i] : null, v.fwd ? v.fwd[i] : null];
+  };
+  const cb = st.color_by == null ? 'ends' : st.color_by;
+  const mc = markerResolved.color;
+  for (let i = 0; i < m; i++) {
+    const a = L.from[i], b = L.to[i];
+    let ca = fixed, cbb = fixed;
+    if (cb === 'ends') { ca = [mc[3 * a], mc[3 * a + 1], mc[3 * a + 2]]; cbb = [mc[3 * b], mc[3 * b + 1], mc[3 * b + 2]]; }
+    else if (typeof cb === 'string' && /^(from|to)\./.test(cb)) {
+      const [end, name] = [cb.slice(0, cb.indexOf('.')), cb.slice(cb.indexOf('.') + 1)];
+      const p = prop(name), vals = set.markers.values[name];
+      const c = p && vals ? colorOf(p, vals[end === 'from' ? a : b]) : null;
+      if (c) { ca = c; cbb = c; }
+    } else if (prop(cb)) {
+      const [va, vb] = endValues(cb, i), p = prop(cb);
+      ca = colorOf(p, va) || colorOf(p, vb) || fixed; cbb = colorOf(p, vb) || colorOf(p, va) || fixed;
+    }
+    colorA.set(ca, 3 * i); colorB.set(cbb, 3 * i);
+  }
+  const spec = sizeSpec(st, 'width');
+  const wp = prop(st.width_by);
+  const widthOf = v => {
+    if (!wp) return spec.max;
+    if (v == null || (typeof v === 'number' && !Number.isFinite(v))) return 0;
+    if (wp.type === 'categorical') { const e = wp.legend[wp.index.get(v)]; return spec.max * (e && e.size != null ? e.size : 1); }
+    const t = norm01(wp, v); return Number.isNaN(t) ? 0 : spec.min + t * (spec.max - spec.min);
+  };
+  for (let i = 0; i < m; i++) {
+    const shown = markerResolved.size[L.from[i]] > 0 && markerResolved.size[L.to[i]] > 0;
+    if (!shown) continue;
+    if (wp) { const [va, vb] = endValues(wp.name, i); widthA[i] = widthOf(va); widthB[i] = widthOf(vb); }
+    else { widthA[i] = spec.max; widthB[i] = spec.max; }
+  }
+  const opacity = isNum(st.opacity) ? Math.max(0, Math.min(1, st.opacity)) : 1;
+  return { colorA, colorB, widthA, widthB, widthUnit: spec.unit, opacity };
 }

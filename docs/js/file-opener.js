@@ -21,17 +21,18 @@
 // structure) rather than a one-shot function.
 
 import { unzipSync } from 'fflate';
-import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME } from './bundle-io.js';
+import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME, isManifestName } from './bundle-io.js';
 import { sniffDqzKind, readDqzChildHeader } from './tract-io.js';
-import { looksLikeMarkersText } from './markers-io.js';
+import { looksLikeGraphText } from './graph-io.js';
 
-const TRACT_EXTS = ['.tck', '.dqz', '.trk'];
+const TRACT_EXTS = ['.tck', '.dqz', '.trk', '.tt'];   // .tt: DSI Studio (also .tt.gz)
 const LUT_EXTS    = ['.txt', '.lut'];
+const GRAD_EXTS   = ['.bval', '.bvec'];   // FSL gradient table of a 4D volume (paired by name)
 
 // Extensions with a compound ("double") suffix, e.g. "brain.nii.gz" -> base
 // "brain" rather than "brain.nii". Extend as needed for other compound
 // formats.
-const DOUBLE_EXTS = ['.nii.gz', '.mif.gz'];
+const DOUBLE_EXTS = ['.nii.gz', '.mif.gz', '.tt.gz'];
 
 // Files that operating systems and mail/share services add to folders and
 // zips, never data: macOS resource forks (__MACOSX/…, ._name), Finder and
@@ -44,6 +45,7 @@ export function isJunkPath(path) {
 }
 
 function extOf(name) {
+  if (/\.tt\.gz$/i.test(name)) return '.tt';
   const i = name.toLowerCase().lastIndexOf('.');
   return i === -1 ? '' : name.toLowerCase().slice(i);
 }
@@ -88,12 +90,12 @@ export class MultiFileOpener {
       // The manifest goes on to be classified (pass 2) — it ended in the
       // .json skip below before, so a manifest's "volumes" section was
       // never read.
-      if (name.toLowerCase() === MANIFEST_FILENAME) { dataFiles.push(file); continue; }
+      if (isManifestName(name)) { dataFiles.push(file); continue; }
       if (name.toLowerCase().endsWith('.json')) continue; // json files are targets' sidecars, not targets themselves
 
       for (const cand of baseNameCandidates(name)) {
         const jsonName = cand + '.json';
-        if (jsonName.toLowerCase() === MANIFEST_FILENAME) continue; // never treat the manifest as a sidecar match
+        if (isManifestName(jsonName)) continue; // never treat the manifest as a sidecar match
         const jsonFile = byName.get(jsonName);
         if (jsonFile) {
           sidecarForTarget.set(name, jsonFile);
@@ -110,7 +112,7 @@ export class MultiFileOpener {
       //if (consumedSidecars.has(file.name)) continue; // folded into its target's entry below
 
       const name = file.name;
-      if (name.toLowerCase() === MANIFEST_FILENAME) {
+      if (isManifestName(name)) {
         classified.push({ file, kind: 'manifest' });
         continue;
       }
@@ -129,6 +131,8 @@ export class MultiFileOpener {
 
       if (TRACT_EXTS.includes(ext)) { classified.push({ file, kind: 'tract', sidecar }); continue; }
       if (LUT_EXTS.includes(ext))   { classified.push({ file, kind: 'lut', sidecar });   continue; }
+      if (GRAD_EXTS.includes(ext))  { classified.push({ file, kind: 'grad' });           continue; }
+      if (ext === '.csv' || ext === '.tsv') { classified.push({ file, kind: 'table' }); continue; }   // a graph package's table (read through its package)
       classified.push({ file, kind: 'anat', sidecar }); // nifti/mif/etc., sidecar attached if one was found
     }
 
@@ -173,21 +177,22 @@ export class MultiFileOpener {
     }
   }
 
-  // Markers files (markers-format.md): .json files recognized by their
-  // "type", whatever their name — [{file, json, error}]. A .json that isn't
-  // one (a sidecar, index.json) is left alone. Recognized from the raw
-  // text, so a markers file with a JSON syntax error is still reported as
-  // one rather than silently ignored.
+  // Graph files (graph-format.md: a Data Package with tables placed in
+  // brain space): .json files recognized by their content, whatever their
+  // name — [{file, json, error, files}] (files: the whole drop, for the CSV
+  // tables a package may name). A .json that isn't one (a sidecar,
+  // index.json) is left alone. Recognized from the raw text, so a file with
+  // a JSON syntax error is still reported rather than silently ignored.
   static async findMarkerFiles(files) {
     const out = [];
     for (const file of files) {
       const lower = file.name.toLowerCase();
-      if (!lower.endsWith('.json') || lower === MANIFEST_FILENAME) continue;
+      if (!lower.endsWith('.json') || lower === MANIFEST_FILENAME) continue;   // (datapackage.json: also read for its tables)
       if (file.size > 256 * 1024 * 1024) continue;
       const text = await file.text();
-      if (!looksLikeMarkersText(text)) continue;
-      try { out.push({ file, json: JSON.parse(text), error: null }); }
-      catch (e) { out.push({ file, json: null, error: 'not valid JSON: ' + ((e && e.message) || e) }); }
+      if (!looksLikeGraphText(text)) continue;
+      try { out.push({ file, json: JSON.parse(text), error: null, files }); }
+      catch (e) { out.push({ file, json: null, error: 'not valid JSON: ' + ((e && e.message) || e), files }); }
     }
     return out;
   }

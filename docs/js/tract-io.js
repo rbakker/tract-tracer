@@ -91,9 +91,11 @@ function headerToRaw(header) {
  * Parse a full .tck file into streamlines + metadata.
  * @param {File} file
  * @param {number} [maxNumTracts=0] - Maximum number of tracts to extract, 0 to extract all.
- * @returns {{streamlines: Array, streamlineLookup: Int32Array, header: Object}}
+ * @param {number} [every=1] - keep every n-th streamline (then copied out,
+ *   so the file's buffer isn't kept alive)
+ * @returns {{streamlines: Array, streamlineLookup: Int32Array, header: Object, total: number}}
  */
-export async function parseTck(file, maxNumTracts = 0) {
+export async function parseTck(file, maxNumTracts = 0, every = 1) {
   const buf = await file.arrayBuffer();
   
   const header = parseTckHeader(buf);
@@ -120,12 +122,13 @@ export async function parseTck(file, maxNumTracts = 0) {
 
   const streamlines = [], lookup = [];
   const nPoints = data.length / 3;
-  let iPrev = 0;
+  let iPrev = 0, seen = 0;
 
   // Push a streamline slice [start,end)
   function pushStreamline(start, end) {
     const len = end - start;
     if (len <= 0) return;
+    if (seen++ % every) return;
 
     const si = streamlines.length;
     const off = data.byteOffset + 3 * start * data.BYTES_PER_ELEMENT;
@@ -133,21 +136,28 @@ export async function parseTck(file, maxNumTracts = 0) {
 
     for (let k = 0; k < len; k++) lookup.push(si);
   }
+  // thinned: the kept streamlines into one buffer of their own
+  const done = () => {
+    if (every > 1) {
+      let n = 0; for (const t of streamlines) n += t.length;
+      const out = new Float32Array(n); let o = 0;
+      for (let i = 0; i < streamlines.length; i++) { const t = streamlines[i]; out.set(t, o); streamlines[i] = out.subarray(o, o + t.length); o += t.length; }
+    }
+    return { streamlines, streamlineLookup: new Int32Array(lookup), header, total: seen };
+  };
 
   for (let i = 0; i < nPoints; i++) {
     const x = data[3*i], y = data[3*i+1], z = data[3*i+2];
     if (!isFinite(x) || !isFinite(y) || !isFinite(z)) {
       pushStreamline(iPrev, i);
       iPrev = i + 1;
-      if (maxNumTracts && streamlines.length >= maxNumTracts) {
-        return { streamlines, streamlineLookup: new Int32Array(lookup), header };
-      }
+      if (maxNumTracts && streamlines.length >= maxNumTracts) return done();
     }
   }
 
   pushStreamline(iPrev, nPoints);
 
-  return { streamlines, streamlineLookup: new Int32Array(lookup), header };
+  return done();
 }
 
 
@@ -221,14 +231,15 @@ export function parseDqzHeader(buf) {
  *   never actually used to limit anything, this one really does.
  * @returns {{tracts: Array, streamlineLookup: Int32Array, header: Object}}
  */
-export async function parseDqz(file, maxNumTracts = 0) {
+export async function parseDqz(file, maxNumTracts = 0, every = 1) {
   const buf = await file.arrayBuffer();
   const header = parseDqzHeader(buf);
   const { dataOffset, n_streamlines } = header._dqz;
 
-  const numTracts = maxNumTracts ? Math.min(maxNumTracts, n_streamlines) : n_streamlines;
-
   const dv = new DataView(buf);
+  if (every > 1) return decodeDqzThinned(dv, header, dataOffset, n_streamlines, maxNumTracts, every);
+
+  const numTracts = maxNumTracts ? Math.min(maxNumTracts, n_streamlines) : n_streamlines;
 
   // First pass: walk just the records being kept, reading each one's
   // n_points (4 bytes) and remembering where its payload starts, so the
@@ -304,7 +315,218 @@ export async function parseDqz(file, maxNumTracts = 0) {
     streamlines[tr] = new Float32Array(dataArray.buffer, dataArray.byteOffset + streamlineStartFloat * 4, n * 3);
   }
 
-  return { streamlines, streamlineLookup: lookup, header };
+  return { streamlines, streamlineLookup: lookup, header, total: n_streamlines };
+}
+
+// parseDqz keeping every n-th streamline: the records walked, the kept
+// ones decoded (same arithmetic as above).
+function decodeDqzThinned(dv, header, dataOffset, n_streamlines, maxNumTracts, every) {
+  const offs = [], counts = [];
+  let off = dataOffset, total = 0;
+  for (let tr = 0; tr < n_streamlines; tr++) {
+    const n = dv.getUint32(off, true);
+    if (tr % every === 0 && !(maxNumTracts && offs.length >= maxNumTracts)) { offs.push(off); counts.push(n); total += n; }
+    off += 4 + (n ? 16 + (n - 1) * 3 : 0);
+  }
+  const data = new Float32Array(total * 3), lookup = new Int32Array(total), streamlines = new Array(offs.length);
+  let p = 0;
+  for (let s = 0; s < offs.length; s++) {
+    const n = counts[s], start = p;
+    if (n) {
+      let o = offs[s] + 4;
+      const sx = dv.getFloat32(o, true), sy = dv.getFloat32(o + 4, true), sz = dv.getFloat32(o + 8, true), Q = dv.getFloat32(o + 12, true);
+      o += 16;
+      data[p++] = sx; data[p++] = sy; data[p++] = sz;
+      let ix = 0, iy = 0, iz = 0;
+      for (let i = 1; i < n; i++, o += 3) {
+        ix += dv.getInt8(o); iy += dv.getInt8(o + 1); iz += dv.getInt8(o + 2);
+        data[p++] = sx + ix * Q; data[p++] = sy + iy * Q; data[p++] = sz + iz * Q;
+      }
+      lookup.fill(s, start / 3, p / 3);
+    }
+    streamlines[s] = data.subarray(start, p);
+  }
+  return { streamlines, streamlineLookup: lookup, header, total: n_streamlines };
+}
+
+/**
+ * How many streamlines and points a tract file holds — before reading it,
+ * to decide how much of it fits in memory. Exact for .dqz and .tt (their
+ * records are walked); for .tck and .trk estimated from the file size.
+ * @param {File|Blob} file
+ * @param {string} ext - '.tck', '.trk', '.dqz' or '.tt'
+ * @returns {Promise<{points:number, streamlines:number|null, exact:boolean}>}
+ */
+export async function countTract(file, ext) {
+  if (ext === '.tck') {
+    const head = await file.slice(0, Math.min(file.size, 1 << 16)).arrayBuffer();
+    const h = parseTckHeader(head);
+    const off = parseInt(String(h.file).split(' ').pop()) || 0;
+    const bpe = /64/.test(h.datatype) ? 8 : 4;
+    const n = parseInt(h.count) || null;
+    return { points: Math.max(0, (file.size - off) / bpe / 3 - (n || 0)), streamlines: n, exact: false };
+  }
+  if (ext === '.trk') {
+    const h = parseTrkHeader(await file.slice(0, 1000).arrayBuffer());
+    const n = h.n_count || null, fpp = 3 + h.n_scalars;
+    return { points: Math.max(0, (file.size - 1000 - (n || 0) * (4 + 4 * h.n_properties)) / (4 * fpp)), streamlines: n, exact: false };
+  }
+  if (ext === '.dqz') {
+    const buf = await file.arrayBuffer();
+    const header = parseDqzHeader(buf), dv = new DataView(buf);
+    let off = header._dqz.dataOffset, pts = 0;
+    for (let tr = 0; tr < header._dqz.n_streamlines; tr++) { const n = dv.getUint32(off, true); pts += n; off += 4 + (n ? 16 + (n - 1) * 3 : 0); }
+    return { points: pts, streamlines: header._dqz.n_streamlines, exact: true };
+  }
+  if (ext === '.tt') {
+    const mats = readMat4(await maybeGunzip(file));
+    if (!mats.track) throw 'no "track" matrix in this .tt file';
+    const t = mats.track.bytes, dv = new DataView(t.buffer, t.byteOffset, t.byteLength);
+    let o = 0, n = 0, pts = 0;
+    while (o + 16 <= t.length) { const c = dv.getUint32(o, true); pts += c / 3; n++; o += 16 + c - 3; }
+    return { points: pts, streamlines: n, exact: true };
+  }
+  return { points: 0, streamlines: null, exact: false };
+}
+
+/**
+ * A parsed .dqz data file (parseDqzChild) cut down to every n-th
+ * streamline — to go with a parent read thinned.
+ */
+export function thinDqzChild(parsed, every) {
+  if (every <= 1) return parsed;
+  const n = parsed.header.n_streamlines, keep = [];
+  for (let i = 0; i < n; i += every) keep.push(i);
+  const header = { ...parsed.header, n_streamlines: keep.length };
+  const Arr = parsed.codes.constructor;
+  if (parsed.scope === 'per_streamline') {
+    const codes = Arr.from(keep, i => parsed.codes[i]);
+    const values = parsed.values === parsed.codes ? codes : Float32Array.from(keep, i => parsed.values[i]);
+    return { ...parsed, header, codes, values };
+  }
+  const pointCounts = new Uint32Array(keep.length), offsets = new Uint32Array(keep.length + 1);
+  let total = 0;
+  keep.forEach((i, k) => { pointCounts[k] = parsed.pointCounts[i]; offsets[k] = total; total += pointCounts[k]; });
+  offsets[keep.length] = total;
+  const codes = new Arr(total);
+  const values = parsed.values === parsed.codes ? codes : new Float32Array(total);
+  keep.forEach((i, k) => {
+    const a = parsed.offsets[i], b = parsed.offsets[i + 1];
+    codes.set(parsed.codes.subarray(a, b), offsets[k]);
+    if (values !== codes) values.set(parsed.values.subarray(a, b), offsets[k]);
+  });
+  return { ...parsed, header, codes, values, pointCounts, offsets };
+}
+
+
+// -- .tt / .tt.gz parser (DSI Studio) ------------------------------
+// A DSI Studio tract file: a MATLAB v4 container (usually gzipped) of
+// named matrices. The ones read here:
+//   dimension    int32[3]   the grid the tracts were made on
+//   voxel_size   float[3]   mm
+//   trans_to_mni float[16]  row-major 4×4, voxel → template (MNI) RAS mm
+//   report       uint8[]    DSI Studio's methods paragraph
+//   track        uint8[]    the streamlines, back to back:
+//       uint32  c          number of coordinate values (3 × points)
+//       int32×3            the first point
+//       int8×(c−3)         every next point as a step from the one before
+//     all in 1/32 voxel.
+// Other matrices (parameter_id, cluster, color …) are kept in the header
+// when they are small, otherwise ignored.
+
+/** Inflate if gzipped (magic 1f 8b); a Uint8Array either way. */
+async function maybeGunzip(file) {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] !== 0x1f || head[1] !== 0x8b) return new Uint8Array(await file.arrayBuffer());
+  const stream = file.stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** The named matrices of a MATLAB v4 file: name → { type, rows, cols, bytes }. */
+export function readMat4(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const out = {};
+  let o = 0;
+  while (o + 20 <= u8.length) {
+    const type = dv.getInt32(o, true), rows = dv.getInt32(o + 4, true), cols = dv.getInt32(o + 8, true),
+          imag = dv.getInt32(o + 12, true), nl = dv.getInt32(o + 16, true);
+    if (type < 0 || type > 9999 || rows < 0 || cols < 0 || nl <= 0 || nl > 256)
+      throw o ? 'damaged .tt file (at byte ' + o + ')' : 'not a DSI Studio .tt file';
+    if (Math.floor(type / 1000) !== 0) throw 'a big-endian .tt file (not supported)';
+    o += 20;
+    const name = new TextDecoder().decode(u8.subarray(o, o + nl - 1)); o += nl;
+    const P = Math.floor(type / 10) % 10, size = [8, 4, 4, 2, 2, 1][P];
+    if (!size) throw '.tt matrix "' + name + '" has an unknown type ' + type;
+    const n = rows * cols * size * (imag ? 2 : 1);
+    if (o + n > u8.length) throw '.tt file ends early (in "' + name + '")';
+    out[name] = { P, rows, cols, bytes: u8.subarray(o, o + n) };
+    o += n;
+  }
+  return out;
+}
+
+function mat4Values(m) {
+  const b = m.bytes, n = m.rows * m.cols;
+  const T = [Float64Array, Float32Array, Int32Array, Int16Array, Uint16Array, Uint8Array][m.P];
+  const a = new T(n);
+  new Uint8Array(a.buffer).set(b.subarray(0, n * T.BYTES_PER_ELEMENT));
+  return Array.from(a);
+}
+
+/**
+ * Parse a DSI Studio .tt / .tt.gz file into streamlines in RAS mm (through
+ * its trans_to_mni; without one, voxel × voxel_size).
+ * @param {File|Blob} file
+ * @param {number} [maxNumTracts=0] - at most this many, 0 for all
+ * @param {number} [every=1] - keep every n-th streamline
+ */
+export async function parseTt(file, maxNumTracts = 0, every = 1) {
+  const mats = readMat4(await maybeGunzip(file));
+  if (!mats.track) throw 'no "track" matrix in this .tt file';
+  const header = { format: 'DSI Studio .tt' };
+  for (const [name, m] of Object.entries(mats)) {
+    if (name === 'track') continue;
+    if (name === 'report' && m.P === 5) header.report = new TextDecoder().decode(m.bytes).replace(/\0+$/, '').trim();
+    else if (m.rows * m.cols <= 64) { const v = mat4Values(m); header[name] = v.length === 1 ? v[0] : v; }
+  }
+  const vs = Array.isArray(header.voxel_size) ? header.voxel_size : [1, 1, 1];
+  const T = Array.isArray(header.trans_to_mni) && header.trans_to_mni.length === 16 ? header.trans_to_mni : null;
+  // voxel → RAS rows (with the 1/32 already folded in)
+  const k = 1 / 32;
+  const R = T ? [0, 1, 2].map(r => [T[4 * r] * k, T[4 * r + 1] * k, T[4 * r + 2] * k, T[4 * r + 3]])
+              : [[vs[0] * k, 0, 0, 0], [0, vs[1] * k, 0, 0], [0, 0, vs[2] * k, 0]];
+  if (!T) header.space = 'voxel × voxel_size (no trans_to_mni in the file)';
+
+  const t = mats.track.bytes, dv = new DataView(t.buffer, t.byteOffset, t.byteLength);
+  // pass 1: the records (and the points) that are kept
+  const offs = [], counts = [];
+  let o = 0, seen = 0, total = 0;
+  while (o + 16 <= t.length) {
+    const c = dv.getUint32(o, true);
+    if (c < 3 || c % 3 || o + 16 + c - 3 > t.length) throw 'damaged .tt track data (streamline ' + seen + ')';
+    if (seen % every === 0 && !(maxNumTracts && offs.length >= maxNumTracts)) { offs.push(o); counts.push(c / 3); total += c / 3; }
+    o += 16 + c - 3; seen++;
+  }
+  header.count = seen;
+  header.streamlines_read = offs.length;
+  // pass 2: decode
+  const data = new Float32Array(total * 3), lookup = new Int32Array(total), streamlines = new Array(offs.length);
+  let p = 0;
+  for (let s = 0; s < offs.length; s++) {
+    let q = offs[s] + 4;
+    let x = dv.getInt32(q, true), y = dv.getInt32(q + 4, true), z = dv.getInt32(q + 8, true);
+    q += 12;
+    const n = counts[s], start = p;
+    for (let i = 0; i < n; i++) {
+      if (i) { x += dv.getInt8(q); y += dv.getInt8(q + 1); z += dv.getInt8(q + 2); q += 3; }
+      data[p++] = R[0][0] * x + R[0][1] * y + R[0][2] * z + R[0][3];
+      data[p++] = R[1][0] * x + R[1][1] * y + R[1][2] * z + R[1][3];
+      data[p++] = R[2][0] * x + R[2][1] * y + R[2][2] * z + R[2][3];
+    }
+    lookup.fill(s, start / 3, p / 3);
+    streamlines[s] = data.subarray(start, p);
+  }
+  return { header, streamlines, streamlineLookup: lookup, total: seen };
 }
 
 
@@ -522,12 +744,16 @@ hdr_size	int	4	Size of the header. Used to determine byte swap. Should be 1000.
 * @param {ArrayBuffer} fileAsArrayBuffer - File contents as a byte array buffer
 * @return {Object} File header as a set of key-value pairs
 */
-export function parseTrkHeader(fileAsArrayBuffer) {
+export function parseTrkHeader(fileAsArrayBuffer, LE = null) {
+    // No header field gives the byte order; hdr_size (the last field) must
+    // read 1000 — if it doesn't, the file was written in the other order.
+    if (LE === null) {
+        const dv0 = new DataView(fileAsArrayBuffer);
+        LE = dv0.getInt32(996, true) === 1000 ? true : dv0.getInt32(996, false) === 1000 ? false : sysLE();
+    }
     let header = {}
     let byteOffset = 0;
     const view = new DataView(fileAsArrayBuffer);
-    // There is no header field for byte-order. Assuming same as system byte-order.
-    const LE = sysLE();
     header.little_endian = LE;
     // id_string[6]	char	6	ID string for track file. The first 5 characters must be "TRACK".
     let v;
@@ -665,113 +891,136 @@ export function parseTrkHeader(fileAsArrayBuffer) {
 }
 
 
-/** 
-* Parse both header and tracts from a TrackVis .trk file
-* @param {ArrayBuffer} buf - File contents as a byte array buffer
-* @param {Object} [header] - File header if previously parsed
+// TrackVis .trk point coordinates are always "voxmm" (the format fixes
+// it; no header field chooses): millimetres along the voxel axes, from
+// the CORNER of the first voxel — voxel (i,j,k)'s centre is at
+// ((i+½)·vx, (j+½)·vy, (k+½)·vz). The header's vox_to_ras (version 2)
+// maps voxel indices (centres) to RAS mm, so
+//     RAS = vox_to_ras · (p / voxel_size − ½)
+// (as nibabel reads it). Without vox_to_ras (version 1, or [3][3] = 0)
+// the voxel sizes and voxel_order are all there is: an axis-aligned
+// matrix, no origin.
+export function trkVoxmmToRas(header) {
+  const vs = header.voxel_size.map(v => v || 1);
+  let M = header.vox_to_ras;
+  if (!M || !M[3] || M[3][3] === 0) {
+    const order = String.fromCharCode(...(header.voxel_order || [])).toUpperCase();
+    M = [[vs[0], 0, 0, 0], [0, vs[1], 0, 0], [0, 0, vs[2], 0]];
+    // L, P or I in voxel_order: that axis runs against RAS
+    for (let a = 0; a < 3; a++) if ('LPI'.includes(order[a])) { const row = 'LR'.includes(order[a]) ? 0 : 'PA'.includes(order[a]) ? 1 : 2; M[a][a] = 0; M[row][a] = -vs[a]; }
+    console.warn('.trk without vox_to_ras: voxel order "' + order + '", no origin');
+  }
+  // rows of RAS = A·(p/vs − ½) + t
+  return [0, 1, 2].map(r => {
+    const A = [M[r][0] / vs[0], M[r][1] / vs[1], M[r][2] / vs[2]];
+    return [A[0], A[1], A[2], M[r][3] - 0.5 * (M[r][0] + M[r][1] + M[r][2])];
+  });
+}
+
+/**
+ * The orientation letters of a vox_to_ras matrix ("RAS", "LPS", …), or null.
+ */
+export function axcodesOf(M) {
+  if (!M || !M[3] || M[3][3] === 0) return null;
+  let out = '';
+  for (let c = 0; c < 3; c++) {
+    let r = 0; for (let k = 1; k < 3; k++) if (Math.abs(M[k][c]) > Math.abs(M[r][c])) r = k;
+    out += (M[r][c] >= 0 ? 'RAS' : 'LPI')[r];
+  }
+  return out;
+}
+/**
+ * A .trk header whose voxel_order disagrees with its vox_to_ras: which one
+ * the points follow is up to the program that wrote it (DSI Studio's are
+ * consistent; others are not always), so it is only noted — the points are
+ * placed by vox_to_ras. Returns the note, or null.
+ */
+export function trkOrientationNote(header) {
+  const m = axcodesOf(header.vox_to_ras);
+  const order = String.fromCharCode(...(header.voxel_order || [])).replace(/\0.*$/, '').toUpperCase();
+  if (!m || !/^[LRAPSI]{3}$/.test(order) || order === m) return null;
+  return `voxel_order says ${order} but vox_to_ras is ${m}; placed by vox_to_ras. If the streamlines look mirrored, use the mirror buttons in this header.`;
+}
+
+/**
+* Parse a TrackVis .trk file: header and streamlines (in RAS mm).
+* Read in chunks (file.slice), so a file larger than one ArrayBuffer
+* can be read as long as its points fit in memory. n_count 0 ("not
+* stored"): read to the end. A file that ends early keeps what it has
+* (header.truncated: the number the header promised).
+* @param {File|Blob} file
 * @param {number} [maxNumTracts=0] - Maximum number of tracts to extract, 0 to extract all.
-* @return {Array} Extracted header and tracts
+* @param {number} [every=1] - keep every n-th streamline (a subsample of a huge file)
 */
-export async function parseTrk(file, space='vox_mm',maxNumTracts = 0) {
-  const buf = await file.arrayBuffer();
-
-  const header = parseTrkHeader(buf);
-  const view = new DataView(buf);
+export async function parseTrk(file, maxNumTracts = 0, every = 1) {
+  const header = parseTrkHeader(await file.slice(0, 1000).arrayBuffer());
   const LE = header.little_endian;
+  if (header.hdr_size !== 1000) throw '.trk header size is ' + header.hdr_size + ', not 1000';
+  const ns = header.n_scalars, np = header.n_properties, fpp = 3 + ns;
+  const [r0, r1, r2] = trkVoxmmToRas(header);
+  const size = file.size, CHUNK = 64 << 20;
+  const promised = header.n_count;
+  const limit = maxNumTracts ? (promised ? Math.min(promised, maxNumTracts) : maxNumTracts) : promised || Infinity;
 
-  const numScalars = header.n_scalars;
-  const numProperties = header.n_properties;
-
-  let byteOffset = header.hdr_size;
-  let numTracts = header.n_count;
-  if (maxNumTracts) numTracts = Math.min(maxNumTracts, numTracts);
-
-  const vox2ras = header.vox_to_ras;
-  const vs = header.voxel_size;
-
-  // Precompute affine rows for speed
-  let r0, r1, r2;
-  if (space === 'vox') {
-    r0 = [...vox2ras[0]]; r1 = [...vox2ras[1]]; r2 = [...vox2ras[2]];
-  } else if (space === 'vox_mm') {
-    r0 = [vox2ras[0][0]/vs[0], vox2ras[0][1]/vs[1], vox2ras[0][2]/vs[2], vox2ras[0][3]];
-    r1 = [vox2ras[1][0]/vs[0], vox2ras[1][1]/vs[1], vox2ras[1][2]/vs[2], vox2ras[1][3]];
-    r2 = [vox2ras[2][0]/vs[0], vox2ras[2][1]/vs[1], vox2ras[2][2]/vs[2], vox2ras[2][3]];
-  } else if (space === 'ras') {
-    r0 = [1, 0, 0, 0]; r1 = [0, 1, 0, 0]; r2 = [0, 0, 1, 0];
-  }
-  const streamlines = [];
-
-  // We accumulate all points into one big Float32Array
-  // (same as TCK reader)
-  let totalPoints = 0;
-  const pointCounts = new Array(numTracts);
-
-  // First pass: count points
-  let off = byteOffset;
-  for (let tr = 0; tr < numTracts; tr++) {
-    const n = view.getUint32(off, LE);
-    off += 4 + (n * (3 + numScalars) * 4) + (numProperties * 4);
-    pointCounts[tr] = n;
-    totalPoints += n;
-  }
-
-  // Allocate final buffer (RAS‑space)
-  const dataArray = new Float32Array(totalPoints * 3);
-
-  // Second pass: read + transform directly into final buffer
-  let p = 0;
-  off = byteOffset;
-
-  for (let tr = 0; tr < numTracts; tr++) {
-    const n = view.getUint32(off, LE);
-    off += 4;
-
-    const floatsPerPoint = 3 + numScalars;
-
-    for (let i = 0; i < n; i++) {
-      const x = view.getFloat32(off + 4 * (i * floatsPerPoint + 0), LE);
-      const y = view.getFloat32(off + 4 * (i * floatsPerPoint + 1), LE);
-      const z = view.getFloat32(off + 4 * (i * floatsPerPoint + 2), LE);
-
-      // Apply affine
-      dataArray[p++] = r0[0] * x + r0[1] * y + r0[2] * z + r0[3];
-      dataArray[p++] = r1[0] * x + r1[1] * y + r1[2] * z + r1[3];
-      dataArray[p++] = r2[0] * x + r2[1] * y + r2[2] * z + r2[3];
+  // a window on the file: bytes [winStart, winStart + win.length)
+  let win = new Uint8Array(0), winStart = 1000, readTo = 1000;
+  const ensure = async (pos, n) => {
+    while (pos + n > winStart + win.length && readTo < size) {
+      const more = new Uint8Array(await file.slice(readTo, Math.min(size, readTo + Math.max(CHUNK, n))).arrayBuffer());
+      const keep = win.subarray(pos - winStart);
+      const next = new Uint8Array(keep.length + more.length);
+      next.set(keep); next.set(more, keep.length);
+      win = next; winStart = pos; readTo += more.length;
     }
+    return pos + n <= winStart + win.length;
+  };
 
-    off += n * floatsPerPoint * 4;
-    off += numProperties * 4;
+  // the points buffer sized from the file once (an upper bound: the file's
+  // bytes as points, per-streamline counts included), grown by half when
+  // the guess falls short — not by doubling, which for a file of billions
+  // of points would ask for twice the memory (and a copy on top)
+  const bound = Math.max(0, (size - 1000) / (4 * fpp));
+  let pts = new Float32Array(Math.max(1 << 16, Math.ceil(3 * (every > 1 ? bound / every * 1.1 : bound)))), p = 0;
+  const counts = [];
+  let pos = 1000, seen = 0;
+  while (seen < limit) {
+    if (!(await ensure(pos, 4))) break;                       // the end
+    const dv = new DataView(win.buffer, win.byteOffset);
+    const n = dv.getUint32(pos - winStart, LE);
+    const need = 4 + n * fpp * 4 + np * 4;
+    if (!(await ensure(pos, need))) { header.truncated = promised || seen + 1; break; }   // ends inside a streamline
+    if (seen % every === 0) {
+      if (p + 3 * n > pts.length) { let L = pts.length; while (L < p + 3 * n) L = Math.ceil(L * 1.5); const g = new Float32Array(L); g.set(pts.subarray(0, p)); pts = g; }
+      const d = new DataView(win.buffer, win.byteOffset + (pos - winStart) + 4);
+      for (let i = 0; i < n; i++) {
+        const o = 4 * i * fpp;
+        const x = d.getFloat32(o, LE), y = d.getFloat32(o + 4, LE), z = d.getFloat32(o + 8, LE);
+        pts[p++] = r0[0] * x + r0[1] * y + r0[2] * z + r0[3];
+        pts[p++] = r1[0] * x + r1[1] * y + r1[2] * z + r1[3];
+        pts[p++] = r2[0] * x + r2[1] * y + r2[2] * z + r2[3];
+      }
+      counts.push(n);
+    }
+    pos += need; seen++;
   }
+  if (promised && seen < Math.min(promised, maxNumTracts || Infinity) && !header.truncated) header.truncated = promised;
+  if (header.truncated) console.warn('.trk: the file ends after ' + seen + ' of ' + header.truncated + ' streamlines');
+  header.streamlines_read = seen;
+  const note = trkOrientationNote(header);
+  if (note) header.orientation_note = note;
 
-  // Build streamline views + lookup (same as TCK)
-  const lookup = new Int32Array(totalPoints);
+  // streamline views + point → streamline lookup (as TCK)
+  const dataArray = pts.subarray(0, p);
+  const lookup = new Int32Array(p / 3);
+  const streamlines = new Array(counts.length);
   let base = 0;
-
-  let pi = 0;
-  for (let tr = 0; tr < numTracts; tr++) {
-    const n = pointCounts[tr];
-    for (let i=0; i<n; i++) { lookup[pi] = tr; pi++ }
-
-    const byteOff = base * 3 * 4;
-    streamlines.push(
-      new Float32Array(
-        dataArray.buffer,
-        dataArray.byteOffset + byteOff,
-        n * 3
-      )
-    );
-
+  for (let tr = 0; tr < counts.length; tr++) {
+    const n = counts[tr];
+    lookup.fill(tr, base, base + n);
+    streamlines[tr] = new Float32Array(dataArray.buffer, dataArray.byteOffset + base * 12, n * 3);
     base += n;
   }
-  lookup[numTracts] = base;
-
-console.log(streamlines,lookup)
-  return {
-    header,
-    streamlines,
-    streamlineLookup: lookup
-  };
+  return { header, streamlines, streamlineLookup: lookup, total: seen };
 }
 
 
@@ -784,11 +1033,10 @@ console.log(streamlines,lookup)
 export function ensureTckHeader(header) {
   if (!header.vox_to_ras && header.file) return header;
 
-  const vox = trkHeader.vox_to_ras;
+  const vox = header.vox_to_ras;
 
-  const msg =
-    'Converted from .trk header with vox_to_ras ' +
-    JSON.stringify(vox);
+  const msg = vox ? 'Converted from .trk header with vox_to_ras ' + JSON.stringify(vox)
+                  : 'Converted from ' + (header.format || 'another format') + (header.trans_to_mni ? ' with trans_to_mni ' + JSON.stringify(header.trans_to_mni) : '');
 
   return {
     datatype: 'Float32LE',
@@ -1052,9 +1300,14 @@ export function writeTrk(streamlines, header) {
   // --- 5. Write streamline data ---
   let p = 1000;
 
-  // Compute RAS → voxel transform
-  const rasToVoxel = invertAffine(header.vox_to_ras);
-  const R = rasToVoxel; // alias
+  // RAS → voxmm: the inverse of trkVoxmmToRas
+  const F = trkVoxmmToRas(header);
+  const det = F[0][0] * (F[1][1] * F[2][2] - F[1][2] * F[2][1]) - F[0][1] * (F[1][0] * F[2][2] - F[1][2] * F[2][0]) + F[0][2] * (F[1][0] * F[2][1] - F[1][1] * F[2][0]);
+  const I = [[(F[1][1] * F[2][2] - F[1][2] * F[2][1]) / det, (F[0][2] * F[2][1] - F[0][1] * F[2][2]) / det, (F[0][1] * F[1][2] - F[0][2] * F[1][1]) / det],
+             [(F[1][2] * F[2][0] - F[1][0] * F[2][2]) / det, (F[0][0] * F[2][2] - F[0][2] * F[2][0]) / det, (F[0][2] * F[1][0] - F[0][0] * F[1][2]) / det],
+             [(F[1][0] * F[2][1] - F[1][1] * F[2][0]) / det, (F[0][1] * F[2][0] - F[0][0] * F[2][1]) / det, (F[0][0] * F[1][1] - F[0][1] * F[1][0]) / det]];
+  const t = [0, 1, 2].map(r => -(I[r][0] * F[0][3] + I[r][1] * F[1][3] + I[r][2] * F[2][3]));
+  const R = [I[0], I[1], I[2], t];
 
   for (const sl of streamlines) {
     const nPoints = sl.length / 3;
@@ -1069,7 +1322,7 @@ export function writeTrk(streamlines, header) {
 	  const y = sl[3*i+1];
 	  const z = sl[3*i+2];
 
-	  // Convert RAS → voxel
+	  // Convert RAS → voxmm
 	  const vx = R[0][0]*x + R[0][1]*y + R[0][2]*z + R[3][0];
 	  const vy = R[1][0]*x + R[1][1]*y + R[1][2]*z + R[3][1];
 	  const vz = R[2][0]*x + R[2][1]*y + R[2][2]*z + R[3][2];

@@ -57,6 +57,7 @@ uniform vec3  u_lightDir;     // the direction the light travels
 uniform vec3  u_lightPos;
 uniform float u_pointLight;
 uniform float u_ambient;
+uniform float u_gloss;
 uniform vec3  u_camFwd;
 uniform vec3  u_depthTarget;
 uniform float u_depthRadius;
@@ -92,7 +93,7 @@ void main() {
   // way to the light would skim the region's own bumps — shadow acne)
   if (u_meshShadowOn > 0.5 && (u_glass < 0.5 || u_glass > 2.5))
     T = texture(u_shadowTex, (vWorldPos + (L * 1.5 + N * 1.5) * u_shadowVoxMm - u_shadowMin) / u_shadowSize).r;
-  vec3 col = u_color * (u_ambient + (1.0 - u_ambient) * diffuse * fall * T) + vec3(0.25 * spec * fall * T);
+  vec3 col = u_color * (u_ambient + (1.0 - u_ambient) * diffuse * fall * T) + vec3(u_gloss * spec * fall * T);
   float alpha = 1.0;
   if (u_glass > 2.5) col *= 0.75;                       // the inner wall: a little darker
   else if (u_glass > 0.5) alpha = clamp(pow(1.0 - abs(dot(N, V)), u_rimPow) * u_alphaMult, 0.0, 1.0);
@@ -247,7 +248,7 @@ export class RegionMeshes {
     this.uniforms = {
       u_rimPow: { value: 1 }, u_alphaMult: { value: 1 },
       u_lightDir: { value: new THREE.Vector3(0, 0, 1) }, u_lightPos: { value: new THREE.Vector3() },
-      u_pointLight: { value: 1 }, u_ambient: { value: 0.25 }, u_falloff: { value: 0.5 },
+      u_pointLight: { value: 1 }, u_ambient: { value: 0.25 }, u_gloss: { value: 0.25 }, u_falloff: { value: 0.5 },
       u_camFwd: { value: new THREE.Vector3(0, 0, -1) }, u_depthTarget: { value: new THREE.Vector3() },
       u_depthRadius: { value: 1 },
       // SHADOWS: kept up to date by index.html (syncMeshShadowUniforms)
@@ -667,7 +668,7 @@ export class RegionMeshes {
     const d = cam.position.distanceTo(L.target);
     u.u_lightPos.value.copy(L.target).addScaledVector(u.u_lightDir.value, -d);
     u.u_pointLight.value = L.point ? 1 : 0;
-    u.u_falloff.value = L.falloff; u.u_ambient.value = L.ambient;
+    u.u_falloff.value = L.falloff; u.u_ambient.value = L.ambient; if (L.gloss != null) u.u_gloss.value = L.gloss;
     u.u_depthTarget.value.copy(L.target); u.u_depthRadius.value = L.radius || 1;
     u.u_rimPow.value = L.rimPow; u.u_alphaMult.value = L.alphaMult;
   }

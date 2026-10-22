@@ -177,6 +177,7 @@ float lightFalloff(vec3 worldPos, vec3 camPos, vec3 target, vec3 fwd, float radi
 }
 `;
 export const DEFAULT_LIGHT_FALLOFF = 0.5;
+export const DEFAULT_GLOSS = 0.25;    // specular highlights of the brain and the region meshes
 export const DEFAULT_AMBIENT = 0.25;  // the light in full shadow (lines and brain)
 
 const GLASS_HELPERS_GLSL = `
@@ -277,6 +278,7 @@ uniform float u_pointLight;
 // AMBIENT: the light every outer surface gets, lit or not (the streamlines'
 // u_ambient alike; console setAmbient)
 uniform float u_ambient;
+uniform float u_gloss;   // specular highlight strength (3D › LIGHT › gloss)
 // SHADOWING received from the streamlines (SOLID: outer surface and cut
 // face; GLASS: the cut face; index.html switches it on for the high/ultra
 // GPU tiers): the same
@@ -1127,6 +1129,7 @@ ${CLIP_SETUP_GLSL}
 
   vec3 baseColor;
   float shade;
+  float spec = 0.0;   // the specular highlight (outer surfaces only), added on top of the colour
   // Fully opaque by default (SOLID mode, and the flat cap in any mode —
   // an artificial cross-section has no curved surface for a rim/Fresnel
   // term to mean anything on). GLASS mode (u_shellMode) overrides this
@@ -1216,6 +1219,13 @@ ${CLIP_SETUP_GLSL}
     diffuse *= lightFalloff((u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz, u_camPos, u_depthTarget, u_camFwd, u_depthRadius);
     shade = startInside ? (0.3 + 0.5 * diffuse)
                         : (u_ambient + (1.0 - u_ambient) * diffuse);
+    // gloss: Blinn-Phong on the outward normal (-N: N points into the
+    // tissue), toward the light (-Ltr) and the eye (-rd)
+    if (!startInside && u_gloss > 0.0 && diffuse > 0.0) {
+      vec3 H = normalize(-Ltr - rd);
+      spec = u_gloss * pow(max(dot(-N, H), 0.0), 32.0)
+           * lightFalloff((u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz, u_camPos, u_depthTarget, u_camFwd, u_depthRadius);
+    }
 
     if (labelMode) {
       // Sample at inwardP, not hitP: hitP sits wherever the blended
@@ -1248,7 +1258,9 @@ ${CLIP_SETUP_GLSL}
     float T = texture(u_shadowTex, (wp - u_shadowMin) / u_shadowSize).r;
     float ambL = (startInside && !isCap) ? 0.3 : u_ambient;
     solidColor = baseColor * (ambL + max(shade - ambL, 0.0) * T);
+    spec *= T;
   }
+  solidColor += vec3(spec);
   // TEMPORARY DEBUG (remove once the thin-structure issue is
   // understood): paints every hit a flat, unmistakable color by which
   // code path produced it, ignoring real shading entirely. Toggle from
@@ -1474,6 +1486,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       u_lightPosLocal: { value: new THREE.Vector3() },
       u_pointLight: { value: 1 },
       u_ambient:    { value: DEFAULT_AMBIENT },
+      u_gloss:      { value: DEFAULT_GLOSS },
       u_shadowTex:  { value: null },
       u_shadowMin:  { value: new THREE.Vector3() },
       u_shadowSize: { value: new THREE.Vector3(1, 1, 1) },
