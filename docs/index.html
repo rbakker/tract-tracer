@@ -850,7 +850,7 @@ input[type=file]{display:none;}
   </div>
   <!-- LOAD… (the ☰ menu, the tabs' LOAD buttons) opens this; every load
        goes through dispatchOpenedFiles, as a drop does -->
-  <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.tt,.txt,.lut,.bval,.bvec,.json,.csv,.zip" style="display:none">
+  <input type="file" id="fi-load" multiple accept=".nii,.gz,.mif,.webm,.tck,.dqz,.trk,.tt,.txt,.lut,.tsv,.bval,.bvec,.json,.csv,.zip" style="display:none">
 
 
   <!-- PROBE (top of TRACTS), 3D, 2D and TOOLS: pages of the left column, moved there at start
@@ -4616,7 +4616,7 @@ function recomputeView({ reframe = true, force = false } = {}) {
 let volumes = [], activeVolume = null, luts = [];
 
 function volumeBaseName(name) { return name.replace(/\.(nii\.gz|nii|mif\.gz|mif|webm)$/i, ''); }
-function lutBaseName(name)    { return name.replace(/\.(txt|lut)$/i, ''); }
+function lutBaseName(name)    { return name.replace(/\.(txt|lut|tsv)$/i, ''); }
 const isWebmName = name => /\.webm$/i.test(name);
 
 function makeVolume(file, { label = null, category = null, source = null } = {}) {
@@ -6969,7 +6969,8 @@ async function dispatchOpenedFiles(rawFiles){
   // "continue" — entries are already unpacked regardless of zip vs.
   // loose, so there's nothing to retry, just volumes to skip.
   let manifestVolumes = null;
-  const manifestEntry = entries.find(e => e.kind === 'manifest');
+  // (datapackage.json before an older index.json in the same drop)
+  const manifestEntry = entries.find(e => e.kind === 'manifest' && /^datapackage\.json$/i.test(e.file.name.split('/').pop())) || entries.find(e => e.kind === 'manifest');
   if (manifestEntry) {
     try {
       const raw = JSON.parse(await manifestEntry.file.text());
@@ -7001,9 +7002,15 @@ async function dispatchOpenedFiles(rawFiles){
   if (manifestVolumes && manifestVolumes.length) {
     for (const v of manifestVolumes) {
       const vol = makeVolume(v.file, { label: v.name, category: v.type === 'label' ? 'parcellation' : 'anatomy', source: 'manifest' });
+      vol.manifestType = v.type;
       if (v.lutFile) manifestLut.set(v.lutFile, vol);
       newVols.push(vol);
     }
+    // "mask": a volume of the package applied to this one from the start
+    // (as ANATOMY › apply mask; loadAnat applies the shown volume's mask)
+    manifestVolumes.forEach((v, i) => {
+      if (v.maskFile) newVols[i].maskSrc = newVols.find(x => x.file === v.maskFile) || null;
+    });
   } else {
     for (const e of anatEntries) newVols.push(makeVolume(e.file));
   }
@@ -7124,12 +7131,12 @@ async function dispatchOpenedFiles(rawFiles){
   return did;
 }
 
-// The volume of a drop to show first: not one known (manifest, lookup table)
-// or named (aseg, aparc, dseg, seg, label, mask, parc, atlas) as a label
+// The volume of a drop to show first: not one known (manifest: a label or
+// mask volume; a lookup table) or named (aseg, aparc, dseg, seg, label, mask, parc, atlas) as a label
 // volume, when there is another; else the first.
 const LABEL_NAME_RE = /(^|[^a-z])(a?seg|aparc|dseg|label|labels|mask|parc|parcellation|atlas|wmparc)([^a-z]|$)/i;
 function firstToShow(vols) {
-  const labelish = v => v.category === 'parcellation' || LABEL_NAME_RE.test(volumeBaseName(v.file.name));
+  const labelish = v => v.category === 'parcellation' || v.manifestType === 'mask' || LABEL_NAME_RE.test(volumeBaseName(v.file.name));
   return vols.find(v => !labelish(v)) || vols[0];
 }
 

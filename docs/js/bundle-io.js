@@ -133,8 +133,10 @@ function parseManifestView(v) {
 //   a volume: a path ending in .nii, .nii.gz, .mif, .webm; "role" (ours):
 //     "anat" (default), "label" or "mask" — "label" also when a region
 //     table of the package places its regions in it; "labels" (ours): the
-//     name of a lookup-table resource (.txt / .lut) for it; "title": its
-//     display name;
+//     name of a lookup-table resource (.txt / .lut) for it; "mask" (ours):
+//     the name of a volume resource to apply to it as a mask when the
+//     package opens (as ANATOMY › apply mask: where the mask is 0, so is
+//     the volume); "title": its display name;
 //   a tractogram: a path ending in .tck, .trk, .dqz, .tt(.gz); "color" (ours), "title";
 //     "visible" (ours): false — starts off, and is only read when switched on;
 //   "role": "data" — a .dqz data file of a tractogram; "sidecar" — a
@@ -164,7 +166,14 @@ export function manifestFromPackage(obj) {
         if (!l || typeof l.path !== 'string') throw `datapackage.json resource "${r.name}": "labels" must name a lookup-table resource of the package`;
         labels = base(l.path);
       }
-      volumes.push({ file, type, name, labels });
+      let mask = null;
+      if (r.mask != null) {
+        const m = byName.get(r.mask);
+        if (!m || typeof m.path !== 'string' || !(VOL_RE.test(base(m.path)) || VOLUME_TYPES.includes(m.role)) || m === r)
+          throw `datapackage.json resource "${r.name}": "mask" must name another volume resource of the package (role "mask")`;
+        mask = base(m.path);
+      }
+      volumes.push({ file, type, name, labels, mask });
     } else if (TRACT_RE.test(file) || r.role === 'tractogram') {
       let color = null;
       if (r.color != null) { color = normalizeManifestColor(r.color); if (color === null) throw `datapackage.json resource "${r.name}": "color" must be "#rrggbb" or [r, g, b]`; }
@@ -222,7 +231,7 @@ export function parseManifest(obj) {
 // { tractFiles: File[], manifestFile: File|null }
 export function detectBundleDrop(files) {
   const tractFiles = files.filter(f => TRACT_EXTS.includes(extOf(f.name)));
-  const manifestFile = files.find(f => isManifestName(f.name)) || null;
+  const manifestFile = files.find(f => f.name.toLowerCase() === PACKAGE_FILENAME) || files.find(f => isManifestName(f.name)) || null;   // datapackage.json first
   if (tractFiles.length === 0) return null;
   if (tractFiles.length === 1 && !manifestFile) return null; // ordinary single-file load
   return { tractFiles, manifestFile };
@@ -268,7 +277,7 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
     // avoids a raw TypeError pre-empting that nicer, user-facing message.
     return { file: f, color: b.color || autoColors[i], name: b.name || stripPathExt(f ? f.name : b.file), visible: b.visible !== false };
   });
-  if (missing.length) throw `index.json references file(s) not present in the drop: ${missing.join(', ')}`;
+  if (missing.length) throw `${manifest.type === 'datapackage' ? 'datapackage.json' : 'index.json'} references file(s) not present in the drop: ${[...new Set(missing)].join(', ')}`;
   extra.forEach((f, j) => entries.push({ file: f, color: autoColors[manifest.bundles.length + j], name: stripPathExt(f.name) }));
   return { manifest, entries };
 }
@@ -293,8 +302,13 @@ export function resolveManifestVolumes(manifest, files) {
       lutFile = byName.get(v.labels) || null;
       if (!lutFile) missing.push(v.labels);
     }
-    return { file, type: v.type, name: v.name || (file ? stripPathExt(file.name) : v.file), lutFile };
+    let maskFile = null;   // (datapackage.json only)
+    if (v.mask) {
+      maskFile = byName.get(v.mask) || null;
+      if (!maskFile) missing.push(v.mask);
+    }
+    return { file, type: v.type, name: v.name || (file ? stripPathExt(file.name) : v.file), lutFile, maskFile };
   });
-  if (missing.length) throw `index.json references file(s) not present in the drop: ${missing.join(', ')}`;
+  if (missing.length) throw `${manifest.type === 'datapackage' ? 'datapackage.json' : 'index.json'} references file(s) not present in the drop: ${[...new Set(missing)].join(', ')}`;
   return resolved;
 }

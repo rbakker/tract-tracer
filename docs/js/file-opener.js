@@ -24,6 +24,7 @@ import { unzipSync } from 'fflate';
 import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME, isManifestName } from './bundle-io.js';
 import { sniffDqzKind, readDqzChildHeader } from './tract-io.js';
 import { looksLikeGraphText } from './graph-io.js';
+import { isBidsLutHeader } from './lut-io.js';
 
 const TRACT_EXTS = ['.tck', '.dqz', '.trk', '.tt'];   // .tt: DSI Studio (also .tt.gz)
 const LUT_EXTS    = ['.txt', '.lut'];
@@ -177,6 +178,20 @@ export class MultiFileOpener {
     }
   }
 
+  // A .tsv is a graph package's table — unless its header row is that of
+  // a BIDS lookup table (index, name, …; see lut-io.js) and no package in
+  // the drop declares it a table ("type": "table" or a schema): then it is re-labelled kind 'lut'.
+  static async separateBidsLuts(entries, markers) {
+    const tables = new Set();
+    for (const m of markers || []) for (const r of (m.json && m.json.resources) || [])
+      if (r && typeof r.path === 'string' && (r.type === 'table' || r.schema)) tables.add(r.path.split('/').pop());
+    for (const e of entries) {
+      if (e.kind !== 'table' || extOf(e.file.name) !== '.tsv' || tables.has(e.file.name)) continue;
+      const head = await e.file.slice(0, 4096).text();
+      if (isBidsLutHeader(head.split(/\r?\n/)[0])) e.kind = 'lut';
+    }
+  }
+
   // Graph files (graph-format.md: a Data Package with tables placed in
   // brain space): .json files recognized by their content, whatever their
   // name — [{file, json, error, files}] (files: the whole drop, for the CSV
@@ -223,12 +238,13 @@ export class MultiFileOpener {
     const files = isSingleZip ? await MultiFileOpener.filesFromZip(rawFiles[0]) : Array.from(rawFiles).filter(f => !isJunkPath(f.name));
     const entries = MultiFileOpener.classify(files);
     await MultiFileOpener.separateDqzChildren(entries);
+    const markers = await MultiFileOpener.findMarkerFiles(files);
+    await MultiFileOpener.separateBidsLuts(entries, markers);
 
     const anat = entries.find(e => e.kind === 'anat')?.file || null;
     const lut  = entries.find(e => e.kind === 'lut')?.file  || null;
     const childEntries = entries.filter(e => e.kind === 'dqzChild');
     const children = childEntries.map(e => ({ file: e.file, header: e.header, error: e.error }));
-    const markers = await MultiFileOpener.findMarkerFiles(files);
 
     // detectBundleDrop groups by extension, so hand it the drop minus
     // the child files — otherwise geometry + one child would look like a

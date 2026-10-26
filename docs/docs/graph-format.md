@@ -23,7 +23,7 @@ A `.json` file with a `resources` list, at least one of which has a
 `geometry` (see below), or with `"$schema"` set to this format's profile,
 `https://tractogram.observer/schema/graph-v1.json` (a JSON Schema extending
 the Data Package one). Any file name; as the manifest of a zip it is
-`datapackage.json` (see *The zip manifest*).
+`datapackage.json` (see *The zip manifest* and `zip-package-spec.md`).
 
 ## Overview
 
@@ -122,7 +122,7 @@ by itself (a link table is drawn through its references, see below).
 | key | meaning |
 |-----|---------|
 | `point` | the three columns with the position |
-| `space` | informative; no transformation is applied |
+| `space` | informative; no transformation is applied. Also **ours** `space` on the package or a resource, as in `zip-package-spec.md` |
 | `coordinate_system` | `"RAS"` (default) or `"LPS"` (x and y negated on reading) |
 | `units` | `"mm"` (the only value for now) |
 
@@ -270,8 +270,9 @@ columns.
 A label volume with a lookup table stays the simplest way to load an atlas,
 and keeps working without any graph file:
 
-- a **FreeSurfer** or **ITK-SNAP** LUT, or a BIDS `dseg.tsv` (`index`,
-  `name`, optional `color`).
+- a **FreeSurfer** or **ITK-SNAP** LUT, or a **BIDS** `*_dseg.tsv` with
+  its official columns (`index`, `name`, optional `abbreviation`, `color`,
+  `mapping`; see `zip-package-spec.md`, *Lookup tables*).
 
 These have no hierarchy. Two conveniences derive some structure from the
 names:
@@ -319,29 +320,13 @@ Data taken from a BIDS dataset maps one to one: `License` → `licenses`,
 
 ## The zip manifest: datapackage.json
 
-A zip (or a drop of files) can carry a `datapackage.json`: the package's
-file resources are then its volumes and tractograms, in order, and its
-tables are read as in any graph file. `index.json` (manifest version 1,
-see zip-package-spec.md) is still read.
-
-| resource | keys |
-|---|---|
-| a volume: `path` ending in `.nii`, `.nii.gz`, `.mif`, `.webm` | `title` (display name); **ours** `role`: `"anat"` (default), `"label"` or `"mask"` — `"label"` also when a region table places its regions in it; **ours** `labels`: the name of a lookup-table resource (`.txt`, `.lut`) |
-| a tractogram: `path` ending in `.tck`, `.trk`, `.dqz`, `.tt`, `.tt.gz` (DSI Studio) | `title`; **ours** `color` (`"#rrggbb"` or `[r, g, b]`); **ours** `visible`: `false` — starts off and is only read when switched on (for large sets, such as a tract atlas) |
-| a lookup table: `path` ending in `.txt`, `.lut` | named by a volume's `labels` |
-| a tractogram's data file (`.dqz`) | **ours** `role: "data"` — not a tractogram; paired with its tractogram by its uuid |
-| a volume's JSON sidecar | **ours** `role: "sidecar"` — listed for completeness; paired by name |
-| a table (points, links, regions) | as above |
-
-At the top, **ours** `view`: the opening view, as in index.json (`bounds`,
-`from`, `up`). A package without any table in space is a manifest only: it is not
-read as a graph file.
-
-Memory: the streamlines that are read are capped by the CPU tier (3D ›
-HARDWARE): 75 million, 300 million or 1.2 billion points. When a load holds more,
-every n-th streamline is read — the same n for all its files — and the
-streamline count says "thinned"; a bundle's tooltip and header say which n.
-A bundle switched on later is read with what is left of that cap.
+A graph file named `datapackage.json` inside a zip (or a drop of files) is
+also the zip's **manifest**: its file resources are the zip's volumes and
+tractograms, in load order, and its tables are read as in any graph file.
+The keys for those file resources (`role`, `labels`, `mask`, `color`,
+`visible`), the package's `space` and its opening `view` are described in
+`zip-package-spec.md`. That page also covers the older `index.json`, which
+is still read.
 
 ## Later
 
