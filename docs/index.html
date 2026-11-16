@@ -891,6 +891,7 @@ input[type=file]{display:none;}
   <div id="top-btns">
     <button class="top-btn" id="menu-btn" title="menu" aria-haspopup="true"><span class="icon">☰</span></button>
     <button class="top-btn icon-only" id="hw-btn" title="hardware: the GPU and CPU tiers (3D › HARDWARE)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><path d="M12.6 8.8 10.4 12.2h3.2l-2.2 3.4"/></svg></button>
+    <button class="top-btn icon-only" id="cursor-btn" title="3D cursor: the frames through it, their lines on the surface, the coloured crosshair in the sections (3D › 3D CURSOR)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14V3"/><path d="M10 14h11"/><path d="M10 14 3 21"/><path d="M7.5 5.5 10 3l2.5 2.5"/><path d="M18.5 11.5 21 14l-2.5 2.5"/><path d="M3 17.5V21h3.5"/></svg></button>
     <button class="top-btn icon-only" id="fullscreen-btn" title="Toggle fullscreen"></button>
     <!-- the ☰ menu: Load…, the left column's tabs (see section 11b), About… -->
     <div id="main-menu" role="menu">
@@ -3949,8 +3950,9 @@ const PLANE_AXIS_INDEX = {sag:0, cor:1, axi:2}; // matches vr._getNormalAxis / v
 // 3D › 3D CURSOR and the menu's Cursor row: frames (with the lines on the surface), axes
 function setCursorShow({ frames = framesVisible, axes = cursorAxesOn } = {}) {
   framesVisible = frames; cursorAxesOn = axes;
-  const f = document.getElementById('cursor-frames'), a = document.getElementById('cursor-axes');
+  const f = document.getElementById('cursor-frames'), a = document.getElementById('cursor-axes'), b = document.getElementById('cursor-btn');
   if (f) f.checked = framesVisible;
+  if (b) b.classList.toggle('active', framesVisible);
   if (a) a.checked = cursorAxesOn;
   updatePlaneMeshes();
   updateSlicesA(); updateSlicesB();   // (the sections' cursor: crosshair or mark)
@@ -3958,6 +3960,8 @@ function setCursorShow({ frames = framesVisible, axes = cursorAxesOn } = {}) {
 }
 document.getElementById('cursor-frames').addEventListener('change', e => setCursorShow({ frames: e.target.checked }));
 document.getElementById('cursor-axes').addEventListener('change', e => setCursorShow({ axes: e.target.checked }));
+// the 3D view's button (between hardware and fullscreen): the frames on / off
+document.getElementById('cursor-btn').addEventListener('click', e => { e.stopPropagation(); setCursorShow({ frames: !framesVisible }); });
 function updatePlaneMeshes() {
   for (const k of ['sag','cor','axi']) {
     if (planeMeshes[k]) { scene.remove(planeMeshes[k]); planeMeshes[k]=null; }
