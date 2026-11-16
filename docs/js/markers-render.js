@@ -17,10 +17,11 @@ import { MARKER_SHAPES } from './markers-io.js';
 
 export const MARKER_VS = `
 attribute vec3  iCenter;
+attribute vec2  iOffset;    // beside the center, facing the camera (in the size unit): the markers of one spot
 attribute vec3  iColor;
 attribute float iSize;      // diameter, in mm or CSS px (u_sizeInPx)
 uniform float u_opacity;    // opacity of base-colored markers (iBase)
-attribute float iIndex;     // marker index in its file (for u_hover)
+attribute float iIndex;     // index of the drawn marker (for u_hover)
 attribute float iDim;       // 1: dimmed (not the highlighted category)
 attribute float iBase;      // 1: drawn in the base color — gets u_opacity
 uniform float u_hover;      // index of the hovered marker, or -1
@@ -41,11 +42,11 @@ void main() {
   // World-space diameter. For pixels: a length S at clip depth w covers
   // S * P[1][1] / w * resolution.y / 2 pixels, for a perspective and an
   // orthographic camera alike (w = 1 there).
-  float d = iSize * u_sizeScale;
+  float unit = u_sizeScale * (u_sizeInPx > 0.5 ? u_pxScale * cClip.w / (projectionMatrix[1][1] * 0.5 * u_resolution.y) : 1.0);
+  float d = iSize * unit;
   bool hovered = abs(iIndex - u_hover) < 0.5;
   if (hovered) d *= 1.35;
   else if (iDim > 0.5) d *= 0.7;
-  if (u_sizeInPx > 0.5) d = d * u_pxScale * cClip.w / (projectionMatrix[1][1] * 0.5 * u_resolution.y);
   vSignedDist = dot(iCenter - u_slicePt, u_sliceNormal);
   if (d <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; } // hidden (size 0)
 #if defined(NEAR_PASS)
@@ -57,8 +58,120 @@ void main() {
   vAlpha = (iBase > 0.5 && !hovered) ? u_opacity : 1.0;
   vColor = hovered ? min(iColor * 1.25 + 0.15, vec3(1.0)) : iDim > 0.5 ? iColor * 0.28 + 0.06 : iColor;
   vNormalV = normalize(normalMatrix * normal);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(iCenter + position * d, 1.0);
+  vec4 pv = modelViewMatrix * vec4(iCenter + position * d, 1.0);
+  pv.xy += iOffset * unit;
+  gl_Position = projectionMatrix * pv;
 }`;
+
+// COUNTS: "20×" beside a marker that stands for several rows — one quad per
+// character, from a small atlas of white digits with a dark outline; in
+// screen pixels, on the outer side of the marker (the side away from its
+// spot's center: right for a marker on its own); depth-tested at the
+// marker's front, so the brain hides it as it hides the marker.
+export const LABEL_CHARS = '0123456789×';
+const LABEL_PX = 12;                      // character height, CSS px
+const LABEL_VS = `
+attribute vec3  iCenter;
+attribute vec2  iOffset;
+attribute float iSize;
+attribute float iChar;      // index in LABEL_CHARS
+attribute float iPos;       // the character's place in its label
+attribute float iLen;       // the label's length in characters
+uniform float u_sizeInPx;
+uniform float u_pxScale;
+uniform vec2  u_resolution;
+uniform float u_sizeScale;
+uniform float u_charW;      // a character's cell width, as a fraction of the height
+uniform float u_adv;        // the advance from one character to the next, idem
+varying vec2  vUv;
+void main() {
+  vec4 cView = modelViewMatrix * vec4(iCenter, 1.0);
+  vec4 cClip = projectionMatrix * cView;
+  float pxPerWorld = projectionMatrix[1][1] * 0.5 * u_resolution.y / cClip.w;   // device px per mm at this depth
+  float unit = u_sizeScale * (u_sizeInPx > 0.5 ? u_pxScale / pxPerWorld : 1.0);
+  float d = iSize * unit;
+  if (d <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec4 v = cView;
+  v.xy += iOffset * unit;
+  v.z += 0.5 * d;                                    // at the marker's front
+  vec4 c = projectionMatrix * v;
+  float h = ${LABEL_PX.toFixed(1)} * u_pxScale;      // device px
+  float rpx = 0.5 * d * pxPerWorld;                  // the marker's radius, device px
+  float adv = h * u_adv, cw = h * u_charW, wt = iLen * adv + (cw - adv);
+  vec2 u = length(iOffset) > 1e-6 ? normalize(iOffset) : vec2(1.0, 0.0);
+  vec2 a = u * (rpx + 0.2 * h);                      // where the label starts, from the marker's center
+  float x0, y0;
+  if (u.x > 0.38)       { x0 = a.x;            y0 = a.y - 0.5 * h; }   // right of it
+  else if (u.x < -0.38) { x0 = a.x - wt;       y0 = a.y - 0.5 * h; }   // left of it
+  else                  { x0 = a.x - 0.5 * wt; y0 = u.y > 0.0 ? a.y : a.y - h; }   // above or below
+  vec2 px = vec2(x0 + iPos * adv + (position.x + 0.5) * cw, y0 + (position.y + 0.5) * h);
+  c.xy += px * 2.0 / u_resolution * c.w;
+  vUv = vec2((iChar + position.x + 0.5) / ${LABEL_CHARS.length.toFixed(1)}, position.y + 0.5);
+  gl_Position = c;
+}`;
+const LABEL_FS = `
+precision highp float;
+uniform sampler2D u_atlas;
+varying vec2 vUv;
+void main() {
+  vec4 t = texture2D(u_atlas, vUv);
+  if (t.a < 0.02) discard;
+  gl_FragColor = t;
+}`;
+let _atlas = null;
+function labelAtlas() {
+  if (_atlas) return _atlas;
+  const H = 64, W = Math.round(H * 0.62), cv = document.createElement('canvas');
+  cv.width = W * LABEL_CHARS.length; cv.height = H;
+  const g = cv.getContext('2d');
+  g.font = `600 ${Math.round(H * 0.78)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineJoin = 'round'; g.lineWidth = H * 0.14; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.fillStyle = '#fff';
+  [...LABEL_CHARS].forEach((ch, i) => { g.strokeText(ch, (i + 0.5) * W, H * 0.54); g.fillText(ch, (i + 0.5) * W, H * 0.54); });
+  const tex = new THREE.CanvasTexture(cv);
+  tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true;
+  return (_atlas = { tex, charW: 0.62, adv: 0.54 });
+}
+function makeLabelMaterial(uniforms) {
+  const a = labelAtlas();
+  return new THREE.ShaderMaterial({
+    vertexShader: LABEL_VS, fragmentShader: LABEL_FS, transparent: true, depthWrite: false,
+    uniforms: { u_sizeInPx: uniforms.u_sizeInPx, u_pxScale: uniforms.u_pxScale, u_resolution: uniforms.u_resolution,
+                u_sizeScale: uniforms.u_sizeScale, u_charW: { value: a.charW }, u_adv: { value: a.adv }, u_atlas: { value: a.tex } },
+  });
+}
+let _quad = null;
+function quadGeometry() { return _quad || (_quad = new THREE.PlaneGeometry(1, 1)); }
+// The count labels of the drawn markers with a count above 1 (wanted(j): which).
+function makeLabelMesh(inst, material, wanted) {
+  const chars = [];
+  for (let j = 0; j < inst.n; j++) {
+    if (!(inst.count[j] > 1) || !wanted(j)) continue;
+    const text = inst.count[j] + '×';
+    for (let p = 0; p < text.length; p++) chars.push([j, LABEL_CHARS.indexOf(text[p]), p, text.length]);
+  }
+  if (!chars.length) return null;
+  const k = chars.length, center = new Float32Array(3 * k), offset = new Float32Array(2 * k), size = new Float32Array(k), ch = new Float32Array(k), at = new Float32Array(k), len = new Float32Array(k);
+  chars.forEach(([j, c, p, l], q) => {
+    center.set(inst.center.subarray(3 * j, 3 * j + 3), 3 * q); offset.set(inst.offset.subarray(2 * j, 2 * j + 2), 2 * q);
+    size[q] = inst.size[j]; ch[q] = c; at[q] = p; len[q] = l;
+  });
+  const g = new THREE.InstancedBufferGeometry(), b = quadGeometry();
+  g.index = b.index;
+  g.setAttribute('position', b.attributes.position);
+  g.setAttribute('iCenter', new THREE.InstancedBufferAttribute(center, 3));
+  g.setAttribute('iOffset', new THREE.InstancedBufferAttribute(offset, 2));
+  g.setAttribute('iSize', new THREE.InstancedBufferAttribute(size, 1));
+  g.setAttribute('iChar', new THREE.InstancedBufferAttribute(ch, 1));
+  g.setAttribute('iPos', new THREE.InstancedBufferAttribute(at, 1));
+  g.setAttribute('iLen', new THREE.InstancedBufferAttribute(len, 1));
+  g.instanceCount = k;
+  const mesh = new THREE.Mesh(g, material);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 10;
+  mesh.userData.isLabels = true;
+  return mesh;
+}
 
 export const MARKER_FS = `
 precision highp float;
@@ -131,8 +244,10 @@ void main() {
 }`;
 let _tube = null;
 function tubeGeometry() { return _tube || (_tube = new THREE.CylinderGeometry(0.5, 0.5, 1, 10, 1, true)); }
-function makeLinkMesh(set, lr, material) {
-  const L = set.links, pos = set.markers.pos, m = L.n;
+function makeLinkMesh(set, lr, material, inst) {
+  // each end at its row's drawn marker (the center of its spot)
+  const L = set.links, m = L.n, pos = new Float32Array(3 * set.markers.n).fill(NaN);
+  for (let r = 0; r < set.markers.n; r++) { const j = inst.rowInst[r]; if (j >= 0) pos.set(inst.center.subarray(3 * j, 3 * j + 3), 3 * r); }
   const A = new Float32Array(3 * m), B = new Float32Array(3 * m);
   for (let i = 0; i < m; i++) { A.set(pos.subarray(3 * L.from[i], 3 * L.from[i] + 3), 3 * i); B.set(pos.subarray(3 * L.to[i], 3 * L.to[i] + 3), 3 * i); }
   const g = new THREE.InstancedBufferGeometry(), base = tubeGeometry();
@@ -146,7 +261,7 @@ function makeLinkMesh(set, lr, material) {
   g.setAttribute('iCA', new THREE.InstancedBufferAttribute(lr.colorA, 3));
   g.setAttribute('iCB', new THREE.InstancedBufferAttribute(lr.colorB, 3));
   g.instanceCount = m;
-  g.boundingSphere = markerBoundingSphere(pos);
+  g.boundingSphere = markerBoundingSphere(inst.center);
   material.uniforms.u_widthInPx.value = lr.widthUnit === 'px' ? 1 : 0;
   material.uniforms.u_opacity.value = lr.opacity;
   material.transparent = lr.opacity < 0.999; material.depthWrite = !material.transparent; material.needsUpdate = true;
@@ -202,7 +317,9 @@ export function makeMarkerMaterial(defines = { FULL_PASS: 1 }, uniforms = null) 
 }
 
 // Builds a THREE.Group with one instanced mesh per shape in use.
-// resolved: resolveMarkerStyle()'s { color, shape, size, sizeUnit }.
+// resolved: resolveMarkerStyle()'s { color, shape, size, sizeUnit }, with
+// .inst: the markers as drawn (markers-io markerInstances) — without it,
+// one per row.
 // material: pass the previous group's material when rebuilding (a style
 // change), so three.js keeps its compiled shader program — disposing a
 // material and making a new one would recompile it every time.
@@ -210,7 +327,8 @@ export function makeMarkerMaterial(defines = { FULL_PASS: 1 }, uniforms = null) 
 // uniforms: u_sizeScale, u_opacity, ... — see setMarkerDisplay), and each
 // mesh's userData.markerIndex maps instance → marker index (for picking).
 export function makeMarkerGroup(set, resolved, materials = null, linkResolved = null) {
-  const { n, pos } = set.markers;
+  const inst = resolved.inst || rowInstances(set, resolved);
+  const n = inst.n;
   // Two materials sharing one set of uniforms: markers in their own color
   // (always opaque) and markers in the base color (get the opacity). They
   // must be separate: a translucent marker mustn't write depth — it would
@@ -223,28 +341,42 @@ export function makeMarkerGroup(set, resolved, materials = null, linkResolved = 
   group.userData.material = material;
   group.userData.baseMaterial = baseMaterial;
   const base = baseGeometries();
-  const isBase = i => (resolved.base ? resolved.base[i] : 1) === 1;
+  const isBase = j => inst.base[j] === 1;
   MARKER_SHAPES.forEach((shapeName, s) => addShapeMeshes(s, shapeName));
   if (linkResolved && set.links && set.links.n) {
     const lm = (materials && materials.linkMaterial) || makeLinkMaterial();
     group.userData.linkMaterial = lm;
-    group.add(makeLinkMesh(set, linkResolved, lm));
+    group.add(makeLinkMesh(set, linkResolved, lm, inst));
+  }
+  // the counts: own-colored and base-colored apart (the latter hide with opacity 0)
+  const labelMaterial = (materials && materials.labelMaterial) || makeLabelMaterial(material.uniforms);
+  group.userData.labelMaterial = labelMaterial;
+  for (const wantBase of [false, true]) {
+    const lm = makeLabelMesh(inst, labelMaterial, j => isBase(j) === wantBase);
+    if (!lm) continue;
+    lm.userData.isBase = wantBase;
+    lm.onBeforeRender = renderer => {
+      renderer.getDrawingBufferSize(material.uniforms.u_resolution.value);
+      material.uniforms.u_pxScale.value = renderer.getPixelRatio();
+    };
+    group.add(lm);
   }
   // One mesh per shape for own-colored markers, one for base-colored ones.
   function addShapeMeshes(s, shapeName) {
     for (const wantBase of [false, true]) {
       const idx = [];
-      for (let i = 0; i < n; i++) if (resolved.shape[i] === s && isBase(i) === wantBase && resolved.size[i] > 0) idx.push(i);
+      for (let i = 0; i < n; i++) if (inst.shape[i] === s && isBase(i) === wantBase && inst.size[i] > 0) idx.push(i);
       if (!idx.length) continue;
       const k = idx.length;
-      const center = new Float32Array(3 * k), color = new Float32Array(3 * k), size = new Float32Array(k);
+      const center = new Float32Array(3 * k), offset = new Float32Array(2 * k), color = new Float32Array(3 * k), size = new Float32Array(k);
       const index = new Float32Array(k), dim = new Float32Array(k), baseF = new Float32Array(k);
       idx.forEach((i, j) => {
-        center.set(pos.subarray(3 * i, 3 * i + 3), 3 * j);
-        color.set(resolved.color.subarray(3 * i, 3 * i + 3), 3 * j);
-        size[j] = resolved.size[i];
+        center.set(inst.center.subarray(3 * i, 3 * i + 3), 3 * j);
+        offset.set(inst.offset.subarray(2 * i, 2 * i + 2), 2 * j);
+        color.set(inst.color.subarray(3 * i, 3 * i + 3), 3 * j);
+        size[j] = inst.size[i];
         index[j] = i;
-        dim[j] = resolved.dim ? resolved.dim[i] : 0;
+        dim[j] = inst.dim[i];
         baseF[j] = wantBase ? 1 : 0;
       });
       const g = new THREE.InstancedBufferGeometry();
@@ -253,6 +385,7 @@ export function makeMarkerGroup(set, resolved, materials = null, linkResolved = 
       g.setAttribute('position', b.attributes.position);
       g.setAttribute('normal', b.attributes.normal);
       g.setAttribute('iCenter', new THREE.InstancedBufferAttribute(center, 3));
+      g.setAttribute('iOffset', new THREE.InstancedBufferAttribute(offset, 2));
       g.setAttribute('iColor', new THREE.InstancedBufferAttribute(color, 3));
       g.setAttribute('iSize', new THREE.InstancedBufferAttribute(size, 1));
       g.setAttribute('iIndex', new THREE.InstancedBufferAttribute(index, 1));
@@ -261,7 +394,7 @@ export function makeMarkerGroup(set, resolved, materials = null, linkResolved = 
       g.instanceCount = k;
       // Glyphs are placed in the shader, so three's own bounds (from the
       // unit glyph at the origin) would cull them wrongly.
-      g.boundingSphere = markerBoundingSphere(pos);
+      g.boundingSphere = markerBoundingSphere(inst.center);
       const mesh = new THREE.Mesh(g, wantBase ? baseMaterial : material);
       mesh.frustumCulled = false;
       mesh.userData.markerIndex = Int32Array.from(idx);
@@ -277,7 +410,16 @@ export function makeMarkerGroup(set, resolved, materials = null, linkResolved = 
   return group;
 }
 
-// Which marker (index in its file) is drawn as hovered; -1 for none.
+// One drawn marker per row (resolveMarkerStyle's arrays as they are).
+function rowInstances(set, resolved) {
+  const n = set.markers.n, pos = set.markers.pos, rowInst = new Int32Array(n), members = [];
+  for (let i = 0; i < n; i++) { rowInst[i] = i; members.push(Int32Array.of(i)); }
+  const size = Float32Array.from(resolved.size, (s, i) => (Number.isFinite(pos[3 * i]) ? s : 0));
+  return { n, center: pos, offset: new Float32Array(2 * n), color: resolved.color, shape: resolved.shape, size,
+           base: resolved.base || new Uint8Array(n).fill(1), dim: resolved.dim || new Uint8Array(n), count: new Uint32Array(n).fill(1), members, rowInst, cut: 0 };
+}
+
+// Which drawn marker (index in group's markers as drawn) is hovered; -1 for none.
 export function setMarkerHover(group, index) {
   group.userData.material.uniforms.u_hover.value = index == null ? -1 : index;
 }
@@ -297,6 +439,7 @@ export function setMarkerDisplay(group, { sizeScale = 1, opacity = 1 } = {}) {
     bm.needsUpdate = true;
   }
   for (const mesh of group.children) if (mesh.userData.isBase) mesh.visible = opacity > 0.004;
+  if (group.userData.labelMaterial) group.userData.labelMaterial.uniforms.u_sizeScale.value = sizeScale;
 }
 
 export function disposeMarkerGroup(group, keepMaterial = false) {
@@ -309,12 +452,12 @@ export function disposeMarkerGroup(group, keepMaterial = false) {
     mesh.geometry.index = null;
     mesh.geometry.dispose();
   }
-  if (!keepMaterial) { group.userData.material.dispose(); group.userData.baseMaterial.dispose(); if (group.userData.linkMaterial) group.userData.linkMaterial.dispose(); }
+  if (!keepMaterial) { group.userData.material.dispose(); group.userData.baseMaterial.dispose(); if (group.userData.linkMaterial) group.userData.linkMaterial.dispose(); if (group.userData.labelMaterial) group.userData.labelMaterial.dispose(); }
 }
 
 export function markerBoundingSphere(pos) {
   const box = new THREE.Box3();
   const v = new THREE.Vector3();
-  for (let i = 0; i < pos.length; i += 3) box.expandByPoint(v.set(pos[i], pos[i + 1], pos[i + 2]));
+  for (let i = 0; i < pos.length; i += 3) if (Number.isFinite(pos[i]) && Number.isFinite(pos[i + 1]) && Number.isFinite(pos[i + 2])) box.expandByPoint(v.set(pos[i], pos[i + 1], pos[i + 2]));
   return box.isEmpty() ? new THREE.Sphere() : box.getBoundingSphere(new THREE.Sphere());
 }

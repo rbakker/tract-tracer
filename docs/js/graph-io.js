@@ -214,11 +214,26 @@ export async function readPackage(obj, { name = 'graph', getText = async () => n
   for (const t of tables.values()) {
     const g = t.geometry;
     if (!g) continue;
-    if (g.point) {
-      if (!Array.isArray(g.point) || g.point.length !== 3) fail(`table "${t.name}": geometry.point must name the 3 columns of the position`);
-      for (const c of g.point) if (!t.col.has(c)) fail(`table "${t.name}": geometry.point column "${c}" is missing`);
+    const refs = placeRefsOf(g);
+    if (g.point || refs) {
+      if (g.point) {
+        if (!Array.isArray(g.point) || g.point.length !== 3) fail(`table "${t.name}": geometry.point must name the 3 columns of the position`);
+        for (const c of g.point) if (!t.col.has(c)) fail(`table "${t.name}": geometry.point column "${c}" is missing`);
+      }
       if (g.coordinate_system != null && !['RAS', 'LPS'].includes(g.coordinate_system)) fail(`table "${t.name}": coordinate_system must be "RAS" or "LPS"`);
       if (g.units != null && g.units !== 'mm') fail(`table "${t.name}": units must be "mm"`);
+      // geometry.region on a point table: the position of a row without a
+      // point, from the region it refers to (the first reference with a value)
+      if (refs) t.placeRefs = refs.map((r, k) => {
+        if (!r || typeof r !== 'object' || r.fields == null) fail(`table "${t.name}": geometry.region[${k}] needs "fields" (the columns of one of the table's foreignKeys)`);
+        const f = [].concat(r.fields).map(String);
+        const fk = t.foreignKeys.find(x => x.fields.join('\u0000') === f.join('\u0000') && (!r.resource || x.target.name === r.resource));
+        if (!fk) fail(`table "${t.name}": geometry.region: ${f.join(', ')} is not a foreignKey of the table${r.resource ? ` into "${r.resource}"` : ''}`);
+        if (!fk.target.geometry || !isRegionGeometry(fk.target.geometry.region)) fail(`table "${t.name}": geometry.region: "${fk.target.name}" is not a region table (a table with geometry.region { volume, index })`);
+        return { fields: f, fk, target: fk.target };
+      });
+      if (g.hemisphere != null && !t.col.has(g.hemisphere)) fail(`table "${t.name}": geometry.hemisphere "${g.hemisphere}" is not a column`);
+      if (g.default_hemisphere != null && !['L', 'R'].includes(g.default_hemisphere)) fail(`table "${t.name}": geometry.default_hemisphere must be "L" or "R"`);
     } else if (g.region) {
       if (!g.region.index || !t.col.has(g.region.index)) fail(`table "${t.name}": geometry.region.index must name a column`);
       if (g.region.volume && !files.has(g.region.volume)) warnings.push(`table "${t.name}": its label volume "${g.region.volume}" is not a resource of the package`);
@@ -226,6 +241,26 @@ export async function readPackage(obj, { name = 'graph', getText = async () => n
   }
   return { meta: attributionOf(obj), name: typeof obj.name === 'string' ? obj.name : name, title: typeof obj.title === 'string' && obj.title ? obj.title : (typeof obj.name === 'string' ? obj.name : name),
            description: typeof obj.description === 'string' ? obj.description : '', profile: obj.$schema || null, tables, files, warnings, view: obj.view || null, raw: obj };
+}
+
+// geometry.region: on a region table the regions of a label volume
+// ({ volume, index }); on a point table one or more references to region
+// tables ({ fields, resource } or a list of them), placing its rows that
+// have no point.
+const isRegionGeometry = r => !!r && typeof r === 'object' && !Array.isArray(r) && r.fields == null;
+const placeRefsOf = g => (g.region == null || isRegionGeometry(g.region) ? null : [].concat(g.region));
+// a hemisphere value → 'L' / 'R' / null (unknown)
+function sideOf(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().toLowerCase();
+  return t === 'l' || t === 'left' ? 'L' : t === 'r' || t === 'right' ? 'R' : null;
+}
+// A region's level: 1 for a top-level region, 2 for its children, …
+function regionLevels(table) {
+  const self = table.foreignKeys.find(fk => fk.target === table);
+  const lv = new Int32Array(table.n);
+  for (let i = 0; i < table.n; i++) { let k = 1, p = self ? self.rows[i] : -1; while (p >= 0 && k <= table.n) { k++; p = self.rows[p]; } lv[i] = k; }
+  return lv;
 }
 
 // ── to the drawing ─────────────────────────────────────────
@@ -276,15 +311,33 @@ export function linkTablesOf(pkg, table) {
 //    links: { n, from, to, values: { field: { both | fwd | bwd } } },
 //    style: { markers, links } }
 export function pointSet(pkg, table) {
-  const g = table.geometry.point ? table.geometry : null;
+  const g = table.geometry && (table.geometry.point || table.placeRefs) ? table.geometry : null;
   if (!g) fail(`table "${table.name}" has no point geometry`);
   const n = table.n, flip = g.coordinate_system === 'LPS' ? -1 : 1;
-  const [cx, cy, cz] = g.point.map(c => table.col.get(c));
-  const pos = new Float32Array(3 * n);
+  // Where each row is: at its point when all three values are there; else
+  // in the region of its first reference with a value (the position comes
+  // later, from the label volume: NaN until then); else nowhere (not drawn).
+  const P = g.point ? g.point.map(c => table.col.get(c)) : null;
+  const refs = table.placeRefs || null;
+  const pos = new Float32Array(3 * n).fill(NaN);
+  const kind = new Uint8Array(n);                     // 0: not placed, 1: point, 2: region
+  const refK = new Int8Array(n).fill(-1), refRow = new Int32Array(n).fill(-1);
+  const side = new Uint8Array(n).fill(2), sideKnown = new Uint8Array(n);   // side 0 L, 1 R, 2 either
+  const hcol = g.hemisphere ? table.col.get(g.hemisphere) : null, defSide = g.default_hemisphere === 'R' ? 1 : 0;
   for (let i = 0; i < n; i++) {
-    if (![cx[i], cy[i], cz[i]].every(isNum)) fail(`table "${table.name}": row ${i + 1} needs numeric ${g.point.join(', ')}`);
-    pos[3 * i] = flip * cx[i]; pos[3 * i + 1] = flip * cy[i]; pos[3 * i + 2] = cz[i];
+    if (P) {
+      const v = [P[0][i], P[1][i], P[2][i]];
+      if (v.every(isNum)) { pos[3 * i] = flip * v[0]; pos[3 * i + 1] = flip * v[1]; pos[3 * i + 2] = v[2]; kind[i] = 1; }
+      else if (v.some(x => x != null && !isNum(x))) fail(`table "${table.name}": row ${i + 1}: ${g.point.join(', ')} must be numbers`);
+    }
+    if (!kind[i] && refs) for (let k = 0; k < refs.length; k++) {
+      const j = refs[k].fk.rows[i];
+      if (j >= 0) { kind[i] = 2; refK[i] = k; refRow[i] = j; break; }
+    }
+    if (hcol) { const s = sideOf(hcol[i]); sideKnown[i] = s ? 1 : 0; side[i] = s ? (s === 'R' ? 1 : 0) : defSide; }
   }
+  const counts = { point: 0, region: 0, none: 0 };
+  for (let i = 0; i < n; i++) counts[kind[i] === 1 ? 'point' : kind[i] === 2 ? 'region' : 'none']++;
   const ids = table.keys ? table.keys.slice() : Array.from({ length: n }, (_, i) => String(i + 1));
   const index = new Map(ids.map((k, i) => [k, i]));
   const props = new Map(), values = {}, warnings = [...table.warnings];
@@ -297,6 +350,22 @@ export function pointSet(pkg, table) {
     props.set(name, p);
     values[name] = columnValues(p, table.col.get(name), `table "${table.name}"`);
   }
+  // read-only fields (ours): how each row is placed, for styles and filters
+  const readOnly = (name, p, vals) => {
+    if (props.has(name)) { warnings.push(`table "${table.name}": a column "${name}" hides the read-only field of that name`); return; }
+    props.set(name, { name, unit: '', declared: true, readOnly: true, ...p });
+    values[name] = p.type === 'categorical' ? vals : Float64Array.from(vals);
+  };
+  const cat = (...vs) => ({ type: 'categorical', ordered: false, legend: vs.map(v => ({ value: v, name: v, color: null, shape: null, size: null })) });
+  if (refs) {
+    readOnly('placement', { ...cat('point', 'region'), description: 'how the row is placed: at its point, or in its region' },
+             Array.from(kind, k => (k === 1 ? 'point' : k === 2 ? 'region' : null)));
+    const levels = refs.map(r => regionLevels(r.target));
+    readOnly('region_level', { type: 'integer', description: 'the level of the region a row is placed in (1: top level); none for a row placed at its point' },
+             Array.from(kind, (k, i) => (k === 2 ? levels[refK[i]][refRow[i]] : NaN)));
+  }
+  if (hcol) readOnly('side_known', { ...cat('yes', 'no'), description: `whether "${g.hemisphere}" gives the side (no: drawn on the default side, ${defSide ? 'R' : 'L'})` },
+                     Array.from(sideKnown, (k, i) => (kind[i] === 2 ? (k ? 'yes' : 'no') : null)));
   // each row's own color
   let rowColor = null;
   if (style.color_column && table.col.has(style.color_column)) {
@@ -336,7 +405,8 @@ export function pointSet(pkg, table) {
   return {
     name: table.title && table.title !== table.name ? table.title : (pointTables(pkg).length > 1 ? pkg.title + ' · ' + table.name : pkg.title),
     space: g.space || null, coordinateSystem: g.coordinate_system || 'RAS', props, warnings,
-    markers: { n, ids, index, pos, values, rowColor },
+    markers: { n, ids, index, pos, values, rowColor,
+               place: { kind, refK, refRow, side, sideKnown, refs: refs || [], counts } },
     links: { n: m, from, to, values: lv },
     style: { markers: { ...style }, links: { ...((lts[0] && lts[0].table.style) || {}) } },
     table, linkTables: lts.map(l => l.table),
@@ -344,8 +414,8 @@ export function pointSet(pkg, table) {
 }
 
 // The point tables of a package, in order.
-export function pointTables(pkg) { return [...pkg.tables.values()].filter(t => t.geometry && t.geometry.point); }
-export function regionTables(pkg) { return [...pkg.tables.values()].filter(t => t.geometry && t.geometry.region); }
+export function pointTables(pkg) { return [...pkg.tables.values()].filter(t => t.geometry && (t.geometry.point || t.placeRefs)); }
+export function regionTables(pkg) { return [...pkg.tables.values()].filter(t => t.geometry && !t.geometry.point && !t.placeRefs && isRegionGeometry(t.geometry.region)); }
 
 // ── region tables → a lookup table with a hierarchy ─────────────────────
 // A region table (geometry.region) gives a label volume its names, colors

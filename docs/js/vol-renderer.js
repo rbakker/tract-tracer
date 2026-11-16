@@ -28,6 +28,7 @@ uniform vec2  u_window;
 uniform vec3  u_chColorH;
 uniform vec3  u_chColorV;
 uniform float u_wH;
+uniform float u_chOn;   // the coloured crosshair (and its edge marks): 0 off (setCrosshairOn)
 uniform float u_wV;
 uniform vec2  u_crosshair;
 uniform vec2  u_res;
@@ -136,8 +137,8 @@ void main(){
   }
 
   if (inVol && u_ovOn > 0.5) col = mix(col, u_ovColor, smoothstep(0.3, 0.7, texture(u_ov, tc).r) * 0.85);
-  col = mix(col, u_chColorH, clamp(chH + capH, 0.0, 1.0) * 0.9);
-  col = mix(col, u_chColorV, clamp(chV + capV, 0.0, 1.0) * 0.9);
+  col = mix(col, u_chColorH, clamp(chH + capH, 0.0, 1.0) * 0.9 * u_chOn);
+  col = mix(col, u_chColorV, clamp(chV + capV, 0.0, 1.0) * 0.9 * u_chOn);
 
   float dist = length(px - cp);
   float ring = (u_probeRadius < 0.0) ? 0.0 : smoothstep(1.5, 0.0, abs(dist - u_probeRadius));
@@ -265,6 +266,7 @@ export class VolRenderer {
   }
 
   setProbeRadius(px){ this._probeRadiusPx = px; }
+  setCrosshairOn(on){ this._chOn = !!on; }
 
   setWindow(wmin, wmax) { this._wmin=wmin; this._wmax=wmax; }
 
@@ -453,6 +455,7 @@ export class VolRenderer {
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorH'),chColorH);
     gl.uniform3fv(gl.getUniformLocation(this._prog,'u_chColorV'),chColorV);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_wH'), wH);
+    gl.uniform1f(gl.getUniformLocation(this._prog,'u_chOn'), this._chOn === false ? 0 : 1);
     gl.uniform1f(gl.getUniformLocation(this._prog,'u_wV'), wV);
     gl.bindVertexArray(this._quad);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

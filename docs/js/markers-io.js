@@ -267,3 +267,130 @@ export function resolveLinkStyle(set, st, colormap, markerResolved) {
   const opacity = isNum(st.opacity) ? Math.max(0, Math.min(1, st.opacity)) : 1;
   return { colorA, colorB, widthA, widthB, widthUnit: spec.unit, opacity };
 }
+
+// ── Rows sharing a place: drawn as one marker per color with their count ──
+// (graph-format.md, style "aggregate"). Rows at exactly the same position
+// form a spot (rows placed in one region and side always do); with
+// "overlap" (the default), spots closer than one marker width merge too —
+// single linkage, so zooming in splits them in the reverse order. Each spot
+// or merged spot is drawn as one marker per category (color, shape, and
+// dimmed or not), side by side around its center, with its count.
+export const AGGREGATE_MODES = ['overlap', 'spot', 'none'];
+
+// The spots of the drawn rows (size > 0, a finite position), and the
+// edges of their minimum spanning tree (by distance, ascending) — the
+// merge order. Recomputed only when the drawn rows change.
+export function markerSpots(set, resolved) {
+  const pos = set.markers.pos, n = set.markers.n, byKey = new Map(), spots = [];
+  for (let i = 0; i < n; i++) {
+    if (!(resolved.size[i] > 0)) continue;
+    const x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
+    if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) continue;
+    const key = x + ',' + y + ',' + z;
+    let s = byKey.get(key);
+    if (!s) { s = { x, y, z, rows: [] }; byKey.set(key, s); spots.push(s); }
+    s.rows.push(i);
+  }
+  // Prim, O(S²): a few thousand spots take some tens of milliseconds
+  const S = spots.length, inTree = new Uint8Array(S), dist = new Float64Array(S).fill(Infinity), from = new Int32Array(S).fill(-1);
+  const ea = new Int32Array(Math.max(0, S - 1)), eb = new Int32Array(Math.max(0, S - 1)), ew = new Float64Array(Math.max(0, S - 1));
+  let m = 0;
+  if (S) dist[0] = 0;
+  for (let it = 0; it < S; it++) {
+    let u = -1, best = Infinity;
+    for (let v = 0; v < S; v++) if (!inTree[v] && dist[v] < best) { best = dist[v]; u = v; }
+    if (u < 0) break;
+    inTree[u] = 1;
+    if (from[u] >= 0) { ea[m] = from[u]; eb[m] = u; ew[m] = best; m++; }
+    const a = spots[u];
+    for (let v = 0; v < S; v++) {
+      if (inTree[v]) continue;
+      const b = spots[v], d = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+      if (d < dist[v]) { dist[v] = d; from[v] = u; }
+    }
+  }
+  const order = Array.from({ length: m }, (_, k) => k).sort((p, q) => ew[p] - ew[q] || p - q);
+  return { spots, edges: { a: Int32Array.from(order, k => ea[k]), b: Int32Array.from(order, k => eb[k]), w: Float64Array.from(order, k => ew[k]) } };
+}
+
+// How many merge steps a distance threshold allows (edges shorter than it).
+export function mergeCut(spots, threshold) {
+  const w = spots.edges.w;
+  let lo = 0, hi = w.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (w[mid] < threshold) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+
+// Hexagonal spiral: the first k positions (unit spacing), centered.
+function hexLayout(k) {
+  const out = [[0, 0]];
+  const dirs = [[1, 0], [0.5, Math.sqrt(3) / 2], [-0.5, Math.sqrt(3) / 2], [-1, 0], [-0.5, -Math.sqrt(3) / 2], [0.5, -Math.sqrt(3) / 2]];
+  for (let ring = 1; out.length < k; ring++) {
+    let x = ring, y = 0;   // from the right (two side by side: left and right), around counter-clockwise
+    for (let side = 0; side < 6 && out.length < k; side++)
+      for (let s = 0; s < ring && out.length < k; s++) { out.push([x, y]); const d = dirs[(side + 2) % 6]; x += d[0]; y += d[1]; }
+  }
+  out.length = k;
+  const cx = out.reduce((a, p) => a + p[0], 0) / k, cy = out.reduce((a, p) => a + p[1], 0) / k;
+  return out.map(([x, y]) => [x - cx, y - cy]);
+}
+
+/**
+ * The markers as drawn: one per row ("none"), or per spot or merged spot
+ * and category. → { n, center Float32Array(3n), offset Float32Array(2n)
+ * (side by side, facing the camera, in the size unit), color, shape, size,
+ * base, dim, count Uint32Array, members [Int32Array], rowInst Int32Array
+ * (row → its marker, −1: not drawn), cut }.
+ * @param spots - markerSpots(set, resolved)
+ * @param o.mode - 'overlap' | 'spot' | 'none'
+ * @param o.mergeMm - for 'overlap': the distance below which spots merge (one marker width, in mm)
+ * @param o.rankOf - row → its category's place in the legend (the order around a spot)
+ */
+export function markerInstances(set, resolved, spots, { mode = 'overlap', mergeMm = 0, rankOf = null } = {}) {
+  const n = set.markers.n, pos = set.markers.pos, S = spots.spots.length;
+  const groups = [];   // [{ rows: [...] }] per cluster
+  let cut = 0;
+  if (mode === 'none') { for (const s of spots.spots) for (const r of s.rows) groups.push([r]); }
+  else {
+    cut = mode === 'overlap' ? mergeCut(spots, mergeMm) : 0;
+    const parent = Int32Array.from({ length: S }, (_, i) => i);
+    const find = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    for (let e = 0; e < cut; e++) { const a = find(spots.edges.a[e]), b = find(spots.edges.b[e]); if (a !== b) parent[Math.max(a, b)] = Math.min(a, b); }
+    const byRoot = new Map();
+    spots.spots.forEach((s, i) => { const r = find(i); if (!byRoot.has(r)) { byRoot.set(r, []); groups.push(byRoot.get(r)); } byRoot.get(r).push(...s.rows); });
+  }
+  const insts = [];
+  for (const rows of groups) {
+    rows.sort((a, b) => a - b);
+    let cx = 0, cy = 0, cz = 0, maxSize = 0;
+    for (const r of rows) { cx += pos[3 * r]; cy += pos[3 * r + 1]; cz += pos[3 * r + 2]; if (resolved.size[r] > maxSize) maxSize = resolved.size[r]; }
+    cx /= rows.length; cy /= rows.length; cz /= rows.length;
+    // per category: color, shape, base, dimmed
+    const cats = new Map();
+    for (const r of rows) {
+      const key = resolved.color[3 * r] + ',' + resolved.color[3 * r + 1] + ',' + resolved.color[3 * r + 2] + '|' + resolved.shape[r] + '|' + (resolved.base ? resolved.base[r] : 1) + '|' + (resolved.dim ? resolved.dim[r] : 0);
+      if (!cats.has(key)) cats.set(key, []);
+      cats.get(key).push(r);
+    }
+    const list = [...cats.values()].sort((p, q) => (rankOf ? rankOf(p[0]) - rankOf(q[0]) : 0) || p[0] - q[0]);
+    const lay = hexLayout(list.length), step = 1.15 * maxSize;
+    list.forEach((members, k) => {
+      let size = 0;
+      for (const r of members) if (resolved.size[r] > size) size = resolved.size[r];
+      insts.push({ c: [cx, cy, cz], o: [lay[k][0] * step, lay[k][1] * step], r0: members[0], size, members: Int32Array.from(members) });
+    });
+  }
+  const k = insts.length;
+  const out = { n: k, center: new Float32Array(3 * k), offset: new Float32Array(2 * k), color: new Float32Array(3 * k), shape: new Uint8Array(k),
+                size: new Float32Array(k), base: new Uint8Array(k), dim: new Uint8Array(k), count: new Uint32Array(k), members: [],
+                rowInst: new Int32Array(n).fill(-1), cut };
+  insts.forEach((t, j) => {
+    out.center.set(t.c, 3 * j); out.offset.set(t.o, 2 * j);
+    out.color.set(resolved.color.subarray(3 * t.r0, 3 * t.r0 + 3), 3 * j);
+    out.shape[j] = resolved.shape[t.r0]; out.size[j] = t.size;
+    out.base[j] = resolved.base ? resolved.base[t.r0] : 1; out.dim[j] = resolved.dim ? resolved.dim[t.r0] : 0;
+    out.count[j] = t.members.length; out.members.push(t.members);
+    for (const r of t.members) out.rowInst[r] = j;
+  });
+  return out;
+}

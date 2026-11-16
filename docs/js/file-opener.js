@@ -21,14 +21,16 @@
 // structure) rather than a one-shot function.
 
 import { unzipSync } from 'fflate';
-import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME, isManifestName } from './bundle-io.js';
+import { detectBundleDrop, resolveBundleColors, MANIFEST_FILENAME, isManifestName, isMarkersFileName } from './bundle-io.js';
 import { sniffDqzKind, readDqzChildHeader } from './tract-io.js';
 import { looksLikeGraphText } from './graph-io.js';
 import { isBidsLutHeader } from './lut-io.js';
+import { pathOf, dirOf, withPath, findFile } from './file-paths.js';
 
-const TRACT_EXTS = ['.tck', '.dqz', '.trk', '.tt'];   // .tt: DSI Studio (also .tt.gz)
+const TRACT_EXTS = ['.tck', '.dqz', '.trk', '.tt', '.trx'];   // .tt: DSI Studio (also .tt.gz)
 const LUT_EXTS    = ['.txt', '.lut'];
 const GRAD_EXTS   = ['.bval', '.bvec'];   // FSL gradient table of a 4D volume (paired by name)
+const PHOTO_EXTS  = ['.jpg', '.jpeg', '.png'];   // a photo (TOOLS › Photo to surface)
 
 // Extensions with a compound ("double") suffix, e.g. "brain.nii.gz" -> base
 // "brain" rather than "brain.nii". Extend as needed for other compound
@@ -75,14 +77,14 @@ export class MultiFileOpener {
   // used to load fine as a loose drop still does inside a zip.
 
   static classify(files) {
-    const byName = new Map(files.map(f => [f.name, f]));
+    const byPath = new Map(files.map(f => [pathOf(f), f]));
 
     // Pass 1: match every non-json file against the json files actually
     // present, using the "<fullname>.json" or "<fullname-minus-its-
-    // (double)-extension>.json" convention. Iterating targets (not json
+    // (double)-extension>.json" convention — in the file's own folder. Iterating targets (not json
     // files) means we only ever match a sidecar that's genuinely paired to
     // something in this drop.
-    const sidecarForTarget = new Map(); // target file.name -> sidecar File
+    const sidecarForTarget = new Map(); // target File -> sidecar File
     //const consumedSidecars = new Set(); // json filenames already claimed
 
     const dataFiles = [];
@@ -92,14 +94,17 @@ export class MultiFileOpener {
       // .json skip below before, so a manifest's "volumes" section was
       // never read.
       if (isManifestName(name)) { dataFiles.push(file); continue; }
+      if (/\.photo\.json$/i.test(name)) { dataFiles.push(file); continue; } // a photo's registration (classified below)
       if (name.toLowerCase().endsWith('.json')) continue; // json files are targets' sidecars, not targets themselves
 
       for (const cand of baseNameCandidates(name)) {
         const jsonName = cand + '.json';
         if (isManifestName(jsonName)) continue; // never treat the manifest as a sidecar match
-        const jsonFile = byName.get(jsonName);
+        if (isMarkersFileName(jsonName)) continue; // nor a markers file
+        if (/\.photo\.json$/i.test(jsonName)) continue; // nor a photo's registration (tools/photo.js)
+        const jsonFile = byPath.get(dirOf(pathOf(file)) + jsonName);
         if (jsonFile) {
-          sidecarForTarget.set(name, jsonFile);
+          sidecarForTarget.set(file, jsonFile);
           //consumedSidecars.add(jsonFile.name);
           break; // most-specific candidate wins
         }
@@ -117,9 +122,10 @@ export class MultiFileOpener {
         classified.push({ file, kind: 'manifest' });
         continue;
       }
+      if (/\.photo\.json$/i.test(name)) { classified.push({ file, kind: 'photoJson' }); continue; }
 
       const ext = extOf(name);
-      const sidecar = sidecarForTarget.get(name) || null;
+      const sidecar = sidecarForTarget.get(file) || null;
 
       if (ext === '.webm') {
         // Only .webm needs the merged combo, since parseWebmCodecs' signature
@@ -133,6 +139,7 @@ export class MultiFileOpener {
       if (TRACT_EXTS.includes(ext)) { classified.push({ file, kind: 'tract', sidecar }); continue; }
       if (LUT_EXTS.includes(ext))   { classified.push({ file, kind: 'lut', sidecar });   continue; }
       if (GRAD_EXTS.includes(ext))  { classified.push({ file, kind: 'grad' });           continue; }
+      if (PHOTO_EXTS.includes(ext)) { classified.push({ file, kind: 'photo' });          continue; }
       if (ext === '.csv' || ext === '.tsv') { classified.push({ file, kind: 'table' }); continue; }   // a graph package's table (read through its package)
       classified.push({ file, kind: 'anat', sidecar }); // nifti/mif/etc., sidecar attached if one was found
     }
@@ -150,11 +157,12 @@ export class MultiFileOpener {
     const files = [];
     for (const [name, bytes] of Object.entries(entries)) {
       // A zipped-up folder (or one a mail/share service re-packed: sub-X/…
-      // next to __MACOSX/…) gives paths with folders: the folders are
-      // dropped, the macOS extras skipped.
+      // next to __MACOSX/…) gives paths with folders: the name is the
+      // file's own, its path kept (relPath: two files of the same name in
+      // different folders stay apart — file-paths.js); the macOS extras skipped.
       const base = name.split('/').pop();
       if (!base || isJunkPath(name)) continue; // directory entry, or not data
-      files.push(new File([bytes], base));
+      files.push(withPath(new File([bytes], base), name));
     }
     return files;
   }
@@ -183,10 +191,11 @@ export class MultiFileOpener {
   // the drop declares it a table ("type": "table" or a schema): then it is re-labelled kind 'lut'.
   static async separateBidsLuts(entries, markers) {
     const tables = new Set();
+    const tsvs = entries.filter(e => e.kind === 'table').map(e => e.file);
     for (const m of markers || []) for (const r of (m.json && m.json.resources) || [])
-      if (r && typeof r.path === 'string' && (r.type === 'table' || r.schema)) tables.add(r.path.split('/').pop());
+      if (r && typeof r.path === 'string' && (r.type === 'table' || r.schema)) { const f = findFile(tsvs, r.path, m.file); if (f) tables.add(f); }
     for (const e of entries) {
-      if (e.kind !== 'table' || extOf(e.file.name) !== '.tsv' || tables.has(e.file.name)) continue;
+      if (e.kind !== 'table' || extOf(e.file.name) !== '.tsv' || tables.has(e.file)) continue;
       const head = await e.file.slice(0, 4096).text();
       if (isBidsLutHeader(head.split(/\r?\n/)[0])) e.kind = 'lut';
     }
@@ -197,15 +206,16 @@ export class MultiFileOpener {
   // name — [{file, json, error, files}] (files: the whole drop, for the CSV
   // tables a package may name). A .json that isn't one (a sidecar,
   // index.json) is left alone. Recognized from the raw text, so a file with
-  // a JSON syntax error is still reported rather than silently ignored.
+  // a JSON syntax error is still reported rather than silently ignored;
+  // a *.markers.json is always taken as one (and its errors reported).
   static async findMarkerFiles(files) {
     const out = [];
     for (const file of files) {
       const lower = file.name.toLowerCase();
-      if (!lower.endsWith('.json') || lower === MANIFEST_FILENAME) continue;   // (datapackage.json: also read for its tables)
+      if (!lower.endsWith('.json') || lower === MANIFEST_FILENAME || lower.endsWith('.photo.json')) continue;   // (datapackage.json: also read for its tables)
       if (file.size > 256 * 1024 * 1024) continue;
       const text = await file.text();
-      if (!looksLikeGraphText(text)) continue;
+      if (!isMarkersFileName(file.name) && !looksLikeGraphText(text)) continue;
       try { out.push({ file, json: JSON.parse(text), error: null, files }); }
       catch (e) { out.push({ file, json: null, error: 'not valid JSON: ' + ((e && e.message) || e), files }); }
     }

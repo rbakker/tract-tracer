@@ -1,14 +1,12 @@
 // ── Region outlines in the 2D sections ───────────────────────────────────
 // With a label volume in memory (index.html's "label volume in memory"),
-// each set of sections (probe, cursor) outlines one region, in all three
-// of its sections where that region is cut:
-//   · while the mouse is over one of the set's sections: the region under
-//     the mouse (nothing over background), named in a small tag next to it;
-//   · otherwise: the region at the set's data cursor — the one its badge
-//     names. A click or tap moves the data cursor, so the clicked region
-//     stays outlined.
-// A set shows its outlines only once all three of its sections are traced;
-// the two sets are independent.
+// each set of sections (probe, cursor) fills the regions shown in 3D, in
+// all three of its sections where they are cut (once all three are traced),
+// and names the region under the mouse in a small tag next to it — the
+// name only, no outline (outlined too while the region probe is on, and
+// the region probe's picks outlined all along: getOutlined) (a marker's name over a marker). (The menu tells
+// the rest.) Every
+// region's outline is still traced: the SVG screenshot's layers.
 //
 // Per section (6: probe and cursor × sag/cor/axi) the label volume is cut
 // along the section plane at its own voxel size — what that section would
@@ -64,8 +62,15 @@ export class SectionOutlines {
   // canvases: { src: { sag, cor, axi }, tgt: { … } } section canvases
   // getFilled(): Map(label → fill opacity) — regions filled in every
   // section (the regions shown in 3D), or null
-  constructor({ vr, getRef, colorOf, nameOf, getCursor, getFilled, canvases }) {
-    this.vr = vr; this.getRef = getRef; this.colorOf = colorOf;
+  // nameAt(tag, pk, x, y): a name for what else is at canvas point (x, y)
+  // — a marker, say — shown instead of the region's, or null
+  // outlineHover(): true — the hovered region outlined too (the region probe)
+  // getOutlined(tag): Map(label → 'add' | 'erase') — regions outlined in a
+  // set's sections (the region probe's picks: solid, erased ones dashed), or null
+  constructor({ vr, getRef, colorOf, nameOf, getCursor, getFilled, nameAt, outlineHover, getOutlined, canvases }) {
+    this.vr = vr; this.getRef = getRef; this.colorOf = colorOf; this.nameAt = nameAt || null;
+    this.outlineHover = outlineHover || (() => false);
+    this.getOutlined = getOutlined || (() => null);
     this.getFilled = getFilled || (() => null);
     this.nameOf = nameOf || (v => 'label ' + v); this.getCursor = getCursor || (() => null);
     this.panels = new Map();
@@ -98,13 +103,14 @@ export class SectionOutlines {
     svg.style.cssText = 'position:absolute;pointer-events:none;overflow:hidden;display:none;';
     const g = document.createElementNS(NS, 'g');
     const fill = document.createElementNS(NS, 'g');   // filled regions, under the outline
+    const picked = document.createElementNS(NS, 'g'); // outlined regions (getOutlined), under the hovered one
     const under = document.createElementNS(NS, 'path'), over = document.createElementNS(NS, 'path');
     for (const p of [under, over]) { p.setAttribute('fill', 'none'); p.setAttribute('vector-effect', 'non-scaling-stroke'); p.setAttribute('stroke-linejoin', 'round'); }
     under.setAttribute('stroke', 'rgba(0,0,0,0.75)'); under.setAttribute('stroke-width', '3.5');
     over.setAttribute('stroke-width', '1.6');
-    g.append(fill, under, over); svg.appendChild(g);
+    g.append(fill, picked, under, over); svg.appendChild(g);
     canvas.insertAdjacentElement('afterend', svg);
-    const P = { id, tag, pk, canvas, svg, g, fill, under, over, key: null, geo: null, paths: null, label: 0, fillKey: '', timer: null };
+    const P = { id, tag, pk, canvas, svg, g, fill, picked, under, over, key: null, geo: null, paths: null, label: 0, fillKey: '', pickKey: '', timer: null };
     this.panels.set(id, P);
     // hover (mouse, pen): the region under the pointer. Touch has no hover:
     // a tap moves the data cursor, whose region is outlined anyway.
@@ -272,17 +278,19 @@ export class SectionOutlines {
     return regionOf(ref, ref.raw[x + nx * (y + ny * z)]);
   }
 
-  // Outlines one region in all three sections of a set — the hovered one,
-  // else the data cursor's — once all three are traced.
+  // Fills the regions shown in 3D in a set's sections (once all three are
+  // traced), and names the region under the mouse in a small tag next to
+  // it — the name only, no outline (hovering stays quiet).
   _showSide(tag) {
     const panels = [...this.panels.values()].filter(P => P.tag === tag);
     const h = this.hover[tag];
-    const label = h ? (h.P.geo ? this._labelAt(h.P, h.point[0], h.point[1]) : 0) : this._cursorLabel(tag);
+    const label = h && h.P.geo ? this._labelAt(h.P, h.point[0], h.point[1]) : 0;
     const ready = panels.every(P => P.geo && P.paths);
     const filled = this.getFilled();
-    let shown = false;
+    const outline = label && this.outlineHover() ? label : 0;
+    const outlined = this.getOutlined(tag);
     for (const P of panels) {
-      const d = ready && label ? P.paths.get(label) : null;
+      const d = ready && outline ? P.paths.get(outline) : null;
       // the filled regions (each section: those it cuts)
       const fills = ready && filled ? [...filled].filter(([v]) => P.paths.has(v)) : [];
       const fk = fills.map(([v, a]) => v + ':' + a + ':' + this.colorOf(v)).join(',') + '|' + P.key;
@@ -295,26 +303,42 @@ export class SectionOutlines {
           return f;
         }));
       }
-      if (!d && !fills.length) { P.svg.style.display = 'none'; P.label = 0; continue; }
-      if (!d) { P.under.setAttribute('d', ''); P.over.setAttribute('d', ''); P.label = 0; }
-      else if (label !== P.label) {
+      if (!d) { if (P.label) { P.under.setAttribute('d', ''); P.over.setAttribute('d', ''); P.label = 0; } }
+      else if (outline !== P.label) {
         P.under.setAttribute('d', d); P.over.setAttribute('d', d);
-        P.over.setAttribute('stroke', this.colorOf(label) || '#fff');
-        P.label = label;
+        P.over.setAttribute('stroke', this.colorOf(outline) || '#fff');
+        P.label = outline;
       }
+      // the outlined regions (each section: those it cuts)
+      const outs = ready && outlined ? [...outlined].filter(([v]) => P.paths.has(v)) : [];
+      const ok = outs.map(([v, st]) => v + ':' + st + ':' + this.colorOf(v)).join(',') + '|' + P.key;
+      if (ok !== P.pickKey) {
+        P.pickKey = ok;
+        const NS = 'http://www.w3.org/2000/svg';
+        P.picked.replaceChildren(...outs.flatMap(([v, st]) => [['rgba(0,0,0,0.75)', '3.5'], [this.colorOf(v) || '#fff', '1.6']].map(([col, w]) => {
+          const e = document.createElementNS(NS, 'path');
+          e.setAttribute('d', P.paths.get(v)); e.setAttribute('fill', 'none'); e.setAttribute('stroke', col); e.setAttribute('stroke-width', w);
+          e.setAttribute('vector-effect', 'non-scaling-stroke'); e.setAttribute('stroke-linejoin', 'round');
+          if (st === 'erase') e.setAttribute('stroke-dasharray', '5 4');
+          return e;
+        })));
+      }
+      if (!fills.length && !d && !outs.length) { P.svg.style.display = 'none'; continue; }
       this._place(P);
       P.svg.style.display = '';
-      if (d && h && P === h.P) shown = true;
     }
-    // the name next to the mouse, while the hovered region is outlined
-    if (shown) {
-      this.tag.textContent = this.nameOf(label);
+    // the name next to the mouse (of a marker there, else of the region)
+    const other = h && !this.quiet && this.nameAt ? this.nameAt(tag, h.P.pk, h.point[0], h.point[1]) : null;
+    if ((other || label) && !this.quiet) {
+      this.tag.textContent = other || this.nameOf(label);
       this.tag.style.left = (h.client[0] + 14) + 'px';
       this.tag.style.top = (h.client[1] + 14) + 'px';
       this.tag.style.display = '';
       this.tagSide = tag;
     } else if (this.tagSide === tag || !this.tagSide) { this.tag.style.display = 'none'; this.tagSide = null; }
   }
+  // No name tag while true (a menu is open over the sections).
+  setQuiet(q) { this.quiet = !!q; if (q) { this.tag.style.display = 'none'; this.tagSide = null; } }
 
   // For a screenshot: what this section shows of the regions now (the
   // filled regions and the outlined one) as a standalone SVG, w × h pixels
@@ -359,7 +383,9 @@ export class SectionOutlines {
     const fills = labels.map(v => region(v, 'fill="' + (this.colorOf(v) || '#fff') + '" stroke="none"', '-fill')).join('');
     let shown = '';
     if (P.svg.style.display !== 'none') {
-      const filled = [...P.fill.children].map(f => '<path d="' + f.getAttribute('d') + '" fill="' + f.getAttribute('fill') + '" fill-opacity="' + f.getAttribute('fill-opacity') + '"/>').join('');
+      const filled = [...P.fill.children].map(f => '<path d="' + f.getAttribute('d') + '" fill="' + f.getAttribute('fill') + '" fill-opacity="' + f.getAttribute('fill-opacity') + '"/>').join('')
+        + [...P.picked.children].map(f => '<path d="' + f.getAttribute('d') + '" fill="none" stroke="' + f.getAttribute('stroke') + '" stroke-width="' + w(+f.getAttribute('stroke-width')) + '" stroke-linejoin="round"'
+          + (f.getAttribute('stroke-dasharray') ? ' stroke-dasharray="' + f.getAttribute('stroke-dasharray').split(' ').map(x => w(+x)).join(' ') + '"' : '') + '/>').join('');
       const d = P.over.getAttribute('d');
       const line = d ? '<path d="' + d + '" fill="none" stroke="#000000" stroke-opacity="0.75" stroke-width="' + w(3.5) + '" stroke-linejoin="round"/>'
         + '<path d="' + d + '" fill="none" stroke="' + P.over.getAttribute('stroke') + '" stroke-width="' + w(1.6) + '" stroke-linejoin="round"><title>' + esc(this.nameOf(P.label)) + '</title></path>' : '';
@@ -370,7 +396,7 @@ export class SectionOutlines {
 
   // The label volume in memory changed (another one, or its colors / names).
   refresh() {
-    for (const P of this.panels.values()) { P.label = 0; P.fillKey = ''; }
+    for (const P of this.panels.values()) { P.label = 0; P.fillKey = ''; P.pickKey = ''; }
     this._showSide('src'); this._showSide('tgt');
   }
 }

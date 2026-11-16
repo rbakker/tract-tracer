@@ -112,6 +112,39 @@ void main() {
   gl_Position = clip;
 }`;
 
+// NEAREST: streamline points (THREE.Points; attributes: position, aPrev,
+// aNext — the points before and after it on its streamline — and aFlag: 1
+// its first point, 2 its last), drawn as a round dot only where the
+// distance to the section plane is smallest along the streamline, inside
+// the slab: one dot per piece of a streamline in the slab (a piece that
+// crosses the plane: at its point nearest the crossing). Ties go to the
+// earlier point.
+const NEAREST_VS = `
+attribute vec3 aPrev;
+attribute vec3 aNext;
+attribute float aFlag;
+uniform vec3  u_sliceNormal;
+uniform vec3  u_slicePt;
+uniform float u_slabHalf;
+uniform float u_dotPx;
+void main() {
+  float dc = abs(dot(position - u_slicePt, u_sliceNormal));
+  float dp = abs(dot(aPrev - u_slicePt, u_sliceNormal));
+  float dn = abs(dot(aNext - u_slicePt, u_sliceNormal));
+  bool first = mod(aFlag, 2.0) > 0.5, last = aFlag > 1.5;
+  if (dc > u_slabHalf || (!first && dc >= dp) || (!last && dc > dn)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = u_dotPx;
+}`;
+const NEAREST_FS = `
+precision highp float;
+uniform vec3 u_color;
+void main() {
+  vec2 q = gl_PointCoord - vec2(0.5);
+  if (dot(q, q) > 0.25) discard;   // (round)
+  gl_FragColor = vec4(u_color, 1.0);
+}`;
+
 const SLAB_FS = `
 precision highp float;
 varying vec3  vColor;
@@ -150,9 +183,36 @@ void main() {
   #endif
   #ifdef FAR_PASS
     if (d >= 0.0 || d < -u_slabHalf) discard;
-    col = col * 0.7;                      // far half: dimmed, and blended (opaque = alpha 1)
+    col = col * 0.8;                      // far half: dimmed, and blended (opaque = alpha 1)
   #endif
   gl_FragColor = vec4(col, alpha);
+}`;
+
+// A surface sheet (opts.sheet: the photo's patch of brain surface, see
+// index.html's photoSheet): its triangles within the slab, coloured by
+// their texture (transparent texels: not drawn), the far half dimmed as
+// the lines'. Opaque, under everything else.
+const SHEET_VS = `
+uniform vec3 u_sliceNormal;
+uniform vec3 u_slicePt;
+varying vec2 vUv;
+varying float vD;
+void main() {
+  vUv = uv;
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vD = dot(w.xyz - u_slicePt, u_sliceNormal);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const SHEET_FS = `
+uniform sampler2D u_tex;
+uniform float u_slabHalf;
+varying vec2 vUv;
+varying float vD;
+void main() {
+  if (abs(vD) > u_slabHalf) discard;
+  vec4 c = texture2D(u_tex, vUv);
+  if (c.a < 0.5) discard;
+  gl_FragColor = vec4(c.rgb * (vD < 0.0 ? 0.8 : 1.0), 1.0);
 }`;
 
 export class SlabRenderer {
@@ -166,6 +226,9 @@ export class SlabRenderer {
     this._matNear     = null;  this._matFar      = null;  this._matNearFaint = null;
     this._dmatSrcNear = null;  this._dmatSrcFar  = null;
     this._dmatTgtNear = null;  this._dmatTgtFar  = null;
+    this._dmatCtxNear = null;  this._dmatCtxFar  = null;
+    this._ctxNear = null; this._ctxFar = null; this._cachedCtxMesh = null;
+    this._nearestClones = new WeakMap();   // opts.crossMesh → its clone with the NEAREST material
 
     this._lineClones  = new WeakMap(); // ribbon mesh -> its pass meshes, see _linePasses
     this._dotsSrcNear = null;  this._dotsSrcFar  = null;
@@ -175,6 +238,24 @@ export class SlabRenderer {
     this._cachedTgtMesh = null;
 
     this._scene = new THREE.Scene();
+    this._sheetMat = null; this._sheetMesh = null;
+  }
+  // the sheet's mesh (one at a time), on its geometry, with its texture
+  _sheetPass(sheet, nDir, cursor, halfThickMm) {
+    if (!this._sheetMat) this._sheetMat = new THREE.ShaderMaterial({
+      vertexShader: SHEET_VS, fragmentShader: SHEET_FS, side: THREE.DoubleSide, depthTest: false, depthWrite: false, transparent: false,
+      uniforms: { u_sliceNormal: { value: new THREE.Vector3() }, u_slicePt: { value: new THREE.Vector3() }, u_slabHalf: { value: 1 }, u_tex: { value: null } },
+    });
+    if (!this._sheetMesh || this._sheetMesh.geometry !== sheet.geometry) {
+      this._sheetMesh = new THREE.Mesh(sheet.geometry, this._sheetMat);
+      this._sheetMesh.frustumCulled = false;
+    }
+    const u = this._sheetMat.uniforms;
+    u.u_sliceNormal.value.set(nDir[0], nDir[1], nDir[2]);
+    u.u_slicePt.value.set(cursor[0], cursor[1], cursor[2]);
+    u.u_slabHalf.value = halfThickMm;
+    u.u_tex.value = sheet.texture;
+    return this._sheetMesh;
   }
 
   _ensureRT(W, H) {
@@ -261,10 +342,26 @@ export class SlabRenderer {
     this._matNear     = lineMat({ NEAR_PASS: 1 });
     this._matFar      = lineMat({ FAR_PASS:  1 });
     this._matNearFaint = lineMat({ NEAR_PASS: 1, FAINT_PASS: 1 });
+    this._matNearest = new THREE.ShaderMaterial({
+      vertexShader: NEAREST_VS, fragmentShader: NEAREST_FS, depthWrite: false, depthTest: false, transparent: false,
+      uniforms: { u_sliceNormal: { value: new THREE.Vector3() }, u_slicePt: { value: new THREE.Vector3() },
+                  u_slabHalf: { value: 1 }, u_dotPx: { value: 2 }, u_color: { value: new THREE.Vector3(0.2, 0.5, 1) } },
+    });
     this._dmatSrcNear = dotMat({ NEAR_PASS: 1 });
     this._dmatSrcFar  = dotMat({ FAR_PASS:  1 });
     this._dmatTgtNear = dotMat({ NEAR_PASS: 1 });
     this._dmatTgtFar  = dotMat({ FAR_PASS:  1 });
+    this._dmatCtxNear = dotMat({ NEAR_PASS: 1 });
+    this._dmatCtxFar  = dotMat({ FAR_PASS:  1 });
+  }
+  // opts.ctxMesh: more dots, drawn first (under the others) in their own
+  // style (opts.ctxStyle) and size (opts.ctxPx) — the paint probe's ends
+  // still to paint.
+  _ensureCtxMeshes(mesh) {
+    if (this._cachedCtxMesh === mesh) return;
+    const mk = (mat) => { if (!mesh) return null; const m = mesh.clone(); m.geometry = mesh.geometry; m.material = mat; return m; };
+    this._ctxNear = mk(this._dmatCtxNear); this._ctxFar = mk(this._dmatCtxFar);
+    this._cachedCtxMesh = mesh;
   }
 
   invalidate(selMesh) {
@@ -273,6 +370,7 @@ export class SlabRenderer {
     this._dotsTgtNear = null; this._dotsTgtFar = null;
     this._cachedSrcMesh = null;
     this._cachedTgtMesh = null;
+    this._cachedCtxMesh = null;
   }
 
   // This renderer's three pass meshes (far, near, near-faint) for one
@@ -305,21 +403,25 @@ export class SlabRenderer {
     this._cachedTgtMesh = tgtMesh;
   }
 
-  // opts: { selMesh, lineMeshes, srcMesh, tgtMesh, slabMm, lineColor, srcColor, tgtColor, endsPx }
+  // opts: { selMesh, lineMeshes, srcMesh, tgtMesh, slabMm, lineColor, srcColor, tgtColor, endsPx, sheet }
+  // sheet: { geometry (position, uv, index), texture } — see SHEET_VS
   // lineMeshes (optional): the ribbon meshes to draw, e.g. a thinner
   // context sample plus the probe's highlighted lines (probe highlight
   // mode); default [selMesh]. They must share selMesh's materials
   // (uniforms and style textures are borrowed from it).
   render(canvas2d, planeKey, cursor, tag, vr, vox_mm, viewCentre, opts) {
     const { selMesh, srcMesh, tgtMesh } = opts;
-    if (!selMesh) return;
-    const lineMeshes = (opts.lineMeshes || [selMesh]).filter(Boolean);
+    const ctxMesh = opts.ctxMesh || null, crossMesh = opts.crossMesh || null;
+    const sheet = opts.sheet && opts.sheet.geometry && opts.sheet.texture ? opts.sheet : null;
+    if (!selMesh && !ctxMesh && !crossMesh && !sheet) return;
+    const lineMeshes = selMesh ? (opts.lineMeshes || [selMesh]).filter(Boolean) : [];
     const W = canvas2d.width, H = canvas2d.height;
     if (W <= 0 || H <= 0) return;
     this._ensureRT(W, H);
     this._ensureMats();
     const passes = lineMeshes.map(m => this._linePasses(m));
     this._ensureDotMeshes(srcMesh || null, tgtMesh || null);
+    this._ensureCtxMeshes(ctxMesh);
 
     const r   = this._r;
 
@@ -378,6 +480,7 @@ export class SlabRenderer {
       // Borrow the 3D mesh's colormap and file-style textures (shared,
       // never disposed here). Line width now comes per file from the
       // style texture; opts.lineWidthPx2D only gates "lines on at all".
+      if (!selMesh) return;
       const su = selMesh.material.uniforms;
       u.u_colormap.value = su.u_colormap?.value ?? null;
       u.u_fileStyle.value = su.u_fileStyle?.value ?? null;
@@ -385,24 +488,40 @@ export class SlabRenderer {
       u.u_context.value = su.u_context?.value ?? -1;
       u.u_dimming.value = su.u_dimming?.value ?? 0.15;
     };
-    const setDot = (mat, c) => {
+    const setDot = (mat, c, px = opts.endsPx ?? 6) => {
       const u = mat.uniforms;
       u.u_sliceNormal.value.set(nDir[0], nDir[1], nDir[2]);
       u.u_slicePt.value.set(cursor[0], cursor[1], cursor[2]);
       u.u_slabHalf.value  = halfThickMm;
       u.u_autoColor.value = c.auto;
       u.u_dotColor.value.set(c.col[0], c.col[1], c.col[2]);
-      u.u_pointSize.value = opts.endsPx ?? 6;
+      u.u_pointSize.value = px;
     };
     setLine(this._matNear); setLine(this._matFar); setLine(this._matNearFaint);
+    // opts.crossMesh: the candidates' points (see NEAREST_VS) — one dot per
+    // piece of a streamline inside the slab, nearest the plane; drawn
+    // first, under everything else
+    let crossPass = null;
+    if (crossMesh && opts.crossStyle && opts.crossStyle.mode !== 'hide') {
+      const u = this._matNearest.uniforms, xc = cv(opts.crossStyle);
+      u.u_sliceNormal.value.set(nDir[0], nDir[1], nDir[2]);
+      u.u_slicePt.value.set(cursor[0], cursor[1], cursor[2]);
+      u.u_slabHalf.value = halfThickMm;
+      u.u_color.value.set(xc.col[0], xc.col[1], xc.col[2]);
+      u.u_dotPx.value = opts.crossPx ?? 2;
+      crossPass = this._nearestClones.get(crossMesh);
+      if (!crossPass) { crossPass = crossMesh.clone(); crossPass.geometry = crossMesh.geometry; crossPass.material = this._matNearest; crossPass.frustumCulled = false; this._nearestClones.set(crossMesh, crossPass); }
+    }
     setDot(this._dmatSrcNear, sc); setDot(this._dmatSrcFar, sc);
     setDot(this._dmatTgtNear, tc); setDot(this._dmatTgtFar, tc);
+    const showCtx = !!(ctxMesh && opts.ctxStyle && opts.ctxStyle.mode !== 'hide');
+    if (showCtx) { const xc = cv(opts.ctxStyle), px = opts.ctxPx ?? opts.endsPx ?? 6; setDot(this._dmatCtxNear, xc, px); setDot(this._dmatCtxFar, xc, px); }
 
 	// Lines are hidden via WIDTH=0 now, not a color mode (see index.html's
 	// LINE·COLOR radio, which no longer has a 'hide'/None option) — 'hide'
 	// can still appear here harmlessly (cv() falls through to the custom-
 	// color branch for any unrecognized mode), but width is the real gate.
-	const showLines = (opts.lineWidthPx2D ?? 2.0) > 0;
+	const showLines = (opts.lineWidthPx2D ?? 2.0) > 0 && passes.length > 0;
 	const showSrc   = opts.srcStyle.mode  !== 'hide' && this._dotsSrcNear;
 	const showTgt   = opts.tgtStyle.mode  !== 'hide' && this._dotsTgtNear;
 
@@ -416,6 +535,10 @@ export class SlabRenderer {
     r.clear();
     r.autoClear = false;
 
+    // Pass −2 — the surface sheet (the photo), under everything else
+    if (sheet) { const m = this._sheetPass(sheet, nDir, cursor, halfThickMm); this._scene.add(m); r.render(this._scene, cam); this._scene.remove(m); }
+    // Pass −1 — the candidates' dots (crossMesh), under everything else but the sheet
+    if (crossPass) { this._scene.add(crossPass); r.render(this._scene, cam); this._scene.remove(crossPass); }
     const drawPass = key => {
       for (const p of passes) this._scene.add(p[key]);
       r.render(this._scene, cam);
@@ -429,6 +552,11 @@ export class SlabRenderer {
     // Skipped when no file is below full opacity (opts.hasFaint false).
     const hasFaint = opts.hasFaint !== false;
     if (showLines && hasFaint) drawPass('nearFaint');
+    // Pass 2a — the context dots, under the others
+    if (showCtx) {
+      this._scene.add(this._ctxFar); r.render(this._scene, cam); this._scene.remove(this._ctxFar);
+      this._scene.add(this._ctxNear); r.render(this._scene, cam); this._scene.remove(this._ctxNear);
+    }
     // Pass 2 — dots on top (far sub-pass)
     if (showSrc) this._scene.add(this._dotsSrcFar);
     if (showTgt) this._scene.add(this._dotsTgtFar);

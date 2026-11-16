@@ -13,14 +13,21 @@ and gets no new features.
 
 ## The zip
 
-- **Flat namespace.** Folders inside the zip are ignored, and every file is
-  known by its **base name** only, so base names must be unique across the
-  zip.
-  - A zip of a folder (`sub-01/…`) works.
+- **Folders.** A file is known by its path in the zip. Files of the same
+  name in different folders are different files, and lists tell them apart
+  by the end of their paths (`left/IMG_0001.jpg`, `right/IMG_0001.jpg`).
+  - A resource `path` is relative to `datapackage.json` (or to the markers
+    file that names it). A bare file name also works when that name is
+    unique in the zip, or when exactly one file of that name is in the
+    referring file's own folder.
+  - A sidecar, a gradient table (`.bval`/`.bvec`), a lookup table named
+    after its volume and a `.photo.json` are paired with the file of the
+    same name in their own folder first.
+  - A zip of a folder (`sub-01/…`) works, and so does a dropped folder.
   - So does a zip re-packed by macOS or a share service: `__MACOSX/`, `._*`,
     `.DS_Store`, `Thumbs.db` and `desktop.ini` are skipped.
 - **Compression.** Store files that are already compressed (`.nii.gz`,
-  `.webm`, `.tt.gz`, `.dqz`) without compressing them again (ZIP_STORED).
+  `.webm`, `.tt.gz`, `.dqz`, `.trx`) without compressing them again (ZIP_STORED).
   Deflate the text files: the manifest, lookup tables, CSV tables and JSON
   sidecars.
 - **Without a manifest** the zip still loads:
@@ -43,9 +50,11 @@ and gets no new features.
 | `*.json` next to a volume | its BIDS sidecar (`sub-01_dwi.json` for `sub-01_dwi.nii.gz`) |
 | `*.bval`, `*.bvec` | a DWI series' gradient table (FSL), paired by name |
 | `*.txt`, `*.lut`, `*_dseg.tsv` | lookup tables for label volumes (FreeSurfer, ITK-SNAP, BIDS) |
-| `*.tck`, `*.trk`, `*.dqz`, `*.tt`, `*.tt.gz` | streamlines: MRtrix, TrackVis, compressed `.tck`, DSI Studio |
+| `*.tck`, `*.trk`, `*.dqz`, `*.tt`, `*.tt.gz`, `*.trx` | streamlines: MRtrix, TrackVis, compressed `.tck`, DSI Studio, TRX |
 | `*.dqz` (data) | per-point or per-streamline data of a `.dqz` tractogram |
-| `*.csv`, `*.tsv` | tables of the manifest (points, links, regions) |
+| `*.markers.json` | a markers file: a graph file of its own (points, links, regions; see `graph-format.md`) |
+| `*.csv`, `*.tsv` | tables of the manifest or of a markers file (points, links, regions) |
+| `*.jpg`, `*.jpeg`, `*.png` + `*.photo.json` | a photo of the exposed brain and its registration (TOOLS › Photo to surface; `tools.md`) |
 | `datapackage.json` | the manifest (exactly this name) |
 | `index.json` | the older manifest (exactly this name) |
 
@@ -56,7 +65,9 @@ standard of the Frictionless Data project. Its `resources` list the files of
 the zip, **in load order**, and can also hold tables. The standard allows
 extra properties, which its tools ignore; this app's own are marked
 **ours** below. The tables themselves (points, links, an atlas's regions
-and their hierarchy) are described in `graph-format.md`.
+and their hierarchy) are described in `graph-format.md`; they can be in the
+manifest or, better for anything more than a few points, in a markers file
+of their own (see *A markers file*).
 
 ```json
 {
@@ -72,7 +83,8 @@ and their hierarchy) are described in `graph-format.md`.
     { "name": "aparc-lut", "path": "sub-01_aparc_lut.txt" },
     { "name": "af-l",      "path": "AF_L.tck.dqz", "title": "arcuate fasciculus, left", "color": "#e04030" },
     { "name": "af-l-fa",   "path": "AF_L.tck.fa.dqz", "role": "data" },
-    { "name": "cst-l",     "path": "CST_L.tt.gz",  "title": "corticospinal tract, left", "visible": false }
+    { "name": "cst-l",     "path": "CST_L.tt.gz",  "title": "corticospinal tract, left", "visible": false },
+    { "name": "contacts",  "path": "sub-01_contacts.markers.json", "title": "electrode contacts" }
   ],
   "view": { "bounds": "sub-01_T1w.nii.gz", "from": "left", "up": "superior" }
 }
@@ -124,7 +136,7 @@ not the same grid. Several volumes can share one mask.
 
 ### A tractogram
 
-A resource whose `path` ends in `.tck`, `.trk`, `.dqz`, `.tt` or `.tt.gz`.
+A resource whose `path` ends in `.tck`, `.trk`, `.dqz`, `.tt`, `.tt.gz` or `.trx`.
 
 | key | from | meaning |
 |---|---|---|
@@ -136,6 +148,30 @@ A resource whose `path` ends in `.tck`, `.trk`, `.dqz`, `.tt` or `.tt.gz`.
 the package opens quickly with a few bundles on, and the rest are read on
 demand.
 
+### A markers file
+
+A resource whose `path` ends in `.markers.json` (or **ours**
+`role: "markers"` with any `.json` path): a graph file of its own
+(`graph-format.md`) — a Data Package with its own tables, which can be
+CSV files next to it in the zip, and its own title, description and
+attribution. Each of its point tables is a marker set in MARKERS.
+
+| key | from | meaning |
+|---|---|---|
+| `name` | standard | its identifier |
+| `path` | standard | the file in the zip |
+| `title` | standard | the name of its marker set (with several point tables: put before each table's name) |
+| `role` | **ours** | `"markers"`; needed only when the name doesn't end in `.markers.json` |
+| `visible` | **ours** | `false`: the marker set starts switched off |
+
+The marker sets load in this order: the manifest's own tables first, then
+the markers files as listed, then any other markers files in the zip.
+Those are read too, unlisted: a `.json` with a table in space is
+recognized by its content, a `.markers.json` always (an error in it is
+reported). Name markers files `<name>.markers.json`: a plain
+`sub-01_T1w.json` next to `sub-01_T1w.nii.gz` is taken as that volume's
+sidecar.
+
 ### Other resources
 
 | resource | keys |
@@ -143,7 +179,7 @@ demand.
 | a lookup table: `path` ending in `.txt`, `.lut`, `.tsv` | named by a volume's `labels` |
 | a `.dqz` data file | **ours** `role: "data"`: not a tractogram; it is paired with its tractogram by its uuid |
 | a volume's JSON sidecar | **ours** `role: "sidecar"`: listed for completeness; it is paired by name |
-| a table (points, links, regions) | inline `data` or a CSV `path`; see `graph-format.md` |
+| a table (points, links, regions) | inline `data` or a CSV `path`; see `graph-format.md` (or put it in a markers file) |
 
 A package without any table in space is a manifest only, and is not read as
 a graph file.
@@ -319,6 +355,23 @@ A compressed `.tck` tractogram, about 4× smaller.
 - **Made with** `tck_quantize.py` (in a zip, as `<name>.tck.dqz`).
 
 Full spec: `dqz-format.md`.
+
+## TRX, briefly
+
+A `.trx` ([TRX spec](https://github.com/tee-ar-ex/trx-spec)) is read in
+place: the app reads the zip's table of contents and then only the byte
+ranges it needs — the offsets first (exact point counts for the memory
+budget), then the positions in chunks, every n-th streamline when thinned.
+Write TRX files uncompressed (stored) for this; compressed ones are
+streamed through, which works too, without random access.
+
+- positions `float16`, `float32` or `float64`; offsets `uint32` or
+  `uint64`, with or without the final `NB_VERTICES`;
+- `dps/` and `dpv/` with one value each: the tractogram's data fields
+  (integer data per streamline with at most 256 values: categories);
+- `groups/`: when no streamline is in two groups, each group a bundle;
+  overlapping groups, values with several components and `dpg/` are listed
+  in the header, not used yet.
 
 DSI Studio's `.tt.gz` uses the same idea: int8 steps of 1/32 voxel, with
 one voxel → MNI matrix per file. It is read as it is.

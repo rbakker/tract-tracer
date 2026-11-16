@@ -24,6 +24,9 @@ A `.json` file with a `resources` list, at least one of which has a
 `https://tractogram.observer/schema/graph-v1.json` (a JSON Schema extending
 the Data Package one). Any file name; as the manifest of a zip it is
 `datapackage.json` (see *The zip manifest* and `zip-package-spec.md`).
+Name a file of its own `<name>.markers.json`: inside a zip it is then
+never mistaken for a volume's sidecar, and an error in it is reported
+rather than the file skipped.
 
 ## Overview
 
@@ -323,6 +326,8 @@ Data taken from a BIDS dataset maps one to one: `License` → `licenses`,
 A graph file named `datapackage.json` inside a zip (or a drop of files) is
 also the zip's **manifest**: its file resources are the zip's volumes and
 tractograms, in load order, and its tables are read as in any graph file.
+It can also list other graph files of the zip (`*.markers.json`), each with
+its own tables and attribution; it sets their order, title and visibility.
 The keys for those file resources (`role`, `labels`, `mask`, `color`,
 `visible`), the package's `space` and its opening `view` are described in
 `zip-package-spec.md`. That page also covers the older `index.json`, which

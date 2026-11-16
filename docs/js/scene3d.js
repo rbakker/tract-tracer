@@ -228,6 +228,13 @@ uniform float u_rimPow;
 uniform float u_volDiagMm;
 uniform int   u_steps;
 uniform mat4  u_invPV;
+// The ray of a pixel, from the camera's own axes (not by unprojecting the
+// near and far planes: with the near plane a hair from a far camera that
+// loses the float precision to tell neighbouring pixels apart — blocks of
+// one colour when zoomed out, and nothing at all from a far photo camera).
+uniform mat3  u_camRot;      // the camera's axes (columns: right, up, back) in world space
+uniform vec2  u_projScale;   // tan of the half field of view: x (times the aspect), y
+vec3 pixelRayWorld(vec2 ndc) { return normalize(u_camRot * vec3(ndc * u_projScale, -1.0)); }
 uniform mat4  u_invModel;
 uniform vec3  u_camPos;
 uniform float u_isColor;
@@ -863,10 +870,7 @@ const CLIP_SETUP_GLSL = `
 
 const GLASS_ONLY_FS = GLASS_HELPERS_GLSL + `
 void main() {
-  vec4 near_w = u_invPV * vec4(vNDC, -1.0, 1.0);
-  vec4 far_w  = u_invPV * vec4(vNDC,  1.0, 1.0);
-  near_w /= near_w.w; far_w /= far_w.w;
-  vec3 rd_world = normalize(far_w.xyz - near_w.xyz);
+  vec3 rd_world = pixelRayWorld(vNDC);
   vec3 ro = (u_invModel * vec4(u_camPos, 1.0)).xyz + u_size * 0.5;
   vec3 rd = normalize(mat3(u_invModel) * rd_world);
   vec2 hit = boxHit(ro, rd);
@@ -948,11 +952,151 @@ ${CLIP_SETUP_GLSL}
 `;
 
 const SOLID_ONLY_FS = GLASS_HELPERS_GLSL + `
+// SURFACE PAINT (ANATOMY › image volume › surface paint): the outer
+// surface coloured by another volume, sampled along the line of sight
+// near the surface — any volume sharing world space, on any grid:
+//  - an intensity volume (a vessel map): its maximum from u_paintOut mm
+//    in front of the surface to u_paintIn mm behind it, through a
+//    colormap over a window (or, u_paintDepth, its hue by where the
+//    maximum lay and its brightness by the value: a depth-coded MIP); below the window the surface keeps its base
+//    colour; above it the paint is opaque, or (u_paintRise) its opacity
+//    rises over the window, from clear at 'from' to opaque at 'to';
+//  - a label volume: the first visible label met from the surface inward,
+//    at most u_paintIn mm (only inside: no guessing which side), in its
+//    lookup table's colours (hidden labels and 0 clear in the table's
+//    alpha); read unblended, its colours blended over the 8 voxels around.
+// Outward the probe stops where it enters tissue again (the far bank of a
+// sulcus), inward where it leaves the tissue: never the other side of a fold.
+uniform float     u_paintOn;
+uniform sampler3D u_paintTex;   // intensity: 0–1 of its range (linear); labels: raw (nearest)
+uniform mat4      u_paintW2T;   // world mm → its texture coordinates
+uniform float     u_paintOut;   // mm in front of the surface
+uniform float     u_paintIn;    // mm behind it
+uniform float     u_paintStep;  // mm per sample
+uniform float     u_paintLo;    // the window, 0–1 of its range
+uniform float     u_paintHi;
+uniform sampler2D u_paintMap;   // the colormap (one row)
+uniform float     u_paintRise;  // the opacity's ramp, a share of the window: 0 opaque from 'from'; 0.25 rising
+                                // from clear at 'from' to opaque a quarter of the way to 'to'; 1 over all of it
+uniform float     u_paintDepth; // 1: colour by depth — the map by where along the line of sight the
+                                // maximum lay (0: outermost, 1: innermost), its brightness by the value
+uniform float     u_paintLabels;// 1: a label volume
+uniform sampler2D u_paintLut;   // its colours by label (alpha 0: hidden, or 0)
+uniform float     u_paintLutSize;
+uniform vec3      u_paintBase;  // the surface's own colour (a plain scan)
+float paintAt(vec3 w) {
+  vec3 tc = (u_paintW2T * vec4(w, 1.0)).xyz;
+  if (any(lessThan(tc, vec3(0.0))) || any(greaterThan(tc, vec3(1.0)))) return 0.0;
+  return texture(u_paintTex, tc).r;
+}
+// a label volume at world point w: its colour (premultiplied by how much of the 8 voxels around are visible labels) and that share
+vec4 paintLabelAt(vec3 w) {
+  vec3 tc = (u_paintW2T * vec4(w, 1.0)).xyz;
+  ivec3 sz = textureSize(u_paintTex, 0);
+  vec3 g = tc * vec3(sz) - 0.5;
+  vec3 f = fract(g); ivec3 b = ivec3(floor(g));
+  vec4 acc = vec4(0.0);
+  for (int k = 0; k < 8; k++) {
+    ivec3 o = ivec3(k & 1, (k >> 1) & 1, k >> 2), q = b + o;
+    if (any(lessThan(q, ivec3(0))) || any(greaterThanEqual(q, sz))) continue;
+    float wt = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y) * (o.z == 1 ? f.z : 1.0 - f.z);
+    float id = floor(texelFetch(u_paintTex, q, 0).r + 0.5);
+    if (id <= 0.0 || id >= u_paintLutSize) continue;
+    vec4 c = texture(u_paintLut, vec2((id + 0.5) / u_paintLutSize, 0.5));
+    acc += wt * c.a * vec4(c.rgb, 1.0);
+  }
+  return acc;
+}
+bool tissueAtWorld(vec3 w, float thresh) {
+  return occupancyAndGradient((u_invModel * vec4(w, 1.0)).xyz + u_size * 0.5).w >= thresh;
+}
+const int PAINT_MAX = 64;
+// SURFACE PHOTO (a tool's — tools/photo.js): a photo projected onto the
+// outer surface by its camera (a pinhole: pixel = principal point +
+// f · (x/z, y/z), [x, y, z] = R (X − C)); its alpha (the part kept, the
+// roi contour) and the surface facing the camera decide where; there it
+// is shown as taken (its own light), over the paint.
+uniform float     u_photoOn;
+// THE CURSOR ON THE SURFACE (with the 3D frames): the lines where the
+// cursor's three planes cut the surface, in the planes' colours, ~1.5 px
+// wide, over everything the surface shows (unshaded, opaque in GLASS too)
+// and drawn as if 1 mm nearer the camera — not buried in surface details,
+// streamline ends or marker bases at the surface.
+uniform float     u_cursorOn;
+uniform vec3      u_cursorPos;      // world mm
+uniform vec3      u_cursorN[3];     // the planes' normals (SAG, COR, AXI)
+uniform vec3      u_cursorCol[3];
+uniform sampler2D u_photoTex;   // the photo (alpha: inside its contour), top row first
+uniform mat3      u_photoR;     // rows: the camera's right, down, forward
+uniform vec3      u_photoC;     // its position (world mm)
+uniform float     u_photoF;     // its focal length (photo px)
+uniform vec2      u_photoSize;  // the photo's size (px)
+uniform float     u_photoOpacity;
+// → rgb and how much of it (0: none here)
+vec4 photoAt(vec3 hitP, vec3 N) {
+  vec3 Pw = (u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz;
+  vec3 x = u_photoR * (Pw - u_photoC);   // (u_photoR set row by row: THREE.Matrix3.set)
+  if (x.z <= 0.0) return vec4(0.0);
+  vec2 px = u_photoF * x.xy / x.z + 0.5 * u_photoSize;
+  vec2 uv = px / u_photoSize;
+  if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return vec4(0.0);
+  // facing the camera: the outward normal toward it (N points into the tissue)
+  vec3 Nw = normalize(transpose(inverse(mat3(u_model))) * N);
+  float facing = dot(-Nw, normalize(u_photoC - Pw));
+  if (facing <= 0.0) return vec4(0.0);
+  vec4 c = texture(u_photoTex, uv);
+  return vec4(c.rgb, c.a * u_photoOpacity * smoothstep(0.0, 0.15, facing));
+}
+// rd: the local ray direction; base: the surface's own colour
+vec3 paintSurface(vec3 hitP, vec3 rd, vec3 base, float thresh) {
+  vec3 Pw = (u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz;
+  vec3 Dw = normalize(mat3(u_model) * rd);   // the line of sight, inward
+  if (u_paintLabels > 0.5) {
+    float st = max(max(u_paintStep, 0.05), u_paintIn / float(PAINT_MAX - 2));
+    for (int i = 0; i < PAINT_MAX; i++) {
+      float d = float(i) * st;
+      if (d > u_paintIn + 1e-4) break;
+      vec3 w = Pw + Dw * d;
+      if (d > st * 1.5 && !tissueAtWorld(w, thresh)) break;
+      vec4 c = paintLabelAt(w);
+      if (c.a >= 0.5) return c.rgb / c.a;            // the first visible label
+    }
+    return base;
+  }
+  float span = u_paintOut + u_paintIn;
+  float st = max(max(u_paintStep, 0.05), span / float(PAINT_MAX - 2));
+  float m = paintAt(Pw), at = 0.0;   // (at: where the maximum lay, mm along the line of sight from the surface)
+  bool out_ = false;
+  for (int i = 1; i < PAINT_MAX; i++) {           // toward the eye: until it enters tissue again
+    float d = float(i) * st;
+    if (d > u_paintOut + 1e-4) break;
+    vec3 w = Pw - Dw * d;
+    bool t = tissueAtWorld(w, thresh);
+    if (!t) out_ = true; else if (out_) break;
+    float v = paintAt(w);
+    if (v > m) { m = v; at = -d; }
+  }
+  for (int i = 1; i < PAINT_MAX; i++) {           // behind it: until it leaves the tissue
+    float d = float(i) * st;
+    if (d > u_paintIn + 1e-4) break;
+    vec3 w = Pw + Dw * d;
+    if (d > st * 1.5 && !tissueAtWorld(w, thresh)) break;
+    float v = paintAt(w);
+    if (v > m) { m = v; at = d; }
+  }
+  float sp = u_paintHi - u_paintLo;
+  float t = abs(sp) < 1e-6 ? step(u_paintLo, m) : (m - u_paintLo) / sp;
+  if (t <= 0.0) return base;
+  vec3 c = texture(u_paintMap, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb;
+  if (u_paintDepth > 0.5) {
+    float dz = span > 1e-4 ? (at + u_paintOut) / span : 0.5;
+    c = texture(u_paintMap, vec2(clamp(dz, 0.0, 1.0), 0.5)).rgb * mix(0.4, 1.0, clamp(t, 0.0, 1.0));
+  }
+  float a = u_paintRise > 0.03 ? clamp(t / u_paintRise, 0.0, 1.0) : smoothstep(0.0, 0.03, t);   // (opaque: a soft edge at 'from')
+  return mix(base, c, a);
+}
 void main() {
-  vec4 near_w = u_invPV * vec4(vNDC, -1.0, 1.0);
-  vec4 far_w  = u_invPV * vec4(vNDC,  1.0, 1.0);
-  near_w /= near_w.w; far_w /= far_w.w;
-  vec3 rd_world = normalize(far_w.xyz - near_w.xyz);
+  vec3 rd_world = pixelRayWorld(vNDC);
   vec3 ro = (u_invModel * vec4(u_camPos, 1.0)).xyz + u_size * 0.5;
   vec3 rd = normalize(mat3(u_invModel) * rd_world);
   vec2 hit = boxHit(ro, rd);
@@ -1136,6 +1280,7 @@ ${CLIP_SETUP_GLSL}
   // below, for the one case a Fresnel term genuinely applies to: a real
   // curved surface with a well-defined normal.
   float fragAlpha = 1.0;
+  vec3 surfN = -rd;   // the surface's normal (into the tissue; the cursor lines): -rd until known
   if (isCap) {
     // Flat, unlit — like the 2D slice panels: this is an artificial
     // cut face, not a real anatomical boundary, so isosurface-style
@@ -1173,6 +1318,7 @@ ${CLIP_SETUP_GLSL}
     vec3 inwardP = hitP + N * 0.5;
     rawGrad = smoothedOccupancyNormal(inwardP);
     if (dot(rawGrad, rawGrad) >= 1e-8) N = normalize(rawGrad); // else keep the already-valid N from above
+    surfN = N;
 
     // GLASS mode: a real Fresnel rim on the actual isosurface, instead of
     // full opacity — same rim formula the TRANSLUCENT shader's own accumulated
@@ -1244,7 +1390,14 @@ ${CLIP_SETUP_GLSL}
       // faint cool/blue tint (vs. neutral white outside), a cheap visual
       // cue for "you're looking at an interior surface" independent of
       // the shade-floor difference above.
-      baseColor = startInside ? vec3(0.8,0.8,1.0) : vec3(1.0);
+      baseColor = startInside ? vec3(0.8,0.8,1.0) : u_paintBase;
+    }
+    if (u_paintOn > 0.5 && !startInside) baseColor = paintSurface(hitP, rd, baseColor, classifyThresh);
+    if (u_photoOn > 0.5 && !startInside) {
+      vec4 ph = photoAt(hitP, N);
+      // the photo as taken: its colour, and unshaded (it has its own light) where it lies
+      baseColor = mix(baseColor * shade, ph.rgb, ph.a);
+      shade = 1.0;
     }
   }
   vec3 solidColor = baseColor * shade;
@@ -1286,6 +1439,36 @@ ${CLIP_SETUP_GLSL}
   // never occludes anything drawn behind it, which is what leaves
   // streamlines and other geometry visible through it.
   vec3 worldPos = (u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz;
+  if (u_cursorOn > 0.5) {
+    // How fast the distance to a plane changes per screen pixel, from the
+    // surface's own normal (not from the neighbouring pixels: at the
+    // silhouette those are background, and gave stray lines there). A
+    // screen step u (square to the line of sight v) moves the surface
+    // point by pix·(u − v (u·N)/(v·N)); its distance to the plane (normal n)
+    // by pix·(w·u), w = n − N (n·v)/(N·v).
+    float zc = max(dot(worldPos - u_camPos, u_camFwd), 1e-3);
+    float pix = zc * u_projScale.y * abs(dFdy(vNDC.y));   // mm per pixel here (vNDC: smooth everywhere)
+    vec3 v = normalize(worldPos - u_camPos);
+    vec3 Nw = normalize(transpose(inverse(mat3(u_model))) * surfN);
+    float nv = dot(Nw, v);
+    if (abs(nv) < 0.05) nv = nv < 0.0 ? -0.05 : 0.05;   // (edge on: the line's width there stays bounded)
+    float ca = 0.0; vec3 cc = vec3(0.0);
+    for (int k = 0; k < 3; k++) {
+      vec3 n = u_cursorN[k];
+      float d = dot(worldPos - u_cursorPos, n);
+      vec3 w = n - Nw * (dot(n, v) / nv);
+      float g = max(pix * length(w - v * dot(w, v)), 1e-6);
+      float a = 1.0 - smoothstep(0.5, 1.4, abs(d) / g);
+      if (a > ca) { ca = a; cc = u_cursorCol[k]; }
+    }
+    if (ca > 0.0) {
+      gl_FragColor = vec4(mix(solidColor, cc, ca), mix(fragAlpha, 1.0, ca));
+      worldPos -= normalize(worldPos - u_camPos) * 1.0 * ca;   // (nearer the camera)
+      vec4 cp = u_projView * vec4(worldPos, 1.0);
+      gl_FragDepth = clamp(cp.z / cp.w * 0.5 + 0.5, 0.0, 1.0);
+      return;
+    }
+  }
   vec4 clipPos = u_projView * vec4(worldPos, 1.0);
   float fragDepth = clipPos.z / clipPos.w * 0.5 + 0.5;
 
@@ -1403,6 +1586,16 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   // colliding with u_vol's sampler3D there — see the earlier 2D-slice fix
   // for the same issue).
   let lutTex, lutSize = 1;
+  function _emptyPaintTex() {
+    const t = new THREE.Data3DTexture(new Float32Array(1), 1, 1, 1);
+    t.format = THREE.RedFormat; t.type = THREE.FloatType; t.internalFormat = 'R32F'; t.needsUpdate = true;
+    return t;
+  }
+  function _emptyPaintMap() {
+    const t = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    t.needsUpdate = true;
+    return t;
+  }
   function _emptyOccTex() {
     const t = new THREE.Data3DTexture(new Uint8Array(1), 1, 1, 1);
     t.format = THREE.RedFormat; t.type = THREE.UnsignedByteType; t.needsUpdate = true;
@@ -1436,6 +1629,33 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       u_alpha:     { value: 5.0 },
       u_thresh:    { value: 0.15 }, // RIM-LIT's accumulation cutoff only now — see its declaration comment
       u_cutoutT1:  { value: 0.0 },  // cutout row 1's own threshold, decoupled from u_thresh
+      // SURFACE PAINT (see paintSurface): off until index.html sets it
+      u_paintOn:   { value: 0.0 },
+      u_paintTex:  { value: _emptyPaintTex() },
+      u_paintW2T:  { value: new THREE.Matrix4() },
+      u_paintOut:  { value: 2.0 },
+      u_paintIn:   { value: 1.0 },
+      u_paintStep: { value: 0.25 },
+      u_paintLo:   { value: 0.5 },
+      u_paintHi:   { value: 1.0 },
+      u_paintMap:  { value: _emptyPaintMap() },
+      u_paintRise: { value: 0.0 },
+      u_paintDepth: { value: 0.0 },
+      u_paintLabels: { value: 0.0 },
+      u_paintLut:  { value: _emptyPaintMap() },
+      u_paintLutSize: { value: 1.0 },
+      u_paintBase: { value: new THREE.Vector3(1, 1, 1) },
+      u_photoOn:   { value: 0.0 },
+      u_cursorOn:  { value: 0.0 },
+      u_cursorPos: { value: new THREE.Vector3() },
+      u_cursorN:   { value: [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)] },
+      u_cursorCol: { value: [PLANE_COLORS.sag, PLANE_COLORS.cor, PLANE_COLORS.axi].map(h => new THREE.Vector3(((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255)) },
+      u_photoTex:  { value: _emptyPaintMap() },
+      u_photoR:    { value: new THREE.Matrix3() },
+      u_photoC:    { value: new THREE.Vector3() },
+      u_photoF:    { value: 1.0 },
+      u_photoSize: { value: new THREE.Vector2(1, 1) },
+      u_photoOpacity: { value: 1.0 },
       u_cutoutBelowThresh: { value: 1.0 }, // cutout row 2's threshold — [0,1] combined via AND by default = every value = cutout off
       u_cutoutRow1Above:    { value: 1 }, // 1 = "above" (>=), 0 = "below" (<=)
       u_cutoutRow2AndBelow: { value: 1 }, // 1 = "and below" (AND), 0 = "or above" (OR)
@@ -1455,6 +1675,8 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       // context outright, with no user interaction involved at all.
       u_steps:     { value: 40 },
       u_invPV:     { value: new THREE.Matrix4() },
+      u_camRot:    { value: new THREE.Matrix3() },
+      u_projScale: { value: new THREE.Vector2(1, 1) },
       u_invModel:  { value: invModel },
       u_camPos:    { value: new THREE.Vector3() },
       u_isColor:   { value: isColor ? 1 : 0 },
@@ -1570,6 +1792,8 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
     sharedUniforms.u_projView.value.copy(_pv);
     sharedUniforms.u_invPV.value.copy(_pv).invert();
     sharedUniforms.u_camPos.value.copy(cam.position);
+    sharedUniforms.u_camRot.value.setFromMatrix4(cam.matrixWorld);
+    { const e = cam.projectionMatrix.elements; sharedUniforms.u_projScale.value.set(1 / e[0], 1 / e[5]); }
 
     const lightCam = mesh.userData.lightCam;
     _camRight.setFromMatrixColumn(cam.matrixWorld, 0);
@@ -2176,6 +2400,17 @@ export const BUILTIN_COLORMAPS = {
     [0.5, [33, 144, 141]], [0.625, [39, 173, 129]], [0.75, [92, 200, 99]], [0.875, [170, 220, 50]],
     [1, [253, 231, 37]] ] },
   gray: { name: 'gray', kind: 'continuous', stops: [[0, [0, 0, 0]], [1, [255, 255, 255]]] },
+  // dark red -> red -> light red: vessels painted on a surface (ANATOMY › surface paint)
+  red: { name: 'red', kind: 'continuous', stops: [[0, [140, 20, 25]], [0.5, [215, 35, 35]], [1, [255, 140, 120]]] },
+  // blue → violet → red → ochre → green at one lightness (OKLCH L 0.64,
+  // chroma as high as sRGB allows): the hue alone changes — brightness
+  // left free for another quantity (surface paint by depth: the hue the
+  // depth, the brightness the value). Unlike matplotlib's 'brg' (same
+  // order, uneven lightness).
+  // coolwarm at one lightness (OKLCH L 0.64): blue → grey → red, the
+  // grey middle as light as both ends (coolwarm's own is near white)
+  'coolwarm-even': { name: 'coolwarm-even', kind: 'continuous', stops: [[0, [71, 133, 255]], [0.125, [90, 138, 227]], [0.25, [108, 140, 199]], [0.375, [124, 141, 170]], [0.5, [140, 140, 140]], [0.625, [167, 130, 123]], [0.75, [191, 117, 105]], [0.875, [213, 102, 85]], [1, [233, 81, 62]]] },
+  'brg-even': { name: 'brg-even', kind: 'continuous', stops: [[0, [81, 131, 255]], [0.125, [152, 107, 246]], [0.25, [198, 87, 205]], [0.375, [227, 73, 146]], [0.5, [237, 74, 73]], [0.625, [211, 109, 2]], [0.75, [176, 133, 5]], [0.875, [138, 149, 4]], [1, [5, 169, 46]]] },
   // black -> red -> yellow -> white
   hot: { name: 'hot', kind: 'continuous', stops: [
     [0, [11, 0, 0]], [0.365, [255, 0, 0]], [0.746, [255, 255, 0]], [1, [255, 255, 255]] ] },
@@ -2567,7 +2802,9 @@ export function makeDotsMaterial3d(endsPx = 6) {
 // ends ("ends").
 //
 // probe: { cursor: [cx,cy,cz], radius } in RAS mm, or null when the probe
-// is off (or set to ALL) — then every end goes to tgt.
+// is off (or set to ALL) — then every end goes to tgt. Or { inner(i, end) }:
+// a test per end instead of the sphere (i: index into tracts; end: 0 the
+// start, 1 the end) — the paint probe's painted ends.
 // endsPx: dot screen size (in CSS pixels; scaled to framebuffer pixels via
 // pixelRatio, which the caller should pass as whatever the renderer is
 // ACTUALLY using — renderer.getPixelRatio() — not window.devicePixelRatio
@@ -2593,8 +2830,9 @@ export function makeEndpointDots(tracts, probe, endsPx = 6, pixelRatio = window.
   const srcBundleId = new Int32Array(n * 2), tgtBundleId = new Int32Array(n * 2);
   let si = 0, ti = 0;
 
-  const [cx, cy, cz] = probe ? probe.cursor : [0, 0, 0];
-  const r2 = probe ? probe.radius * probe.radius : -1;
+  const inner = probe && probe.inner ? probe.inner : null;
+  const [cx, cy, cz] = probe && probe.cursor ? probe.cursor : [0, 0, 0];
+  const r2 = probe && !inner ? probe.radius * probe.radius : -1;
 
   const NEUTRAL_RGB = [1, 1, 1];
   // A bit brighter than the matching line color, not a separate palette —
@@ -2639,8 +2877,8 @@ export function makeEndpointDots(tracts, probe, endsPx = 6, pixelRatio = window.
     };
 
     // Each end on its own: inside the probe sphere -> src, else tgt.
-    if (!(sk & 1)) { if ((sx-cx)**2 + (sy-cy)**2 + (sz-cz)**2 <= r2) addSrc(sx,sy,sz,sCol); else addTgt(sx,sy,sz,sCol); }
-    if (!(sk & 2)) { if ((ex-cx)**2 + (ey-cy)**2 + (ez-cz)**2 <= r2) addSrc(ex,ey,ez,eCol); else addTgt(ex,ey,ez,eCol); }
+    if (!(sk & 1)) { if (inner ? inner(i, 0) : (sx-cx)**2 + (sy-cy)**2 + (sz-cz)**2 <= r2) addSrc(sx,sy,sz,sCol); else addTgt(sx,sy,sz,sCol); }
+    if (!(sk & 2)) { if (inner ? inner(i, 1) : (ex-cx)**2 + (ey-cy)**2 + (ez-cz)**2 <= r2) addSrc(ex,ey,ez,eCol); else addTgt(ex,ey,ez,eCol); }
   }
 
   const makePoints = (pos, col, bundleIdArr, count) => {

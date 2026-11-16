@@ -12,11 +12,11 @@
 
 import { invertAffine, decomposeAffineKSP, matMul } from './affine.js';
 
+// Bytes per voxel of a scalar datatype (NIFTI_TYPES below); 1 for the
+// rest (the packed colour types are read on their own).
 function bytesPerElementFor(datatype) {
-  if ([4, 512].includes(datatype)) return 2;
-  if ([8, 16].includes(datatype)) return 4;
-  if (datatype === 64) return 8;
-  return 1;
+  const t = NIFTI_TYPES[datatype];
+  return t ? t[0] : 1;
 }
 
 // Full-scale value for integer NIfTI datatypes, used to normalize a plain
@@ -31,6 +31,7 @@ function integerRangeMax(datatype) {
     case 4:   return 32767;       // DT_INT16 (signed)
     case 512: return 65535;       // DT_UINT16
     case 8:   return 2147483647;  // DT_INT32 (signed)
+    case 768: return 4294967295;  // DT_UINT32
     default:  return null;        // DT_FLOAT32/64 and anything else
   }
 }
@@ -38,7 +39,7 @@ function integerRangeMax(datatype) {
 
 // Reads exactly `n` elements of the given NIfTI datatype starting at byte
 // offset `start` in `buf`, always returning a Float32Array of length n.
-// (Little-endian, like the rest of the reader.)
+// le: false for a big-endian file (its bytes are swapped first).
 const NIFTI_TYPES = {
   2:    [1, Uint8Array],      // UINT8
   4:    [2, Int16Array],      // INT16
@@ -51,12 +52,18 @@ const NIFTI_TYPES = {
   1024: [8, BigInt64Array],   // INT64
   1280: [8, BigUint64Array],  // UINT64
 };
-function readVolumeFloat32(buf, start, n, datatype) {
+function readVolumeFloat32(buf, start, n, datatype, le = true) {
   const t = NIFTI_TYPES[datatype];
   if (!t) throw 'Unsupported NIfTI datatype ' + datatype;
   const [bytes, Arr] = t;
   // a copy of just these bytes: aligned for the typed array, and never past the first volume
-  const src = new Arr(buf.slice(start, start + n * bytes), 0, n);
+  const copy = buf.slice(start, start + n * bytes);
+  if (copy.byteLength < n * bytes) throw `the image data is shorter than its header says (${copy.byteLength} of ${n * bytes} bytes)`;
+  if (!le && bytes > 1) {   // big-endian: reverse each element's bytes
+    const u = new Uint8Array(copy);
+    for (let i = 0; i < u.length; i += bytes) for (let a = i, b = i + bytes - 1; a < b; a++, b--) { const x = u[a]; u[a] = u[b]; u[b] = x; }
+  }
+  const src = new Arr(copy, 0, n);
   if (Arr === Float32Array) return src;
   const out = new Float32Array(n);
   if (Arr === BigInt64Array || Arr === BigUint64Array) { for (let i = 0; i < n; i++) out[i] = Number(src[i]); }
@@ -133,7 +140,7 @@ export async function forEachNiftiFrame(file, onFrame) {
     const n = shape[0] * shape[1] * shape[2], bpe = bytesPerElementFor(datatype);
     const scl = sclOf(dv, le);
     await src.skip(start - 352);
-    for (let v = 0; v < nvol; v++) { const f = readVolumeFloat32(await src.read(n * bpe), 0, n, datatype, bpe); applyScl(f, scl); await onFrame(v, f); }
+    for (let v = 0; v < nvol; v++) { const f = readVolumeFloat32(await src.read(n * bpe), 0, n, datatype, le); applyScl(f, scl); await onFrame(v, f); }
     return { shape, nvol };
   } finally { src.close(); }
 }
@@ -224,7 +231,7 @@ async function parseNiftiFrom(src, opts) {
     // does above — float datatypes (MRtrix's native output) are left as-is.
     const intMax = integerRangeMax(datatype);
     for (let v=0; v<3; v++) {
-      const vol = readVolumeFloat32(await frameBuf(v, n*bytesPerElement), 0, n, datatype, bytesPerElement);
+      const vol = readVolumeFloat32(await frameBuf(v, n*bytesPerElement), 0, n, datatype, le);
       for (let i=0;i<n;i++) {
         // abs(): eigenvector components are signed with an arbitrary sign
         // (the eigen-decomposition doesn't fix a direction along the
@@ -244,10 +251,10 @@ async function parseNiftiFrom(src, opts) {
     let frames = opts.frames == null ? [0] : [].concat(opts.frames).filter(v => Number.isInteger(v) && v >= 0 && v < nvol);
     if (!frames.length) frames = [0];
     frames = [...new Set(frames)].sort((a, b) => a - b);   // (read in file order)
-    if (frames.length === 1) data = readVolumeFloat32(await frameBuf(frames[0], n*bytesPerElement), 0, n, datatype, bytesPerElement);
+    if (frames.length === 1) data = readVolumeFloat32(await frameBuf(frames[0], n*bytesPerElement), 0, n, datatype, le);
     else {   // the mean of these frames
       data = new Float32Array(n);
-      for (const v of frames) { const f = readVolumeFloat32(await frameBuf(v, n*bytesPerElement), 0, n, datatype, bytesPerElement); for (let i=0;i<n;i++) data[i] += f[i]; }
+      for (const v of frames) { const f = readVolumeFloat32(await frameBuf(v, n*bytesPerElement), 0, n, datatype, le); for (let i=0;i<n;i++) data[i] += f[i]; }
       for (let i=0;i<n;i++) data[i] /= frames.length;
     }
     framesRead = frames;

@@ -16,7 +16,8 @@ export const MANIFEST_FILENAME = 'index.json';
 export const PACKAGE_FILENAME = 'datapackage.json';
 export const isManifestName = name => { const l = String(name).toLowerCase(); return l === MANIFEST_FILENAME || l === PACKAGE_FILENAME; };
 
-const TRACT_EXTS = ['.tck', '.dqz', '.trk', '.tt'];   // .tt: DSI Studio (also .tt.gz)
+import { findFile } from './file-paths.js';
+const TRACT_EXTS = ['.tck', '.dqz', '.trk', '.tt', '.trx'];   // .tt: DSI Studio (also .tt.gz)
 const VOLUME_TYPES = ['anat', 'label', 'mask'];
 
 function extOf(name) {
@@ -34,7 +35,7 @@ function extOf(name) {
 // "[object File]" the one time the fallback branch actually fired.
 export function stripPathExt(filename) {
   const base = String(filename).split(/[\\/]/).pop();
-  return base.replace(/\.(tck|tck\.dqz|dqz|trk|tt|tt\.gz)$/i, '');
+  return base.replace(/\.(tck|tck\.dqz|dqz|trk|tt|tt\.gz|trx)$/i, '');
 }
 
 // Golden-angle hue rotation, same technique as index.html's
@@ -141,22 +142,33 @@ function parseManifestView(v) {
 //     "visible" (ours): false — starts off, and is only read when switched on;
 //   "role": "data" — a .dqz data file of a tractogram; "sidecar" — a
 //     volume's JSON sidecar: listed for completeness, paired by the app itself;
+//   a markers file: a path ending in .markers.json, or "role": "markers"
+//     (ours) with a .json path — a graph file of its own (graph-format.md),
+//     its marker sets in this order; "title", "visible" (ours) as for a tractogram;
 //   "view" (ours, at the top): the opening view, as in index.json.
 // The tables (points, links, regions) are read by graph-io.js as for any
 // graph file.
-const VOL_RE = /\.(nii|nii\.gz|mif|mif\.gz|webm)$/i, TRACT_RE = /\.(tck|trk|dqz|tt|tt\.gz)$/i, LUT_RE = /\.(txt|lut)$/i;
+const MARKERS_RE = /\.markers\.json$/i;
+export const isMarkersFileName = name => MARKERS_RE.test(String(name));
+const VOL_RE = /\.(nii|nii\.gz|mif|mif\.gz|webm)$/i, TRACT_RE = /\.(tck|trk|dqz|tt|tt\.gz|trx)$/i, LUT_RE = /\.(txt|lut)$/i;
 export function manifestFromPackage(obj) {
   const res = obj.resources;
   if (!Array.isArray(res)) throw 'datapackage.json: "resources" must be a list';
+  // (files by their path, relative to datapackage.json: resolved against the drop by findFile)
   const base = p => String(p).split('/').pop();
   const byName = new Map(res.filter(r => r && r.name).map(r => [r.name, r]));
   const labelVols = new Set(res.filter(r => r && r.geometry && r.geometry.region && r.geometry.region.volume).map(r => r.geometry.region.volume));
-  const volumes = [], bundles = [];
+  const volumes = [], bundles = [], markers = [];
   res.forEach((r, i) => {
     if (!r || typeof r !== 'object') throw `datapackage.json resources[${i}] is not an object`;
     if (typeof r.path !== 'string') return;   // an inline table
     if (r.role === 'data' || r.role === 'sidecar') return;   // a .dqz data file (paired with its tractogram by its uuid), a sidecar (paired by name)
-    const file = base(r.path), name = typeof r.title === 'string' ? r.title : null;
+    const file = r.path, name = typeof r.title === 'string' ? r.title : null;
+    if (r.role === 'markers' || MARKERS_RE.test(file)) {
+      if (!/\.json$/i.test(file)) throw `datapackage.json resource "${r.name}": a "markers" resource must be a .json graph file (best: <name>.markers.json)`;
+      markers.push({ file, name, visible: r.visible !== false });
+      return;
+    }
     if (VOL_RE.test(file) || r.role === 'anat' || r.role === 'label' || r.role === 'mask') {
       const type = r.role || (labelVols.has(r.name) ? 'label' : 'anat');
       if (!VOLUME_TYPES.includes(type)) throw `datapackage.json resource "${r.name}": "role" must be one of ${VOLUME_TYPES.join(', ')}`;
@@ -164,14 +176,14 @@ export function manifestFromPackage(obj) {
       if (r.labels != null) {
         const l = byName.get(r.labels);
         if (!l || typeof l.path !== 'string') throw `datapackage.json resource "${r.name}": "labels" must name a lookup-table resource of the package`;
-        labels = base(l.path);
+        labels = l.path;
       }
       let mask = null;
       if (r.mask != null) {
         const m = byName.get(r.mask);
         if (!m || typeof m.path !== 'string' || !(VOL_RE.test(base(m.path)) || VOLUME_TYPES.includes(m.role)) || m === r)
           throw `datapackage.json resource "${r.name}": "mask" must name another volume resource of the package (role "mask")`;
-        mask = base(m.path);
+        mask = m.path;
       }
       volumes.push({ file, type, name, labels, mask });
     } else if (TRACT_RE.test(file) || r.role === 'tractogram') {
@@ -182,7 +194,7 @@ export function manifestFromPackage(obj) {
   });
   let view = null;
   try { view = parseManifestView(obj.view); } catch (e) { throw String(e).replace(/^index\.json/, 'datapackage.json'); }
-  return { type: 'datapackage', version: 1, bundles, volumes, view, package: obj };
+  return { type: 'datapackage', version: 1, bundles, volumes, markers, view, package: obj };
 }
 
 export function parseManifest(obj) {
@@ -249,7 +261,7 @@ export function detectBundleDrop(files) {
 // auto-generated palette otherwise. Files named in the manifest but not
 // present in the drop are reported, not silently dropped.
 export async function resolveBundleColors({ tractFiles, manifestFile }) {
-  const byName = new Map(tractFiles.map(f => [f.name, f]));
+  const fileFor = ref => findFile(tractFiles, ref, manifestFile);   // (by path from the manifest, else by name)
   if (!manifestFile) {
     const colors = autoBundlePalette(tractFiles.length);
     return {
@@ -264,12 +276,12 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
   // Streamline files in the drop that the manifest doesn't list are loaded
   // too, after the listed ones, named after their file and colored from the
   // same automatic palette (continuing after the listed bundles' slots).
-  const listed = new Set(manifest.bundles.map(b => b.file));
-  const extra = tractFiles.filter(f => !listed.has(f.name));
+  const listed = new Set(manifest.bundles.map(b => fileFor(b.file)).filter(Boolean));
+  const extra = tractFiles.filter(f => !listed.has(f));
   const autoColors = autoBundlePalette(manifest.bundles.length + extra.length);
   const missing = [];
   const entries = manifest.bundles.map((b, i) => {
-    const f = byName.get(b.file);
+    const f = fileFor(b.file);
     if (!f) missing.push(b.file);
     // f.name would throw mid-map if f is missing — fall back to b.file
     // itself (already a plain string) rather than assuming f exists;
@@ -289,22 +301,22 @@ export async function resolveBundleColors({ tractFiles, manifestFile }) {
 // "files" is the drop's full flat file list (not just tractogram files —
 // volumes/LUTs are elsewhere in the same drop/zip). Returns [] if the
 // manifest has no "volumes" section at all.
-export function resolveManifestVolumes(manifest, files) {
+export function resolveManifestVolumes(manifest, files, manifestFile = null) {
   const volumes = manifest && manifest.volumes;
   if (!volumes || !volumes.length) return [];
-  const byName = new Map(files.map(f => [f.name, f]));
+  const fileFor = ref => findFile(files, ref, manifestFile);   // (by path from the manifest, else by name)
   const missing = [];
   const resolved = volumes.map(v => {
-    const file = byName.get(v.file);
+    const file = fileFor(v.file);
     if (!file) missing.push(v.file);
     let lutFile = null;
     if (v.labels) {
-      lutFile = byName.get(v.labels) || null;
+      lutFile = fileFor(v.labels);
       if (!lutFile) missing.push(v.labels);
     }
     let maskFile = null;   // (datapackage.json only)
     if (v.mask) {
-      maskFile = byName.get(v.mask) || null;
+      maskFile = fileFor(v.mask);
       if (!maskFile) missing.push(v.mask);
     }
     return { file, type: v.type, name: v.name || (file ? stripPathExt(file.name) : v.file), lutFile, maskFile };

@@ -52,17 +52,20 @@ export function matMul(A, B) {
   );
 }
 
-// Build rotation matrix from pitch (X), yaw (Y), roll (Z) in radians
-// Order: Rz * Ry * Rx  (roll applied first, then yaw, then pitch)
+// Rotation matrix for the section planes from pitch, yaw and roll (radians),
+// about the anatomical axes of RAS space (x left-right, y front-back,
+// z up-down), as for a head: pitch nods (about x, left-right), yaw turns
+// (about z, up-down), roll tilts sideways (about y, front-back).
+// (Before, yaw turned about y and roll about z: the other way round.)
+// As a product: Rx(-pitch) · Ry(-roll) · Rz(-yaw), applied to column vectors.
 export function eulerToMat3(pitch, yaw, roll) {
-  const cp=Math.cos(pitch), sp=Math.sin(pitch);
-  const cy=Math.cos(yaw),   sy=Math.sin(yaw);
-  const cr=Math.cos(roll),  sr=Math.sin(roll);
-  // Rz*Ry*Rx
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const cy = Math.cos(roll),  sy = Math.sin(roll);   // about y (front-back)
+  const cz = Math.cos(yaw),   sz = Math.sin(yaw);    // about z (up-down)
   return [
-    [ cy*cr,             cy*sr,            -sy    ],
-    [ sp*sy*cr - cp*sr,  sp*sy*sr + cp*cr,  sp*cy ],
-    [ cp*sy*cr + sp*sr,  cp*sy*sr - sp*cr,  cp*cy ],
+    [ cy*cz,             cy*sz,            -sy    ],
+    [ sp*sy*cz - cp*sz,  sp*sy*sz + cp*cz,  sp*cy ],
+    [ cp*sy*cz + sp*sz,  cp*sy*sz - sp*cz,  cp*cy ],
   ];
 }
 
