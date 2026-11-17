@@ -368,6 +368,7 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
 .dt-filter-values{display:flex;flex-wrap:wrap;gap:1px 10px;padding-left:4px;}
 .dt-filter-scroll{max-height:96px;overflow-y:auto;}
 .dt-filter-value{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text);cursor:pointer;white-space:nowrap;}
+.dt-filter-value.dt-filter-empty{opacity:0.4;}   /* (none pass the other conditions) */
 .dt-filter-swatch{width:8px;height:8px;border-radius:2px;flex:none;}
 .hover-tip{position:absolute;display:none;z-index:61;background:var(--panel);
   border:1px solid var(--border);border-radius:2px;box-shadow:0 2px 12px rgba(0,0,0,0.65);
@@ -2974,7 +2975,7 @@ function sortTranslucentForView(force = false) {
 }
 
 function render3D() {
-  if (_markersReady) updateMarkerMerging();   // (pixel-sized markers: which spots overlap depends on the zoom)
+  if (_markersReady) { updateMarkerMerging(); updateMarkerFog(); }   // (pixel-sized markers: which spots overlap depends on the zoom)
   sortTranslucentForView(); tMark('sort');
   syncLightUniforms();
   checkBrainShadow();
@@ -2985,6 +2986,27 @@ function render3D() {
   for (const fn of _afterRender) fn();   // (a tool's layer over the view follows it)
 }
 const _afterRender = new Set();
+// Depth in a marker set (markers-render.js u_fog): darker toward its back,
+// over the set's own depth along the line of sight — at least 0.3 of the
+// scene's radius each way, so a small cluster isn't overdone — as strong
+// as the light's falloff (the back at 1 − falloff).
+const MARKER_FOG_MIN = 0.3;
+const _fogFwd = new THREE.Vector3();
+function updateMarkerFog() {
+  camera.getWorldDirection(_fogFwd);
+  for (const rec of markerSets) {
+    const g = rec.group;
+    if (!g || !g.visible || !g.userData.material) continue;
+    const mesh = g.children.find(m => m.geometry && m.geometry.boundingSphere);
+    const u = g.userData.material.uniforms;
+    if (!mesh || !u.u_fog) continue;
+    const bs = mesh.geometry.boundingSphere;
+    const dc = _fogFwd.dot(bs.center.clone().sub(camera.position));
+    const R = Math.max(bs.radius, MARKER_FOG_MIN * (sceneRadius || bs.radius || 1));
+    u.u_fogNear.value = dc - R; u.u_fogFar.value = dc + R;
+    u.u_fog.value = pointLightOn ? lightFalloff : 0;
+  }
+}
 
 const controls=new TrackballControls(camera,threeCanvas);
 
@@ -10255,7 +10277,7 @@ function buildPhotoSheet() {
     // the roi: the canvas's alpha (transparent outside it)
     const cv = sp.canvas, cw = cv.width, ch = cv.height;
     let alpha = null;
-    try { const d = cv.getContext('2d').getImageData(0, 0, cw, ch).data; alpha = new Uint8Array(cw * ch); for (let i = 0; i < alpha.length; i++) alpha[i] = d[4 * i + 3]; } catch (e) {}
+    try { const d = photoPixels(sp).data; alpha = new Uint8Array(cw * ch); for (let i = 0; i < alpha.length; i++) alpha[i] = d[4 * i + 3]; } catch (e) {}   // (the texture's own pixels: no second read of the canvas)
     const inRoi = (u, v) => !alpha || alpha[Math.min(ch - 1, Math.max(0, Math.floor(v * ch))) * cw + Math.min(cw - 1, Math.max(0, Math.floor(u * cw)))] > 127;
     const nv = (nx + 1) * (ny + 1), at = (i, j) => i + (nx + 1) * j;
     const near = new Uint8Array(nv);   // grid points within a cell of the roi
@@ -10316,14 +10338,31 @@ function drawPhotoCut2D(cvs, planeKey, cursor, tag) {
   g.lineWidth = 1.5 * dpr; g.strokeStyle = '#f2f2f2'; g.stroke();
   g.restore();
 }
+// The photo's pixels (RGBA, top row first), read once per canvas version
+// through a CPU-backed copy (willReadFrequently): no GPU path in between.
+let _photoPx = null, _photoTexCanvas = null;
+function photoPixels(sp) {
+  if (_photoPx && _photoPx.canvas === sp.canvas && _photoPx.version === sp.version) return _photoPx;
+  const cv = sp.canvas, w = cv.width, h = cv.height, c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(cv, 0, 0);
+  const d = g.getImageData(0, 0, w, h).data;
+  return (_photoPx = { canvas: cv, version: sp.version, width: w, height: h, data: new Uint8Array(d.buffer, d.byteOffset, d.byteLength) });
+}
 function applyPhotoUniforms() {
   if (!glassBrainMesh) return;
   const u = glassBrainMesh.material.uniforms, sp = surfacePhoto;
   if (!u.u_photoOn) return;
   if (!sp || !sp.canvas) { u.u_photoOn.value = 0; return; }
-  if (!_photoTex || _photoTexVersion !== sp.version || _photoTex.image !== sp.canvas) {
+  if (!_photoTex || _photoTexVersion !== sp.version || _photoTexCanvas !== sp.canvas) {
     if (_photoTex) _photoTex.dispose();
-    _photoTex = new THREE.CanvasTexture(sp.canvas);
+    // from the canvas's pixels, not the canvas: Firefox has swapped red and
+    // blue when a (GPU-backed) 2D canvas goes to WebGL — a red photo turned
+    // blue on the surface, the photo tool's own unchanged
+    const px = photoPixels(sp);
+    _photoTex = new THREE.DataTexture(px.data, px.width, px.height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    _photoTexCanvas = sp.canvas;
     _photoTex.flipY = false; _photoTex.generateMipmaps = true;
     _photoTex.minFilter = THREE.LinearMipmapLinearFilter; _photoTex.magFilter = THREE.LinearFilter;
     _photoTex.colorSpace = THREE.NoColorSpace || '';
@@ -11413,7 +11452,7 @@ function buildMarkerGroup(rec) {
   // the links (graph-format.md: the link tables of the point table): drawn between shown markers
   const ls = rec.set.style.links || {};
   const linkResolved = rec.set.links.n ? resolveLinkStyle(rec.set, ls, markerColormap(ls.colormap), resolved) : null;
-  rec.group = makeMarkerGroup(rec.set, resolved, materials && { material: materials.material, baseMaterial: materials.baseMaterial, linkMaterial: materials.linkMaterial, labelMaterial: materials.labelMaterial }, linkResolved);
+  rec.group = makeMarkerGroup(rec.set, resolved, materials && { material: materials.material, baseMaterial: materials.baseMaterial, outlineMaterial: materials.outlineMaterial, linkMaterial: materials.linkMaterial, labelMaterial: materials.labelMaterial }, linkResolved);
   setMarkerHover(rec.group, markerHover && markerHover.rec === rec && markerHover.inst >= 0 ? markerHover.inst : null);
   rec.group.visible = rec.visible;
   setMarkerDisplay(rec.group, rec);
@@ -12285,6 +12324,9 @@ document.addEventListener('keydown', e => {
 // SHOW ONLY: filters on the marker properties, combined with AND. A
 // categorical filter is a list of values to keep (any of them: OR); a
 // number filter is a from–to range. Markers that don't pass aren't drawn.
+// A categorical filter's counts are faceted: the markers with that value
+// that pass the OTHER filters (never its own — what ticking it would
+// bring); a value at 0 stays listed, greyed, its tick kept.
 function buildMarkerFilterSettings(rec, el) {
   const { set } = rec;
   const refilter = () => { buildMarkerGroup(rec); render3D(); registerMarkerItems(); }; // re-renders the tree (row tag)
@@ -12306,9 +12348,15 @@ function buildMarkerFilterSettings(rec, el) {
     head.appendChild(name);
     if (f.values) {
       const vals = set.markers.values[p.name];
-      const counts = new Map();
-      for (const v of vals) if (v != null) counts.set(v, (counts.get(v) || 0) + 1);
-      const entries = p.legend.filter(e => counts.has(e.value));
+      const counts = new Map(), totals = new Map();
+      const others = markerFilterMask(set, rec.filters.filter(x => x !== f));   // (null: no other filter)
+      for (let i = 0; i < vals.length; i++) {
+        const v = vals[i];
+        if (v == null) continue;
+        totals.set(v, (totals.get(v) || 0) + 1);
+        if (!others || others[i]) counts.set(v, (counts.get(v) || 0) + 1);
+      }
+      const entries = p.legend.filter(e => totals.has(e.value));
       head.append(
         makeSettingsButton('all', () => { f.values = new Set(entries.map(e => e.value)); refilter(); }),
         makeSettingsButton('none', () => { f.values = new Set(); refilter(); }));
@@ -12319,7 +12367,9 @@ function buildMarkerFilterSettings(rec, el) {
       attachTip(list, 'Show only markers with one of the ticked values.');
       for (const e of entries) {
         const lab = document.createElement('label');
-        lab.className = 'dt-filter-value';
+        const k = counts.get(e.value) || 0, tot = totals.get(e.value);
+        lab.className = 'dt-filter-value' + (k ? '' : ' dt-filter-empty');
+        if (others) lab.title = k + ' of its ' + tot + ' markers pass the other conditions';
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.className = 'dt-check';
@@ -12330,7 +12380,7 @@ function buildMarkerFilterSettings(rec, el) {
         sw.className = 'dt-filter-swatch';
         sw.style.background = 'rgb(' + e.color.map(c => Math.round(c * 255)).join(',') + ')';
         const txt = document.createElement('span');
-        txt.textContent = e.name + ' (' + counts.get(e.value) + ')';
+        txt.textContent = e.name + ' (' + k + ')';
         lab.append(cb, sw, txt);
         list.appendChild(lab);
       }
@@ -12341,10 +12391,11 @@ function buildMarkerFilterSettings(rec, el) {
       const [lo, hi] = p.dataRange || propertyRange(p);
       const step = p.type === 'integer' ? 1 : (hi - lo) / 500 || 1;
       const fmt = v => String(+v.toPrecision(4)) + (p.unit ? ' ' + p.unit : '');
+      // (let go: the settings again — the other filters' counts follow)
       const fr = makeSliderRow('from', { min: lo, max: hi, step, value: f.range[0], format: fmt,
-        onInput: v => { f.range[0] = v; refilterQuiet(); } });
+        onInput: v => { f.range[0] = v; refilterQuiet(); }, onChange: () => refilter() });
       const to = makeSliderRow('to', { min: lo, max: hi, step, value: f.range[1], format: fmt,
-        onInput: v => { f.range[1] = v; refilterQuiet(); } });
+        onInput: v => { f.range[1] = v; refilterQuiet(); }, onChange: () => refilter() });
       for (const r of [fr, to]) { r.classList.add('dt-helper'); box.appendChild(r); }
       attachTip(fr, 'Show only markers with ' + p.name + ' from this value …');
       attachTip(to, '… up to this value (both included).');

@@ -10,6 +10,13 @@
 // markers whose glyph reaches into the slab are drawn, darker when the
 // center lies behind the section plane. In the 3D view (FULL_PASS) those
 // slice uniforms are unused.
+//
+// Depth in the 3D view: each marker darker the farther back it lies within
+// its set (u_fogNear … u_fogFar along the line of sight, set per frame by
+// the app: the set's depth, at least a share of the scene's, so a small
+// cluster isn't overdone; u_fog: how much darker at the back), and a thin
+// dark outline (an OUTLINE pass: the glyph's back faces, a little larger,
+// in near-black), so a marker in front visibly cuts into one behind.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -32,13 +39,16 @@ uniform float u_sizeScale;  // user multiplier (FILE panel)
 uniform vec3  u_sliceNormal;
 uniform vec3  u_slicePt;
 uniform float u_slabHalf;
+uniform float u_outlinePx;  // the outline's width (CSS px), OUTLINE pass
 varying vec3  vColor;
 varying vec3  vNormalV;
 varying float vSignedDist;
 varying float vAlpha;
+varying float vDepth;       // the center's depth (mm along the line of sight): the fog
 void main() {
   vec4 cView = modelViewMatrix * vec4(iCenter, 1.0);
   vec4 cClip = projectionMatrix * cView;
+  vDepth = -cView.z;
   // World-space diameter. For pixels: a length S at clip depth w covers
   // S * P[1][1] / w * resolution.y / 2 pixels, for a perspective and an
   // orthographic camera alike (w = 1 there).
@@ -58,6 +68,9 @@ void main() {
   vAlpha = (iBase > 0.5 && !hovered) ? u_opacity : 1.0;
   vColor = hovered ? min(iColor * 1.25 + 0.15, vec3(1.0)) : iDim > 0.5 ? iColor * 0.28 + 0.06 : iColor;
   vNormalV = normalize(normalMatrix * normal);
+#ifdef OUTLINE
+  d += 2.0 * u_outlinePx * u_pxScale * cClip.w / (projectionMatrix[1][1] * 0.5 * u_resolution.y);
+#endif
   vec4 pv = modelViewMatrix * vec4(iCenter + position * d, 1.0);
   pv.xy += iOffset * unit;
   gl_Position = projectionMatrix * pv;
@@ -179,7 +192,15 @@ varying float vAlpha;
 varying vec3  vColor;
 varying vec3  vNormalV;
 varying float vSignedDist;
+varying float vDepth;
+uniform float u_fog;        // 0: none; the back of the set at 1 - this
+uniform float u_fogNear;
+uniform float u_fogFar;
 void main() {
+#ifdef OUTLINE
+  gl_FragColor = vec4(0.02, 0.025, 0.03, vAlpha);
+  return;
+#endif
   // Headlight from slightly above-left, plus a little specular: reads as a
   // solid 3D glyph in both the perspective view and the flat slices.
   vec3 n = normalize(vNormalV);
@@ -190,6 +211,9 @@ void main() {
   vec3 col = vColor * (0.35 + 0.65 * diff) + vec3(0.25 * spec);
 #ifdef FAR_PASS
   col *= 0.7; // behind the section plane, as the streamlines
+#endif
+#ifdef FULL_PASS
+  col *= 1.0 - u_fog * clamp((vDepth - u_fogNear) / max(u_fogFar - u_fogNear, 1e-3), 0.0, 1.0);
 #endif
   gl_FragColor = vec4(col, vAlpha);
 }`;
@@ -311,8 +335,12 @@ export function makeMarkerMaterial(defines = { FULL_PASS: 1 }, uniforms = null) 
       u_sliceNormal: { value: new THREE.Vector3(0, 0, 1) },
       u_slicePt:     { value: new THREE.Vector3() },
       u_slabHalf:    { value: 1e9 },
+      u_outlinePx:   { value: 1.25 },
+      u_fog:         { value: 0 },
+      u_fogNear:     { value: 0 },
+      u_fogFar:      { value: 1 },
     },
-    side: THREE.DoubleSide,
+    side: defines && defines.OUTLINE ? THREE.BackSide : THREE.DoubleSide,
   });
 }
 
@@ -336,10 +364,12 @@ export function makeMarkerGroup(set, resolved, materials = null, linkResolved = 
   // opaque one must.
   const material = (materials && materials.material) || makeMarkerMaterial();
   const baseMaterial = (materials && materials.baseMaterial) || makeMarkerMaterial({ FULL_PASS: 1 }, material.uniforms);
+  const outlineMaterial = (materials && materials.outlineMaterial) || makeMarkerMaterial({ FULL_PASS: 1, OUTLINE: 1 }, material.uniforms);
   material.uniforms.u_sizeInPx.value = resolved.sizeUnit === 'px' ? 1 : 0;
   const group = new THREE.Group();
   group.userData.material = material;
   group.userData.baseMaterial = baseMaterial;
+  group.userData.outlineMaterial = outlineMaterial;
   const base = baseGeometries();
   const isBase = j => inst.base[j] === 1;
   MARKER_SHAPES.forEach((shapeName, s) => addShapeMeshes(s, shapeName));
@@ -405,6 +435,13 @@ export function makeMarkerGroup(set, resolved, materials = null, linkResolved = 
         material.uniforms.u_pxScale.value = renderer.getPixelRatio();
       };
       group.add(mesh);
+      // its outline: the same glyphs' back faces, a little larger, near-black (drawn first)
+      const om = new THREE.Mesh(g, outlineMaterial);
+      om.frustumCulled = false;
+      om.renderOrder = -1;
+      om.userData.isBase = wantBase; om.userData.outline = true;
+      om.onBeforeRender = mesh.onBeforeRender;
+      group.add(om);
     }
   }
   return group;
@@ -438,12 +475,16 @@ export function setMarkerDisplay(group, { sizeScale = 1, opacity = 1 } = {}) {
     bm.depthWrite = !transparent;
     bm.needsUpdate = true;
   }
-  for (const mesh of group.children) if (mesh.userData.isBase) mesh.visible = opacity > 0.004;
+  // (a translucent base-coloured marker: no outline — it would show through it)
+  for (const mesh of group.children) if (mesh.userData.isBase) mesh.visible = mesh.userData.outline ? !transparent : opacity > 0.004;
   if (group.userData.labelMaterial) group.userData.labelMaterial.uniforms.u_sizeScale.value = sizeScale;
 }
 
 export function disposeMarkerGroup(group, keepMaterial = false) {
+  const done = new Set();   // (an outline shares its glyphs' geometry)
   for (const mesh of group.children) {
+    if (done.has(mesh.geometry)) continue;
+    done.add(mesh.geometry);
     // dispose() frees the GPU buffers of the attributes still attached; the
     // base glyph's position/normal/index are shared between all groups, so
     // detach those first and free only the per-group instance attributes.
@@ -452,7 +493,7 @@ export function disposeMarkerGroup(group, keepMaterial = false) {
     mesh.geometry.index = null;
     mesh.geometry.dispose();
   }
-  if (!keepMaterial) { group.userData.material.dispose(); group.userData.baseMaterial.dispose(); if (group.userData.linkMaterial) group.userData.linkMaterial.dispose(); if (group.userData.labelMaterial) group.userData.labelMaterial.dispose(); }
+  if (!keepMaterial) { group.userData.material.dispose(); group.userData.baseMaterial.dispose(); if (group.userData.outlineMaterial) group.userData.outlineMaterial.dispose(); if (group.userData.linkMaterial) group.userData.linkMaterial.dispose(); if (group.userData.labelMaterial) group.userData.labelMaterial.dispose(); }
 }
 
 export function markerBoundingSphere(pos) {
