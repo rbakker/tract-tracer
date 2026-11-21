@@ -27,7 +27,8 @@
 
 import { ImagePanel } from '../js/image-panel.js';
 import { ImageOverlay } from '../js/image-overlay.js';
-import { initialCamera, solveCamera, projectPoint, cameraView, fitPlane, photoHomography } from '../js/camera-solve.js';
+import { initialCamera, solveCamera, projectPoint, cameraView, fitPlane, photoHomography, angleFromNormal } from '../js/camera-solve.js';
+import { readExifLens } from '../js/exif.js';
 
 let host = null;
 let current = null;                 // the photo shown ({ file, name } from host.photos())
@@ -55,7 +56,8 @@ function infoOf(p) {
           outline: { points: [], closed: false }, place: { x: 0, y: 0, size: 0.5, angle: 0 }, show: true,
           matchView: null, matchPlace: null, anchor: null, pairs: [], solve: null, markers: [], notes: [] };
     r.img.decoding = 'async';
-    r.loading = new Promise((ok, bad) => { r.img.onload = ok; r.img.onerror = () => bad(new Error('not an image')); }).then(() => { r.ready = true; applyRegistration(p, r); }, e => { r.error = e; });
+    r.loading = new Promise((ok, bad) => { r.img.onload = ok; r.img.onerror = () => bad(new Error('not an image')); })
+      .then(async () => { await readLens(p, r); r.ready = true; applyRegistration(p, r); }, e => { r.error = e; });
     r.img.src = r.url;
     info.set(p, r);
   }
@@ -71,7 +73,7 @@ function currentPhoto() {
 // the overlay follows the current photo, and the tool being the chosen one
 function syncOverlay() {
   // (the view the photo was matched in: the camera's first guess)
-  if (!overlay) overlay = new ImageOverlay(host.view3d(), { onChange: place => { const p = currentPhoto(); if (p) placedByHand(infoOf(p), place); } });
+  if (!overlay) { overlay = new ImageOverlay(host.view3d(), { onChange: place => { const p = currentPhoto(); if (p) placedByHand(infoOf(p), place); } }); overlay.setControls(!(picking || marking)); }
   const p = currentPhoto(), r = p && infoOf(p);
   if (!r || !r.ready) { overlay.setVisible(false); if (host.setSurfacePhoto) host.setSurfacePhoto(null); return; }
   overlay.setImage(r.url, r.img.naturalWidth, r.img.naturalHeight);
@@ -182,6 +184,52 @@ function pairStates(r) {
     return { state: e != null && e > 5 && e > 2.5 * med ? 'off' : 'ok', err: e, errMm: s && k >= 0 ? s.errorsMm[k] : null };
   });
 }
+// THE DISTANCE: the camera's distance from the brain (the pairs' mean
+// depth) is set, not fitted — a nearly flat patch can't tell a near
+// wide-angle camera from a far telephoto one, while the pairs fix the scale
+// (px per mm) well; the focal length then follows from the two. Set with
+// the slider: a surgical microscope's working distance (~200–400 mm), a
+// phone held over the field (~150–400). First value: from the photo's EXIF
+// lens (35 mm equivalent) when it has one — the distance that lens gives
+// with the pairs — else 30 cm; a loaded registration's own.
+const FILM_DIAG = Math.hypot(36, 24);   // 43.27 mm: 35 mm film's diagonal
+const DEFAULT_DIST = 300;               // mm
+const DIST_MIN = 50, DIST_MAX = 1500;
+const fPx = (r, f35) => f35 / FILM_DIAG * Math.hypot(r.img.naturalWidth, r.img.naturalHeight);
+const focal35Of = (r, f) => f * FILM_DIAG / Math.hypot(r.img.naturalWidth, r.img.naturalHeight);
+async function readLens(p, r) {
+  const e = await readExifLens(p.file).catch(() => null);
+  r.exif = e && e.focal35 ? e : null;
+  r.dist = null; r.distSrc = null;   // (set at the first solve: from the EXIF lens, else DEFAULT_DIST)
+}
+// the pairs' mean depth before a camera (mm)
+const meanDepth = (cam, pairs, image) => pairs.reduce((a, x) => a + projectPoint(cam, x.X, image)[2], 0) / pairs.length;
+// The camera at the set distance: solved with a fixed focal length, the
+// focal length then scaled by set / found depth (proportional, at the
+// pairs' fixed scale) — a few rounds.
+function solveAtDistance(pairs, init, image, D, f0) {
+  let f = f0 > 0 ? f0 : (init.f || 1000), s = null;
+  for (let k = 0; k < 6; k++) {
+    s = solveCamera(pairs, s ? s.cam : init, image, { fFixed: f });
+    const d = meanDepth(s.cam, pairs, image);
+    if (!(d > 0)) break;
+    if (Math.abs(d - D) < 0.5) break;
+    f *= D / d;
+  }
+  return s;
+}
+// The camera's angle from the brain surface's normal over the pairs
+// (host.surfaceNormal: one robust direction, blurred over ~8 mm), seen from
+// the pairs' middle — reported in CAMERA (no longer a limit: with the
+// distance set, the fit stays square enough by itself).
+function surfaceAxis(r, pairs) {
+  if (!host.surfaceNormal || !pairs.length) return null;
+  const key = pairs.map(x => x.X.map(v => v.toFixed(1)).join(',')).join(';');
+  if (r.normalKey !== key) { r.normalKey = key; r.normal = host.surfaceNormal(pairs.map(x => x.X)); }
+  if (!r.normal) return null;
+  const P = [0, 1, 2].map(a => pairs.reduce((s, x) => s + x.X[a], 0) / pairs.length);
+  return { n: r.normal, P };
+}
 // the camera again, from the pairs (four or more)
 function solveFor(r, quick = false) {
   const pairs = complete(r).map(x => ({ q: x.q, X: x.X })), image = { w: r.img.naturalWidth, h: r.img.naturalHeight };
@@ -204,11 +252,15 @@ function solveFor(r, quick = false) {
   const guess = () => initialCamera(r.matchView || host.camera(), r.matchPlace || r.place, image);
   const init = r.solve ? r.solve.cam : guess();
   try {
-    // the focal length expected: the hand placement's (or a loaded camera's) — fixed, so
-    // the camera can't drift off to a far telephoto over a nearly flat patch of brain
-    const opts = { fPrior: r.fPrior || guess().f };
-    let s = solveCamera(pairs, init, image, opts);
-    if (r.solve && !quick) { const s2 = solveCamera(pairs, guess(), image, opts); if (s2.rms < s.rms) s = s2; }   // (a pair moved a lot: start over too)
+    // the distance: set (the slider) — the first time from the EXIF lens, else 30 cm
+    if (!(r.dist > 0)) {
+      if (r.exif) { const s0 = solveCamera(pairs, init, image, { fFixed: fPx(r, r.exif.focal35) }); r.dist = Math.round(meanDepth(s0.cam, pairs, image)); r.distSrc = 'exif'; }
+      if (!(r.dist > 0)) { r.dist = DEFAULT_DIST; r.distSrc = 'default'; }
+    }
+    let s = solveAtDistance(pairs, init, image, r.dist, r.solve && r.solve.cam.f);
+    if (r.solve && !quick) { const s2 = solveAtDistance(pairs, guess(), image, r.dist, r.solve.cam.f); if (s2.rms < s.rms) s = s2; }   // (a pair moved a lot: start over too)
+    const ax = surfaceAxis(r, pairs);
+    if (ax) s.angleDeg = angleFromNormal(s.cam, ax);
     r.solve = s;
   } catch (e) { console.warn('photo camera', e); r.solve = null; }
   placeMarkers(r);
@@ -271,6 +323,7 @@ function clicksClaimed() {
   }
   if (!on && releasePick) { releasePick(); releasePick = null; releaseEsc(); releaseEsc = null; }
   if (panel) panel.el.classList.toggle('picking', on);
+  if (overlay) overlay.setControls(!on);   // (picking points: no move / turn control over the photo)
 }
 
 // ── markers: named points on the photo (stimulation sites), on the brain ──
@@ -547,7 +600,7 @@ function registrationOf(p, r, photoFile) {
   const vol = host.activeVolume(), s = r.solve, iw = r.img.naturalWidth, ih = r.img.naturalHeight, o = r.outline;
   return {
     format: 'tractogram.observer photo', version: 1,
-    photo: { file: photoFile, original: p.file.name, width: iw, height: ih },
+    photo: { file: photoFile, original: p.file.name, width: iw, height: ih, distance_mm: r.dist > 0 ? Math.round(r.dist) : null, ...(s ? { focal_35mm: +focal35Of(r, s.cam.f).toFixed(1) } : {}) },
     brain: vol ? { volume: vol.file.name, shape: vol.gridShape ? Array.from(vol.gridShape) : null, affine: affine4(vol.Ab) } : null,
     roi_contour: o.closed ? o.points.map(([x, y]) => [r1(x), r1(y)]) : null,
     pairs: r.pairs.map(x => ({ photo: x.q ? x.q.map(r1) : null, brain: x.X || null })),
@@ -605,8 +658,14 @@ function applyRegistration(p, r, redraw = true) {
         if (!(zMean > 0 && zMean < 2000)) { notes.push(['!', 'the saved camera was ' + (zMean / 1000).toFixed(0) + ' m from the brain (an earlier solve that drifted): solved again from the pairs — check it']); init = null; }
       }
       const guessCam = initialCamera(host.camera(), r.place, image);
-      r.fPrior = init ? init.f : null;
-      r.solve = solveCamera(pairs, init || guessCam, image, { fPrior: r.fPrior || guessCam.f });
+      // the distance: the registration's own (saved, else its camera's), else from the EXIF lens / 30 cm (solveFor)
+      if (j.photo && j.photo.distance_mm > 0) { r.dist = j.photo.distance_mm; r.distSrc = 'saved'; }
+      else if (init) { const d = meanDepth(init, pairs, image); if (d > 0) { r.dist = Math.round(d); r.distSrc = 'saved'; } }
+      if (r.dist > 0) {
+        r.solve = solveAtDistance(pairs, init || guessCam, image, r.dist, init && init.f);
+        const ax = surfaceAxis(r, pairs);
+        if (ax) r.solve.angleDeg = angleFromNormal(r.solve.cam, ax);
+      } else solveFor(r);
       if (cam && Number.isFinite(cam.rms_px) && Math.abs(r.solve.rms - cam.rms_px) > 1) notes.push(['!', 'the camera solved again fits to ' + r.solve.rms.toFixed(1) + ' px, saved: ' + cam.rms_px.toFixed(1) + ' px']);
     } catch (e) { notes.push(['!', 'the camera could not be solved again from the saved pairs']); }
   }
@@ -843,8 +902,22 @@ export default {
     }
 
     // CAMERA: where the photo was taken from
-    const cm = chapter('camera', 'CAMERA', 'The photo\'s camera, solved from the pairs: where it stood, where it looked, its focal length. From that camera the photo should fit the brain.');
+    const cm = chapter('camera', 'CAMERA', 'The photo\'s camera, solved from the pairs: where it stood and where it looked — its lens set here (from the photo\'s EXIF when it has one). From that camera the photo should fit the brain.');
     if (cm) {
+      // the distance (on a log scale): set, not fitted — the focal length follows
+      const L10 = Math.log(DIST_MAX / DIST_MIN), toMm = v => DIST_MIN * Math.exp(v / 1000 * L10), toV = mm => Math.round(1000 * Math.log(mm / DIST_MIN) / L10);
+      const src = { exif: ' · from EXIF', saved: ' · saved', set: '', default: ' · assumed' }[r.distSrc] || '';
+      const distRow = host.ui.sliderRow('distance', { min: 0, max: 1000, step: 1, value: toV(r.dist > 0 ? r.dist : DEFAULT_DIST),
+        format: v => Math.round(toMm(v)) + ' mm' + (r.dist > 0 && Math.abs(toMm(v) - r.dist) < 0.5 ? src : ''),
+        // typed: in mm (the slider's own value is its log position)
+        parse: t => { const m = String(t).replace(',', '.').match(/\d*\.?\d+/); return m ? 1000 * Math.log(Math.max(DIST_MIN, Math.min(DIST_MAX, +m[0])) / DIST_MIN) / L10 : NaN; },
+        editText: v => String(Math.round(toMm(v))),
+        onInput: v => { r.dist = toMm(v); r.distSrc = 'set'; if (complete(r).length >= MIN_PAIRS) { solveFor(r, true); updateSurfacePhoto(r); drawLayer(); } },
+        onChange: () => { solveFor(r); updateSurfacePhoto(r); host.redraw(); } });
+      distRow.dataset.tip = 'The camera\'s distance from the brain (the pairs\' mean depth) — set, not fitted: a nearly flat patch of brain fits a near wide-angle camera and a far telephoto one alike, and the photo spreads very differently over the brain beyond the pairs; the focal length follows from the distance and the pairs. '
+        + 'A surgical microscope: its working distance (~200–400 mm, often on its display); a phone: ~150–400 mm. '
+        + (r.exif ? 'This photo\'s EXIF lens: ' + r.exif.focal35 + ' mm (35 mm equivalent)' + (r.exif.model ? ', ' + r.exif.model : '') + ' — the first value is the distance it gives.' : 'This photo has no EXIF lens: ' + DEFAULT_DIST + ' mm to start with.');
+      cm.appendChild(distRow);
       const s = r.solve;
       if (!s) {
         const n = document.createElement('div'); n.className = 'tool-hint';
@@ -856,8 +929,9 @@ export default {
         const dist = depths.reduce((a, b) => a + b, 0) / depths.length;
         const L = [
           [s.rms < 0.01 * image.w ? '✓' : '!', 'error: ' + s.rms.toFixed(0) + ' px (' + s.rmsMm.toFixed(1) + ' mm on the brain), over ' + nDone + ' pairs'],
-          ['i', 'focal length ' + s.cam.f.toFixed(0) + ' px (' + (2 * Math.atan(image.h / 2 / s.cam.f) * 180 / Math.PI).toFixed(1) + '° vertical), ' + dist.toFixed(0) + ' mm from the brain'],
+          ['i', 'focal length ' + focal35Of(r, s.cam.f).toFixed(0) + ' mm in 35 mm terms (' + (2 * Math.atan(FILM_DIAG / 2 / focal35Of(r, s.cam.f)) * 180 / Math.PI).toFixed(0) + '° diagonal; ' + s.cam.f.toFixed(0) + ' px)' + (r.exif ? ' — the EXIF lens: ' + r.exif.focal35 + ' mm' : '')],
         ];
+        if (s.angleDeg != null) L.push(['i', s.angleDeg.toFixed(0) + '° from the surface\'s normal']);
         if (nDone < 6) L.push(['!', 'few pairs: add some, spread over the roi']);
         cm.appendChild(host.ui.needsList(L));
         const rowC = document.createElement('div'); rowC.className = 'ctl-row';

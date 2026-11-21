@@ -83,10 +83,21 @@ export function initialCamera(view, place, image) {
  *   hand placement's) when init is a previous solve: anchored to the last solve, the
  *   prior follows it, and a nearly flat patch of brain lets the camera drift away to
  *   a telephoto from metres off (the same picture: further and zoomed in).
- * @returns {{ cam, errors: number[] (px per pair), errorsMm: number[], rms, rmsMm, weights, iterations }}
+ * @param o.fFixed - the focal length (photo px), not fitted at all: the camera's place
+ *   and turn only (a nearly flat patch can't tell a near wide-angle camera from a far
+ *   telephoto one — the lens is known instead: EXIF, or set by hand). fPrior is unused then.
+ * @param o.normal - { n: [x, y, z] (the surface's outward normal, unit), P: [x, y, z] (the
+ *   pairs' middle), maxDeg = 30, wDeg = 5 }: the camera kept within maxDeg of the normal,
+ *   seen from P — a soft "hinge": free below, beyond it wDeg photo px per degree (steep:
+ *   it holds unless the pairs insist). A photo is taken roughly square onto the
+ *   craniotomy; a few pairs on a nearly flat patch would otherwise let the camera
+ *   slide off to a grazing angle.
+ * @returns {{ cam, errors: number[] (px per pair), errorsMm: number[], rms, rmsMm, weights, iterations,
+ *   angleDeg (from the normal; with o.normal), held (true: beyond maxDeg — the limit, not the pairs, decided) }}
  */
 export function solveCamera(pairs, init, image, opts = {}) {
-  opts = { ...opts, fPriorAt: opts.fPrior || init.f };
+  if (opts.fFixed > 0) init = { ...init, f: opts.fFixed };
+  opts = { ...opts, fPriorAt: opts.fPrior || init.f, fixedF: opts.fFixed > 0 };
   const n = pairs.length, med = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : 0; };
   const errorsOf = cam => pairs.map(({ q, X }) => { const [u, v, z] = projectPoint(cam, X, image); return z > 0 ? Math.hypot(u - q[0], v - q[1]) : 1e6; });
   // all pairs, and (five or more) each left out: the one fitting most pairs best
@@ -111,11 +122,18 @@ export function solveCamera(pairs, init, image, opts = {}) {
   // the error summed over the pairs that count (weighted): a far-off pair doesn't spoil it
   const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   const rmsW = a => Math.sqrt(a.reduce((s, x, i) => s + weights[i] * x * x, 0) / wsum);
-  return { cam, errors, errorsMm, weights, rms: rmsW(errors), rmsMm: rmsW(errorsMm), iterations: it };
+  const out = { cam, errors, errorsMm, weights, rms: rmsW(errors), rmsMm: rmsW(errorsMm), iterations: it };
+  if (opts.normal) { out.angleDeg = angleFromNormal(cam, opts.normal); out.held = out.angleDeg > (opts.normal.maxDeg || 30) + 0.5; }
+  return out;
+}
+// The angle (degrees) between the surface's normal and the line from P to the camera.
+export function angleFromNormal(cam, { n, P }) {
+  const v = sub(cam.C, P), l = Math.hypot(...v) || 1;
+  return Math.acos(Math.max(-1, Math.min(1, dot(v, n) / l))) * 180 / Math.PI;
 }
 
 // Levenberg–Marquardt from init; weights: per pair (null: all 1)
-function lm(pairs, init, image, weights, { fWeight = 10, iterations = 200, fPriorAt = null } = {}) {
+function lm(pairs, init, image, weights, { fWeight = 10, iterations = 200, fPriorAt = null, normal = null, fixedF = false } = {}) {
   const R0 = init.R, f0 = Math.log(fPriorAt || init.f);
   const sw = weights ? weights.map(Math.sqrt) : null;
   // the parameters: a turn of R0 (3), the camera's place (3), log f (1)
@@ -127,7 +145,11 @@ function lm(pairs, init, image, weights, { fWeight = 10, iterations = 200, fPrio
       if (z <= 0) { r.push(1e4 * k, 1e4 * k); return; }   // (behind the camera: far off)
       r.push(k * (u - q[0]), k * (v - q[1]));
     });
-    r.push(fWeight * (p[6] - f0));
+    if (!fixedF) r.push(fWeight * (p[6] - f0));
+    if (normal) {   // (the angle from the surface's normal: free up to maxDeg, steep beyond)
+      const a = angleFromNormal(cam, normal);
+      r.push((normal.wDeg || 5) * Math.max(0, a - (normal.maxDeg || 30)));
+    }
     return r;
   };
   const cost = r => r.reduce((a, x) => a + x * x, 0);
@@ -135,7 +157,7 @@ function lm(pairs, init, image, weights, { fWeight = 10, iterations = 200, fPrio
   const steps = [1e-5, 1e-5, 1e-5, 1e-3, 1e-3, 1e-3, 1e-5];
   for (; it < iterations && !done; it++) {
     // the Jacobian, by differences
-    const J = steps.map((h, k) => { const q = p.slice(); q[k] += h; const rq = residuals(q); return rq.map((x, i) => (x - r[i]) / h); });
+    const J = steps.map((h, k) => { if (k === 6 && fixedF) return new Array(r.length).fill(0); const q = p.slice(); q[k] += h; const rq = residuals(q); return rq.map((x, i) => (x - r[i]) / h); });
     const m = r.length, A = [...Array(7)].map(() => new Float64Array(7)), g = new Float64Array(7);
     for (let a = 0; a < 7; a++) {
       for (let i = 0; i < m; i++) g[a] += J[a][i] * r[i];

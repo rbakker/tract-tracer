@@ -219,6 +219,22 @@ export function parseDqzHeader(buf) {
 }
 
 /**
+ * Just the header of a .dqz file — magic, length and JSON, a few hundred
+ * bytes; never the streamlines. For a tractogram not read yet (a package's
+ * "visible": false): its uuid, so its data files match it before it is read.
+ * @param {File|Blob} file
+ * @returns {Promise<Object>} as parseDqzHeader (header._dqz.uuid, n_streamlines …)
+ */
+export async function readDqzHeader(file) {
+  if (file.size < 12) throw 'Not a .dqz file (too short)';
+  const head = await file.slice(0, 12).arrayBuffer();
+  if (String.fromCharCode(...new Uint8Array(head, 0, 8)) !== DQZ_MAGIC) throw 'Not a .dqz file (bad magic)';
+  const len = new DataView(head).getUint32(8, true);
+  if (12 + len > file.size) throw '.dqz header runs past the end of the file';
+  return parseDqzHeader(await file.slice(0, 12 + len).arrayBuffer());
+}
+
+/**
  * Parse a full .dqz file into streamlines + metadata, decoding the
  * quantized-delta encoding back into ordinary float coordinates.
  * Same return shape as parseTck.

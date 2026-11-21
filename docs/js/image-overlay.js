@@ -1,10 +1,12 @@
 // ── image-overlay.js ──────────────────────────────────────
-// An image laid over a view, semi-transparent (a lightbox), with two
-// handles: ✥ at its top-right corner moves it; ⤡ at its bottom-left
-// corner scales and turns it about the top-right corner. With a clip (only
-// part of the image shown), the corners are those of the part shown. Only the handles
-// take the mouse — everywhere else the view below gets it, so the 3D view
-// still turns and zooms under the image.
+// An image laid over a view, semi-transparent (a lightbox), with one
+// control in the middle of it (of the part shown, with a clip), kept in the
+// view: a see-through disc with crossing arrows moves the image; the ring
+// around it turns and scales it about that middle (drag it round: turn;
+// out or in: larger or smaller). Only the control takes the mouse —
+// everywhere else the view below gets it, so the 3D view still turns and
+// zooms under the image. setControls(false) hides it (while points are
+// being picked on the image).
 //
 // Its place: { x, y } its centre from the view's centre, { size } its
 // width, both in units of the view's height; { angle } in radians
@@ -39,15 +41,43 @@ export class ImageOverlay {
     this.img = document.createElement('img');
     this.img.className = 'img-overlay-img';
     this.img.draggable = false;
-    this.hMove = this._handle('✥', 'move the photo', 'move');
-    this.hTurn = this._handle('⤡', 'scale and turn the photo (about its top-right corner)', 'nesw-resize');
-    el.append(this.img, this.hMove, this.hTurn);
+    this.controls = true;
+    // the control: a ring (turn and scale) round a disc (move), drawn in SVG
+    const NS = 'http://www.w3.org/2000/svg', R0 = 17, R1 = 34, S = 2 * R1 + 8;
+    const ctl = this.ctl = document.createElement('div');
+    ctl.className = 'img-overlay-ctl';
+    ctl.style.width = ctl.style.height = S + 'px';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', (-S / 2) + ' ' + (-S / 2) + ' ' + S + ' ' + S); svg.setAttribute('width', S); svg.setAttribute('height', S);
+    const mk = (tag, a) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); return e; };
+    // the ring: a band between R0 + 3 and R1, two turning arrows on it
+    const rm = (R0 + 3 + R1) / 2, rw = R1 - R0 - 3;
+    this.hTurn = mk('circle', { r: rm, fill: 'none', stroke: 'rgba(8,11,15,0.35)', 'stroke-width': rw, class: 'io-turn' });
+    const arc = (a0, a1) => { const p = a => [rm * Math.cos(a), rm * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); return 'M' + x0 + ' ' + y0 + ' A' + rm + ' ' + rm + ' 0 0 1 ' + x1 + ' ' + y1; };
+    const arrows = mk('g', { class: 'io-glyph', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    for (const a of [-Math.PI / 2, Math.PI / 2]) {
+      arrows.appendChild(mk('path', { d: arc(a - 0.55, a + 0.55) }));
+      const t = a + 0.55, ex = rm * Math.cos(t), ey = rm * Math.sin(t), tx = -Math.sin(t), ty = Math.cos(t), nx = Math.cos(t), ny = Math.sin(t);
+      arrows.appendChild(mk('path', { d: 'M' + (ex - 5 * tx + 3.5 * nx) + ' ' + (ey - 5 * ty + 3.5 * ny) + ' L' + ex + ' ' + ey + ' L' + (ex - 5 * tx - 3.5 * nx) + ' ' + (ey - 5 * ty - 3.5 * ny) }));
+    }
+    // the disc: crossing two-way arrows
+    this.hMove = mk('circle', { r: R0, fill: 'rgba(8,11,15,0.35)', stroke: 'rgba(255,255,255,0.55)', 'stroke-width': 1, class: 'io-move' });
+    const cross = mk('g', { class: 'io-glyph', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    const L = R0 - 5, h = 3.5;
+    cross.appendChild(mk('path', { d: `M${-L} 0 H${L} M0 ${-L} V${L} M${-L + h} ${-h} L${-L} 0 L${-L + h} ${h} M${L - h} ${-h} L${L} 0 L${L - h} ${h} M${-h} ${-L + h} L0 ${-L} L${h} ${-L + h} M${-h} ${L - h} L0 ${L} L${h} ${L - h}` }));
+    svg.append(this.hTurn, arrows, this.hMove, cross);
+    ctl.appendChild(svg);
+    this.hTurn.appendChild(mk('title', {})).textContent = 'turn the photo (drag round) and scale it (drag out or in), about its middle';
+    this.hMove.appendChild(mk('title', {})).textContent = 'move the photo';
+    el.append(this.img, ctl);
     parent.appendChild(el);
     this._ro = new ResizeObserver(() => this.layout());
     this._ro.observe(parent);
     this._drag(this.hMove, 'move');
     this._drag(this.hTurn, 'turn');
   }
+  // the control shown (true) or not (false: while points are picked on the image)
+  setControls(on) { this.controls = !!on; this.layout(); }
 
   setImage(url, width, height) { this.img.src = url || ''; this.iw = width || 1; this.ih = height || 1; this.aspect = width && height ? height / width : 1; this.layout(); }
   // placed by a homography H (rows of 3: image px → view px), or by hand again (null)
@@ -84,10 +114,10 @@ export class ImageOverlay {
                   : [0, 0, 1, 1];
     this.layout();
   }
-  // the handles' points, from the image's centre, unturned (px): top-right and bottom-left of the part shown
-  _corners(b) {
+  // the middle of the part shown, from the image's centre, unturned (px): the control's pivot
+  _mid(b) {
     const [u0, v0, u1, v1] = this.box;
-    return { tr: [(u1 - 0.5) * b.w, (v0 - 0.5) * b.h], bl: [(u0 - 0.5) * b.w, (v1 - 0.5) * b.h] };
+    return [((u0 + u1) / 2 - 0.5) * b.w, ((v0 + v1) / 2 - 0.5) * b.h];
   }
   setVisible(on) { this.visible = !!on; this.hidden = false; this.layout(); }
   // hidden for a look at what's under it (true), or shown again (false)
@@ -115,33 +145,28 @@ export class ImageOverlay {
       Object.assign(this.img.style, { left: '0px', top: '0px', width: this.iw * k + 'px', height: this.ih * k + 'px', transformOrigin: '0 0',
         transform: 'matrix3d(' + [H[0][0], H[1][0], 0, H[2][0], H[0][1], H[1][1], 0, H[2][1], 0, 0, 1, 0, H[0][2], H[1][2], 0, H[2][2]].join(',') + ')',
         opacity: this.hidden ? 0 : this.opacity });
-      this.hMove.style.display = this.hTurn.style.display = 'none';
+      this.ctl.style.display = 'none';
       return;
     }
-    this.hMove.style.display = this.hTurn.style.display = '';
+    this.ctl.style.display = this.controls && !this.hidden ? '' : 'none';
     const b = this._box();
     Object.assign(this.img.style, {
       left: (b.cx - b.w / 2) + 'px', top: (b.cy - b.h / 2) + 'px', width: b.w + 'px', height: b.h + 'px', transformOrigin: '50% 50%',
       transform: 'rotate(' + this.place.angle + 'rad)', opacity: this.hidden ? 0 : this.opacity,
     });
-    const k = this._corners(b), tr = this._at(b, ...k.tr), bl = this._at(b, ...k.bl);
-    this.hMove.style.left = tr[0] + 'px'; this.hMove.style.top = tr[1] + 'px';
-    this.hTurn.style.left = bl[0] + 'px'; this.hTurn.style.top = bl[1] + 'px';
-  }
-
-  _handle(symbol, tip, cursor) {
-    const h = document.createElement('div');
-    h.className = 'img-overlay-handle'; h.textContent = symbol; h.dataset.tip = tip; h.style.cursor = cursor;
-    return h;
+    // the control at the middle of the part shown — kept in the view (the photo may reach beyond it)
+    const m = this._at(b, ...this._mid(b)), pad = 40;
+    this.ctl.style.left = Math.min(b.W - pad, Math.max(pad, m[0])) + 'px';
+    this.ctl.style.top = Math.min(b.H - pad, Math.max(pad, m[1])) + 'px';
   }
   _drag(h, kind) {
     let start = null;
     h.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
       e.preventDefault(); e.stopPropagation();
-      const b = this._box();
-      const k = this._corners(b);
-      start = { px: e.clientX, py: e.clientY, place: { ...this.place }, b, k, tr: this._at(b, ...k.tr) };
+      const b = this._box(), r = this.parent.getBoundingClientRect(), mid = this._mid(b), pivot = this._at(b, ...mid);
+      start = { px: e.clientX, py: e.clientY, place: { ...this.place }, b, mid, pivot,
+                a0: Math.atan2(e.clientY - r.top - pivot[1], e.clientX - r.left - pivot[0]), d0: Math.max(8, Math.hypot(e.clientX - r.left - pivot[0], e.clientY - r.top - pivot[1])) };
       this._dragging = true;
       h.setPointerCapture(e.pointerId);
     });
@@ -151,17 +176,14 @@ export class ImageOverlay {
       if (kind === 'move') {
         this.place = { ...place, x: place.x + (e.clientX - start.px) / b.H, y: place.y + (e.clientY - start.py) / b.H };
       } else {
-        // the top-right handle stays; the bottom-left one follows the pointer
-        const r = this.parent.getBoundingClientRect();
-        const vx = e.clientX - r.left - start.tr[0], vy = e.clientY - r.top - start.tr[1];
-        const { tr, bl } = start.k, dx = bl[0] - tr[0], dy = bl[1] - tr[1];   // from one handle to the other, unturned
-        const f = Math.max(24, Math.hypot(vx, vy)) / Math.max(1e-6, Math.hypot(dx, dy));   // the scale factor
-        const angle = Math.atan2(vy, vx) - Math.atan2(dy, dx);
-        const c = Math.cos(angle), s = Math.sin(angle);
-        // the centre: back from the top-right handle (scaled and turned)
-        const ax = tr[0] * f, ay = tr[1] * f;
-        const cx = start.tr[0] - (ax * c - ay * s), cy = start.tr[1] - (ax * s + ay * c);
-        this.place = { x: (cx - b.W / 2) / b.H, y: (cy - b.H / 2) / b.H, size: b.w * f / b.H, angle };
+        // about the middle (it stays): turned by the pointer's turn round it, scaled by its distance
+        const r = this.parent.getBoundingClientRect(), { pivot, mid } = start;
+        const vx = e.clientX - r.left - pivot[0], vy = e.clientY - r.top - pivot[1];
+        const f = Math.max(0.05, Math.max(8, Math.hypot(vx, vy)) / start.d0);
+        const angle = place.angle + Math.atan2(vy, vx) - start.a0;
+        const c = Math.cos(angle), s = Math.sin(angle), ax = mid[0] * f, ay = mid[1] * f;
+        const cx = pivot[0] - (ax * c - ay * s), cy = pivot[1] - (ax * s + ay * c);   // the centre: back from the middle
+        this.place = { x: (cx - b.W / 2) / b.H, y: (cy - b.H / 2) / b.H, size: place.size * f, angle };
       }
       this.layout();
     });

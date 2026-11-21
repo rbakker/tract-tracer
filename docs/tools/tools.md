@@ -103,6 +103,7 @@ What `init(host)` gives a tool — everything a tool may touch in the app:
 | `host.ui.progress(text)` | the status line (`''` clears it) |
 | `host.lib` | `shellsOf(bvals)`, `B0_MAX`, `volumeBaseName(name)`, `compactList(indices)` |
 | `host.openTool(id, opts)` | open another tool |
+| `host.surfaceNormal(points, sigmaMm = 8)` | the brain surface's outward normal over these points (world mm), as one robust direction: the rendered tissue's gradient blurred by `sigmaMm`, the unit normals averaged; `[x, y, z]` or null |
 | `host.applyMask(mask, { background0 })` | mask the rendered volume with `mask` (ANATOMY › masking › apply mask; a soft mask weighs by its value); `background0`: its background set to 0 as well, so a soft mask's smooth edge is the surface |
 | `host.photos()` | the loaded photos (`{ file, name, registration, registrationFile }`; .jpg, .jpeg, .png — dropped photos open Photo to surface; `registration`: a `.photo.json` dropped with it) |
 | `host.view3d()` | the 3D view's element (for a layer over it, such as `js/image-overlay.js`) |
@@ -149,7 +150,8 @@ contour, at full size (so its pixels are the .json's).
 ```json
 {
   "format": "tractogram.observer photo", "version": 1,
-  "photo":  { "file": "IMG_0412_roi.png", "original": "IMG_0412.jpg", "width": 4032, "height": 3024 },
+  "photo":  { "file": "IMG_0412_roi.png", "original": "IMG_0412.jpg", "width": 4032, "height": 3024,
+              "distance_mm": 300, "focal_35mm": 104 },
   "brain":  { "volume": "sub-01_T1w.nii.gz", "shape": [176, 256, 256], "affine": [[…4], […4], […4], [0, 0, 0, 1]] },
   "roi_contour": [[812.5, 440.0], …],
   "pairs":  [{ "photo": [1203.5, 880.0], "brain": [-41.2, 12.8, 63.0] }, …],
@@ -168,6 +170,12 @@ contour, at full size (so its pixels are the .json's).
   4 × 4) its grid. Loaded with no volume on that grid, the tool notes it;
   rendered on another volume, it says the markers are placed again on that
   surface.
+- **photo.distance_mm**: the camera's distance from the brain (the pairs'
+  mean depth), set, not fitted: the focal length follows from it and the
+  pairs. First value: the distance the photo's EXIF lens gives, else
+  300 mm. Loaded, it is the distance again (older files without it: their
+  camera's). `focal_35mm`: the resulting lens, in 35 mm terms
+  (`f = focal_35mm / 43.27 × the photo's diagonal in px`), for reference.
 - **camera**: a pinhole camera; a world point X is seen at pixel
   `principal_point + f · (x/z, y/z)` with `[x, y, z] = R (X − C)`
   (rows of R: the camera's right, down, forward). Loading solves it again

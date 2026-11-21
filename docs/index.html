@@ -516,10 +516,15 @@ button.dt-menu-btn:hover{color:var(--accent);}
 /* the lightbox: a photo over the 3D view; only its handles take the mouse */
 .img-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:5;}
 .img-overlay-img{position:absolute;transform-origin:50% 50%;user-select:none;}
-.img-overlay-handle{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;pointer-events:auto;touch-action:none;
-  background:rgba(8,11,15,0.85);border:1px solid var(--accent);color:var(--bright);font-size:12px;line-height:19px;text-align:center;user-select:none;
-  box-shadow:0 1px 6px rgba(0,0,0,0.6);}
-.img-overlay-handle:hover{background:rgba(40,55,80,0.95);}
+.img-overlay-ctl{position:absolute;transform:translate(-50%,-50%);pointer-events:none;color:rgba(255,255,255,0.85);
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.7));user-select:none;}
+.img-overlay-ctl svg{display:block;overflow:visible;}
+.img-overlay-ctl .io-move, .img-overlay-ctl .io-turn{pointer-events:auto;touch-action:none;}
+.img-overlay-ctl .io-move{cursor:move;}
+.img-overlay-ctl .io-turn{cursor:grab;pointer-events:stroke;}
+.img-overlay-ctl .io-glyph{pointer-events:none;}
+.img-overlay-ctl .io-move:hover{fill:rgba(40,55,80,0.6);}
+.img-overlay-ctl .io-turn:hover{stroke:rgba(40,55,80,0.55);}
 .img-panel.picking canvas{cursor:crosshair;}
 /* Photo to surface: the pairs' numbers on the 3D view, and their list */
 .photo-pairs-layer{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:6;}
@@ -1464,7 +1469,7 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { parseTck, parseDqz, parseTrk, parseTt, countTract, thinDqzChild, ensureTckHeader, ensureTrkHeader, writeTck, writeTrk,
-         parseDqzChild, checkDqzChildAgainst } from './js/tract-io.js';
+         parseDqzChild, checkDqzChildAgainst, readDqzHeader } from './js/tract-io.js';
 import { MultiFileOpener, isJunkPath } from './js/file-opener.js';
 import { ScreenCapture, captureSupported, canRecordMp4 } from './js/screen-capture.js';
 import { pathOf, dirOf, joinPath, withPath, findFile, sameFile, shortNames } from './js/file-paths.js';
@@ -4630,9 +4635,10 @@ function probeHitIds(cx, cy, cz, showAll) {
 // Per-bundle visibility from the DATA panel's tree: drops streamlines
 // whose bundle is toggled off.
 function visibleOnly(ids) {
+  const F = streamFilterMask();
   if (streamlineBundleId && hiddenBundleIndices.size)
-    return ids.filter(id => !hiddenBundleIndices.has(streamlineBundleId[id]));
-  return ids;
+    ids = ids.filter(id => !hiddenBundleIndices.has(streamlineBundleId[id]));
+  return F ? ids.filter(id => F[id]) : ids;
 }
 // Probe HIGHLIGHT mode: every visible streamline is drawn, as translucent
 // context (probeContext x the file's opacity), and the ones the probe hits
@@ -6530,6 +6536,7 @@ const sourceOf = (entry, parsed, every) => ({
 // allStreamlines, streamlineLookup, trckHeader from trckParents.
 function rebuildTractArrays(manifest) {
   resetProbeSelection();   // (other streamline indices)
+  filtersChanged();
   allStreamlines = [];
   for (const p of trckParents) {
     p.firstStreamline = allStreamlines.length;
@@ -6628,6 +6635,7 @@ function readPendingSource(p) {
 // opacity and active data field. Returns false (and changes nothing) if
 // there would be more groups than the style/colormap textures have rows.
 function regroupStreamlines() {
+  filtersChanged();   // (other bundles per streamline)
   const old = new Map(groups.map(g => [g.source.name + '\u0000' + (g.code ?? ''), g]));
   const next = [];
   const gid = new Int32Array(allStreamlines ? allStreamlines.length : 0);
@@ -10535,6 +10543,7 @@ function registerTrckItem() {
 function buildBundleSettings(g, el) {
   buildSplitSettings(g.source, el);
   buildFieldSettings(g, el);
+  buildStreamFilterSettings(g, el);
 }
 // The data fields (matched .dqz children) of streamline file p.
 const fieldRecsOf = p => dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p.source);
@@ -10666,13 +10675,46 @@ function addDqzChildren(children) {
   }
 }
 
+function pendingParentByName(file, h) {
+  const pending = trckParents.filter(tp => tp.pending && tp.file);
+  if (!pending.length) return null;
+  const path = pathOf(file), dir = dirOf(path), base = path.split('/').pop().replace(/\.dqz$/i, '');
+  const field = h && typeof h.name === 'string' && h.name ? h.name : null;
+  const stems = new Set();
+  if (field && base.toLowerCase().endsWith('.' + field.toLowerCase())) stems.add(base.slice(0, -field.length - 1));
+  const dot = base.lastIndexOf('.');
+  if (dot > 0) stems.add(base.slice(0, dot));   // (the last part taken as the field)
+  const strip = n => n.replace(/\.dqz$/i, '');
+  const hits = pending.filter(tp => {
+    const tpPath = pathOf(tp.file), tb = strip(tpPath.split('/').pop());
+    if (dirOf(tpPath) !== dir) return false;
+    return [...stems].some(st => st === tb || st === strip(tb).replace(/\.(tck|trk|tt|tt\.gz)$/i, '') && tb.startsWith(st));
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+// A tractogram not read yet (a package's "visible": false): its uuid from
+// its header alone (magic, length, JSON: a few hundred bytes), so its data
+// files match it — and say "switch it on" — before it is read.
+async function readPendingUuids() {
+  for (const p of trckParents) {
+    if (!p.pending || p.uuid || p._uuidTried || !p.file || !/\.dqz$/i.test(p.file.name)) continue;
+    p._uuidTried = true;
+    try { p.uuid = (await readDqzHeader(p.file))._dqz.uuid || null; }
+    catch (e) { /* (not a .dqz tractogram after all: the name match then) */ }
+  }
+}
 async function matchDqzChildren() {
   const run = ++_dqzMatchRun;
+  await readPendingUuids();
+  if (run !== _dqzMatchRun) return;
   for (const rec of dqzChildRecords) {
     rec.parent = null;
     if (rec.error) { rec.status = 'invalid'; rec.reason = rec.error; continue; }
     const h = rec.header;
-    const p = trckParents.find(tp => tp.uuid && tp.uuid === h.parent);
+    // its tractogram: by uuid — or, one not read yet (its uuid is in its unread
+    // header: a package's "visible": false), by file name: the field's name less
+    // its ".<field>.dqz" (a.tck.dqz → a.tck.fa.dqz, a.fa.dqz)
+    const p = trckParents.find(tp => tp.uuid && tp.uuid === h.parent) || pendingParentByName(rec.file, h);
     if (!p) {
       rec.status = 'unmatched';
       rec.reason = `parent .dqz (uuid ${h.parent}) is not loaded`;
@@ -10691,7 +10733,7 @@ async function matchDqzChildren() {
       if (run !== _dqzMatchRun) return; // a newer tractogram load superseded this pass
     }
     // a parent read thinned: its data thinned the same way
-    if (!rec.parsed || rec.parsedEvery !== (p.every || 1)) { rec.parsed = thinDqzChild(rec.parsedFull, p.every || 1); rec.parsedEvery = p.every || 1; }
+    if (!rec.parsed || rec.parsedEvery !== (p.every || 1)) { rec.parsed = thinDqzChild(rec.parsedFull, p.every || 1); rec.parsedEvery = p.every || 1; rec._sums = null; filtersChanged(); }
     const bad = checkDqzChildAgainst(rec.parsed, p.streamlines);
     if (bad) { rec.status = 'mismatch'; rec.reason = `parent "${p.name}": ${bad}`; continue; }
     rec.status = 'matched'; rec.reason = null; rec.parent = p;
@@ -10762,6 +10804,161 @@ const fieldName = rec => (rec.header && rec.header.name) || rec.file.name;
 // (as in the markers' COLOR·BY): map (the colormap), from and to (the
 // window; the parts outside it are dimmed). Left out when the file has
 // no data fields.
+// ── FILTER·BY: streamlines shown only when they meet conditions ──
+// Per bundle (g.filters), on its file's data fields, combined with AND —
+// and with the probe (it selects among what passes): a categorical field
+// per streamline, a list of values to keep (any of them: OR, counts
+// faceted as the markers'); a number per streamline — or per point,
+// summed up per streamline as its min, mean or max — a from–to range.
+// Streamlines that fail are not drawn at all (3D, sections), unlike the
+// colour window's dimming. visibleOnly() applies it everywhere.
+let _filterMask = undefined;   // (undefined: to compute; null: no conditions)
+function streamFilterMask() {
+  if (_filterMask !== undefined) return _filterMask;
+  if (!allStreamlines || !groups.some(g => g.filters && g.filters.length)) return (_filterMask = null);
+  const M = new Uint8Array(allStreamlines.length).fill(1);
+  for (let id = 0; id < M.length; id++) {
+    const g = groups[streamlineBundleId ? streamlineBundleId[id] : 0];
+    if (g && g.filters && g.filters.length && !passesFilters(g, id, g.filters)) M[id] = 0;
+  }
+  return (_filterMask = M);
+}
+function filtersChanged() { _filterMask = undefined; }
+// a streamline's value for a condition: per streamline, or its points' min / mean / max
+function streamValue(rec, id, how) {
+  const local = id - rec.parent.firstStreamline, v = rec.parsed.values;
+  if (rec.parsed.scope !== 'per_vertex') return v[local];
+  const c = rec._sums || (rec._sums = {});
+  if (!c[how]) {   // (once per field and summary: one value per streamline)
+    const o = rec.parsed.offsets, n = o.length - 1, out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      let mn = Infinity, mx = -Infinity, sum = 0, k = 0;
+      for (let j = o[i]; j < o[i + 1]; j++) { const x = v[j]; if (!Number.isFinite(x)) continue; if (x < mn) mn = x; if (x > mx) mx = x; sum += x; k++; }
+      out[i] = !k ? NaN : how === 'min' ? mn : how === 'max' ? mx : sum / k;
+    }
+    c[how] = out;
+  }
+  return c[how][local];
+}
+function passesFilters(g, id, filters) {
+  for (const f of filters) {
+    if (!f.rec || f.rec.parent !== g.source) continue;
+    const x = streamValue(f.rec, id, f.how);
+    if (f.values) { if (!f.values.has(x)) return false; }
+    else if (!(x >= Math.min(f.range[0], f.range[1]) && x <= Math.max(f.range[0], f.range[1]))) return false;
+  }
+  return true;
+}
+// the streamlines (global ids) of bundle g
+function groupIds(g) {
+  const gi = groups.indexOf(g), out = [];
+  for (let id = 0; id < allStreamlines.length; id++) if ((streamlineBundleId ? streamlineBundleId[id] : 0) === gi) out.push(id);
+  return out;
+}
+function filterRange(f, ids) {
+  if (f.rec.parsed.scope !== 'per_vertex') return [...fieldRange(f.rec)];
+  let lo = Infinity, hi = -Infinity;
+  for (const id of ids) { const x = streamValue(f.rec, id, f.how); if (Number.isFinite(x)) { if (x < lo) lo = x; if (x > hi) hi = x; } }
+  return Number.isFinite(lo) ? [lo, hi] : [0, 1];
+}
+function buildStreamFilterSettings(g, el) {
+  const recs = fieldRecsOf(g);
+  if (!recs.length) return;
+  if (!g.filters) g.filters = [];
+  g.filters = g.filters.filter(f => recs.includes(f.rec));   // (fields gone: their conditions too)
+  const refilter = () => { filtersChanged(); updateProbe(); rebuildDqzChildItems(); bundleChanged(); };
+  const refilterQuiet = () => { filtersChanged(); updateProbe(); };
+  const ids = g.filters.length ? groupIds(g) : null;
+  const box = document.createElement('div');
+  box.className = 'dt-filters';
+  const title = document.createElement('div');
+  title.className = 'dt-fields-title';
+  title.textContent = 'FILTER·BY';
+  box.appendChild(title);
+  for (const f of g.filters) {
+    const head = document.createElement('div');
+    head.className = 'dt-filter-head';
+    const name = document.createElement('span');
+    name.className = 'dt-filter-name';
+    name.textContent = fieldName(f.rec) + (f.how ? ' · ' + f.how : '');
+    head.appendChild(name);
+    const remove = makeSettingsButton('✕', () => { g.filters = g.filters.filter(x => x !== f); refilter(); }, 'remove this condition');
+    if (f.values) {
+      const L = fieldLegend(f.rec), others = g.filters.filter(x => x !== f);
+      const counts = new Map(), totals = new Map();
+      for (const id of ids) {
+        const x = streamValue(f.rec, id, null);
+        if (!Number.isFinite(x)) continue;
+        totals.set(x, (totals.get(x) || 0) + 1);
+        if (!others.length || passesFilters(g, id, others)) counts.set(x, (counts.get(x) || 0) + 1);
+      }
+      const entries = [...totals.keys()].sort((a, b) => a - b).map(v => { const e = L && L.find(e => e.value === v); return { value: v, name: e ? e.name : String(v), color: e ? e.color : null }; });
+      head.append(
+        makeSettingsButton('all', () => { f.values = new Set(entries.map(e => e.value)); refilter(); }),
+        makeSettingsButton('none', () => { f.values = new Set(); refilter(); }), remove);
+      box.appendChild(head);
+      const list = document.createElement('div');
+      list.className = 'dt-filter-values dt-helper' + (entries.length > 10 ? ' dt-filter-scroll' : '');
+      attachTip(list, 'Show only streamlines with one of the ticked values.');
+      for (const e of entries) {
+        const lab = document.createElement('label');
+        const k = counts.get(e.value) || 0, tot = totals.get(e.value);
+        lab.className = 'dt-filter-value' + (k ? '' : ' dt-filter-empty');
+        if (others.length) lab.title = k + ' of its ' + tot + ' streamlines pass the other conditions';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = f.values.has(e.value);
+        cb.addEventListener('click', ev => ev.stopPropagation());
+        cb.addEventListener('change', () => { if (cb.checked) f.values.add(e.value); else f.values.delete(e.value); refilter(); });
+        const sw = document.createElement('span');
+        sw.className = 'dt-filter-swatch';
+        if (e.color) sw.style.background = 'rgb(' + e.color.map(Math.round).join(',') + ')';
+        const txt = document.createElement('span');
+        txt.textContent = e.name + ' (' + k + ')';
+        lab.append(cb, sw, txt);
+        list.appendChild(lab);
+      }
+      box.appendChild(list);
+    } else {
+      head.appendChild(remove);
+      box.appendChild(head);
+      if (f.rec.parsed.scope === 'per_vertex') {   // per point: summed up per streamline
+        const hw = makeChoiceRow('per streamline', [['min', 'min'], ['mean', 'mean'], ['max', 'max']], f.how, v => { f.how = v; f.range = filterRange(f, groupIds(g)); refilter(); });
+        hw.classList.add('dt-helper');
+        attachTip(hw, 'A value per point: each streamline\'s smallest, mean or largest value is compared with the range.');
+        box.appendChild(hw);
+      }
+      const [lo, hi] = filterRange(f, ids);
+      const step = (hi - lo) / 500 || 1, fmt = v => String(+v.toPrecision(4));
+      const fr = makeSliderRow('from', { min: lo, max: hi, step, value: f.range[0], format: fmt, free: true,
+        onInput: v => { f.range[0] = v; refilterQuiet(); }, onChange: () => refilter() });
+      const to = makeSliderRow('to', { min: lo, max: hi, step, value: f.range[1], format: fmt, free: true,
+        onInput: v => { f.range[1] = v; refilterQuiet(); }, onChange: () => refilter() });
+      for (const r of [fr, to]) { r.classList.add('dt-helper'); box.appendChild(r); }
+      attachTip(fr, 'Show only streamlines with ' + fieldName(f.rec) + (f.how ? ' (' + f.how + ' over their points)' : '') + ' from this value …');
+      attachTip(to, '… up to this value (both included).');
+    }
+  }
+  // add a condition: a field not yet used (a categorical one only per streamline)
+  const avail = recs.filter(r => !g.filters.some(f => f.rec === r) && !(r.header.kind === 'categorical' && r.parsed.scope === 'per_vertex'));
+  if (avail.length) {
+    const add = makeChoiceRow('+ condition', [['', '---'], ...avail.map((r, i) => [String(i), fieldName(r)])], '', v => {
+      const r = avail[+v];
+      if (!r) return;
+      const f = { rec: r, how: r.parsed.scope === 'per_vertex' ? 'mean' : null };
+      if (r.header.kind === 'categorical') {
+        const vals = new Set(), gid = groupIds(g);
+        for (const id of gid) { const x = streamValue(r, id, null); if (Number.isFinite(x)) vals.add(x); }
+        f.values = vals;
+      } else f.range = filterRange(f, groupIds(g));
+      g.filters.push(f);
+      refilter();
+    });
+    attachTip(add, 'Add a condition. Streamlines are shown only when they meet ALL conditions (and the probe selects among those); within a category, ANY ticked value. A value per point is summed up per streamline: its min, mean or max.');
+    box.appendChild(add);
+  }
+  el.appendChild(box);
+}
+
 function buildFieldSettings(p, el) {
   const recs = fieldRecsOf(p);
   if (!recs.length) return;
@@ -10904,7 +11101,8 @@ function updateRibbonDensity() {
 // it, so "40%" or "2.0 px" work too) and returns NaN for nonsense.
 // onChange (optional): the value settled — a drag let go, a typed value, an
 // arrow key — for work too slow to redo at every step of a drag.
-function makeSliderRow(label, { min, max, step, value, format, onInput, onChange = null, parse = null, editText = null }) {
+// free: a typed value may lie beyond min–max (a colour window shared by two files whose data differ); dragging stays within
+function makeSliderRow(label, { min, max, step, value, format, onInput, onChange = null, parse = null, editText = null, free = false }) {
   const row = document.createElement('div');
   row.className = 'ctl-row dt-slider-row';
   const lbl = document.createElement('label'); lbl.textContent = label;
@@ -10931,11 +11129,11 @@ function makeSliderRow(label, { min, max, step, value, format, onInput, onChange
   const readText = parse || (t => { const m = String(t).replace(',', '.').match(/-?\d*\.?\d+(e[-+]?\d+)?/i); return m ? +m[0] : NaN; });
   let editing = false;
   const show = () => {
-    fill.style.width = (100 * (value - min) / span) + '%';
+    fill.style.width = Math.max(0, Math.min(100, 100 * (value - min) / span)) + '%';
     if (!editing) input.value = format(value);
   };
   const set = (v, fromText = false) => {
-    v = fromText ? Math.max(min, Math.min(max, v)) : snap(v); // typed: exact, only clamped
+    v = fromText ? (free ? v : Math.max(min, Math.min(max, v))) : snap(v); // typed: exact, only clamped (free: not even that)
     if (!Number.isFinite(v) || v === value) { show(); return; }
     value = v;
     show();
@@ -11287,8 +11485,8 @@ function makeFieldWindowRows(rec) {
     if (groups.some(g => g.activeField === rec)) restyleFiles();
   };
   return [
-    makeSliderRow('from', { min: lo, max: hi, step, value: win[0], format: fmt, onInput: v => { win[0] = v; onChange(); } }),
-    makeSliderRow('to',   { min: lo, max: hi, step, value: win[1], format: fmt, onInput: v => { win[1] = v; onChange(); } }),
+    makeSliderRow('from', { min: lo, max: hi, step, value: win[0], format: fmt, free: !categorical, onInput: v => { win[0] = v; onChange(); } }),
+    makeSliderRow('to',   { min: lo, max: hi, step, value: win[1], format: fmt, free: !categorical, onInput: v => { win[1] = v; onChange(); } }),
   ];
 }
 
@@ -11688,10 +11886,10 @@ function buildMarkerStyleSettings(rec, el) {
     helper(wrap, 'The colormap, spread over the from–to window.');
     const step = colorProp.type === 'integer' ? 1 : (hi - lo) / 500 || 1;
     const fmt = v => String(+v.toPrecision(4)) + (colorProp.unit ? ' ' + colorProp.unit : '');
-    helper(makeSliderRow('from', { min: lo, max: hi, step, value: win[0], format: fmt,
+    helper(makeSliderRow('from', { min: lo, max: hi, step, value: win[0], format: fmt, free: true,
       onInput: v => { win[0] = v; paintSwatch(); restyle(); } }),
       'Value at the start of the colormap. Markers outside from–to keep the base color. to < from reverses the colormap. Drag, or click to type.');
-    helper(makeSliderRow('to', { min: lo, max: hi, step, value: win[1], format: fmt,
+    helper(makeSliderRow('to', { min: lo, max: hi, step, value: win[1], format: fmt, free: true,
       onInput: v => { win[1] = v; paintSwatch(); restyle(); } }),
       'Value at the end of the colormap. Drag, or click to type.');
   }
@@ -12141,6 +12339,51 @@ function pickBrain(clientX, clientY, opts = {}) {
 }
 // the brain surface along a ray (world mm: from origin, along dir) as the
 // shader shows it — the view's own pick, and a tool's (a photo's camera)
+// The brain surface's outward normal over a patch, as one robust direction:
+// at each point the gradient of the tissue (as rendered: the background
+// threshold, the mask, hidden labels) blurred by sigma mm — sulci and
+// small defects ironed out — the unit normals averaged. → [x, y, z] or null.
+function surfaceNormalAt(points, sigmaMm = 8) {
+  const m = glassBrainMesh, anat = currentAnat;
+  if (!m || !anat || !vr.texData || !state.get('anat.file') || !points || !points.length) return null;
+  const u = m.material.uniforms, inv = u.u_invModel.value, size = u.u_size.value, M = u.u_model.value.elements;
+  const [nx, ny, nz] = anat.shape, data = vr.texData, isColor = (anat.channels || 1) === 3;
+  const labelMode = u.u_applyLUT && u.u_applyLUT.value > 0.5 && !isColor;
+  const hiddenL = labelMode && activeVolume && activeVolume.hiddenLabels && activeVolume.hiddenLabels.size ? activeVolume.hiddenLabels : null;
+  const rawL = loadedAnatRaw && loadedAnatShape && loadedAnatShape[0] === nx && loadedAnatShape[1] === ny && loadedAnatShape[2] === nz ? loadedAnatRaw : null;
+  const invert = u.u_bgInvert.value > 0.5, thr = labelMode ? 0.5 : (invert ? 1 - u.u_background.value : u.u_background.value);
+  const tissue = (i, j, k) => {
+    if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return 0;
+    const o = i + nx * (j + ny * k);
+    let v;
+    if (isColor) { const r = (data[4*o] / 255) ** 2, g = (data[4*o+1] / 255) ** 2, b = (data[4*o+2] / 255) ** 2; v = Math.sqrt(r*r + g*g + b*b); }
+    else v = data[o];
+    if (labelMode) return v > 0 && !(hiddenL && rawL && hiddenL.has(Math.round(rawL[o]))) ? 1 : 0;
+    if (v < 0) return 0;   // (masked out)
+    if (invert) v = 1 - v;
+    return v >= thr ? 1 : 0;
+  };
+  // voxel steps in mm (the model's columns), and a grid of about 2 mm out to 2 sigma
+  const col = a => [M[4 * a], M[4 * a + 1], M[4 * a + 2]], cols = [0, 1, 2].map(col), mm = cols.map(c => Math.hypot(...c));
+  const st = mm.map(h => Math.max(1, Math.round(2 / h))), Rmm = 2 * sigmaMm, ext = mm.map((h, a) => Math.ceil(Rmm / h / st[a]));
+  const half = new THREE.Vector3(size.x, size.y, size.z).multiplyScalar(0.5), v3 = new THREE.Vector3();
+  const sum = [0, 0, 0];
+  for (const p of points) {
+    v3.set(p[0], p[1], p[2]).applyMatrix4(inv).add(half);
+    const ci = Math.floor(v3.x), cj = Math.floor(v3.y), ck = Math.floor(v3.z), g = [0, 0, 0];
+    for (let c = -ext[2]; c <= ext[2]; c++) for (let b = -ext[1]; b <= ext[1]; b++) for (let a = -ext[0]; a <= ext[0]; a++) {
+      const di = a * st[0], dj = b * st[1], dk = c * st[2];
+      const w = [0, 1, 2].map(e => cols[0][e] * di + cols[1][e] * dj + cols[2][e] * dk), r2 = w[0] * w[0] + w[1] * w[1] + w[2] * w[2];
+      if (r2 > Rmm * Rmm || !tissue(ci + di, cj + dj, ck + dk)) continue;
+      const k = Math.exp(-r2 / (2 * sigmaMm * sigmaMm));
+      g[0] -= k * w[0]; g[1] -= k * w[1]; g[2] -= k * w[2];   // (away from the tissue: outward)
+    }
+    const l = Math.hypot(...g);
+    if (l > 1e-9) for (let e = 0; e < 3; e++) sum[e] += g[e] / l;
+  }
+  const l = Math.hypot(...sum);
+  return l > 1e-9 ? sum.map(x => x / l) : null;
+}
 function pickBrainRay(origin, dir, { labels: wantLabels = false } = {}) {
   const m = glassBrainMesh, anat = currentAnat;
   if (!m || !m.visible || !anat || !vr.texData || !state.get('anat.file')) return null;
@@ -13072,6 +13315,8 @@ const toolHost = {
                    vessels: volumes.find(v => v !== activeVolume && v.surface && v.surface.on) || null }),   // (a volume shown as an isosurface)
   keys: { claim: (key, fn, tip) => claimToolKey(key, fn, tip) },
   pick3D: (clientX, clientY) => { const b = pickBrain(clientX, clientY); return b && b.visible !== false ? { ras: b.ras, kind: b.kind } : null; },
+  // the brain surface's outward normal over these points (world mm), as one direction (blurred by sigma mm), or null
+  surfaceNormal: (points, sigmaMm) => surfaceNormalAt(points, sigmaMm),
   pickRay: (origin, dir) => { const b = pickBrainRay(new THREE.Vector3(...origin), new THREE.Vector3(...dir).normalize()); return b && b.visible !== false ? { ras: b.ras, kind: b.kind } : null; },
   claimClick3D: fn => claimClick3D(fn),
   claimPointer3D: h => claimPointer3D(h),
