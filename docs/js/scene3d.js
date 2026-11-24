@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { buildLutRGBA } from './lut-io.js';
-console.info('scene3d.js · build 2026-11-24e · textureLod + uniform bounds on all loops (no loop unrolling on Direct3D)');
+console.info('scene3d.js · build 2026-11-24g · one call site per search, corner and normal samples in loops, ?glsl= switches (no loop unrolling on Direct3D)');
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)
@@ -599,14 +599,13 @@ vec4 occupancyAndGradient(vec3 p) {
   vec3 ps = nearestFiltered ? (p - vec3(0.5)) : p;
   vec3 p0 = floor(ps);
   vec3 f  = ps - p0;
-  float c000 = occupancyAt(p0 + vec3(0.0,0.0,0.0));
-  float c100 = occupancyAt(p0 + vec3(1.0,0.0,0.0));
-  float c010 = occupancyAt(p0 + vec3(0.0,1.0,0.0));
-  float c110 = occupancyAt(p0 + vec3(1.0,1.0,0.0));
-  float c001 = occupancyAt(p0 + vec3(0.0,0.0,1.0));
-  float c101 = occupancyAt(p0 + vec3(1.0,0.0,1.0));
-  float c011 = occupancyAt(p0 + vec3(0.0,1.0,1.0));
-  float c111 = occupancyAt(p0 + vec3(1.0,1.0,1.0));
+  // the 8 corners, in a loop: occupancyAt is then copied into this
+  // function once, not 8 times (Direct3D inlines every call — and this
+  // function is called from dozens of places; see LOOP BOUNDS)
+  float c[8];
+  for (int k = 0; k < 8 + u_loopZero; k++)
+    c[k] = occupancyAt(p0 + vec3(float(k & 1), float((k >> 1) & 1), float(k >> 2)));
+  float c000 = c[0], c100 = c[1], c010 = c[2], c110 = c[3], c001 = c[4], c101 = c[5], c011 = c[6], c111 = c[7];
 
   float c00 = mix(c000, c100, f.x);
   float c10 = mix(c010, c110, f.x);
@@ -789,6 +788,9 @@ bool findOuterBoundaryBackward(vec3 ro, vec3 rd, float tStart, float tFar, float
   return false;
 }
 vec3 smoothedOccupancyNormal(vec3 p) {
+#ifdef NO_NORMAL
+  return vec3(0.0);   // (diagnosis only: the view direction stands in)
+#endif
   // Adjustable (default 1.0, matching prior fixed behavior) via
   // u_gradRadius — see its uniform declaration for why this is exposed
   // rather than hardcoded: a fixed sampling distance can alias against a
@@ -800,11 +802,16 @@ vec3 smoothedOccupancyNormal(vec3 p) {
   // an unreliable direction), which is why neither a magnitude cutoff nor
   // a magnitude-based confidence blend fixed it.
   float r = u_gradRadius;
-  vec3 g = vec3(
-    occupancyAndGradient(p+vec3(r,0.0,0.0)).w - occupancyAndGradient(p-vec3(r,0.0,0.0)).w,
-    occupancyAndGradient(p+vec3(0.0,r,0.0)).w - occupancyAndGradient(p-vec3(0.0,r,0.0)).w,
-    occupancyAndGradient(p+vec3(0.0,0.0,r)).w - occupancyAndGradient(p-vec3(0.0,0.0,r)).w
-  );
+  // central differences, the 6 samples in a loop (one copy of
+  // occupancyAndGradient instead of 6: see occupancyAndGradient's corners)
+  vec3 g = vec3(0.0);
+  for (int k = 0; k < 6 + u_loopZero; k++) {
+    int ax = k >> 1;
+    float sgn = (k & 1) == 0 ? 1.0 : -1.0;
+    vec3 o = vec3(ax == 0 ? r : 0.0, ax == 1 ? r : 0.0, ax == 2 ? r : 0.0) * sgn;
+    float v = occupancyAndGradient(p + o).w * sgn;
+    if (ax == 0) g.x += v; else if (ax == 1) g.y += v; else g.z += v;
+  }
   // Same anisotropy correction as gradient() above - "1 voxel" is not the
   // same physical distance in every axis for anisotropic data.
   return g / u_voxMm;
@@ -1179,6 +1186,7 @@ ${CLIP_SETUP_GLSL}
   float classifyThresh = labelMode ? 0.5 : (u_bgInvert > 0.5 ? 1.0 - u_background : u_background);
   bool startInside = occupancyAndGradient(ro + tStart * rd).w >= classifyThresh;
 
+  bool doBackward = false, doCutout = false, cutoutThenBackward = false, doIso = false;   // (which search: decided first)
   if (startInside && !startAtCut) {
     // The CAMERA itself is inside tissue (zoomed into the brain), not a
     // clip plane cutting into it. Every ray then starts at the same point,
@@ -1194,7 +1202,7 @@ ${CLIP_SETUP_GLSL}
     // real curved surface rather than a cap.
     bool farIsBackground = occupancyAndGradient(ro + tEnd * rd).w < classifyThresh;
     if (farIsBackground) {
-      haveHit = findOuterBoundaryBackward(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
+      doBackward = true;
     }
   } else if (startInside) {
     // Real tissue right at the clip cut. COVER (u_fillIn) decides
@@ -1255,18 +1263,12 @@ ${CLIP_SETUP_GLSL}
       // assumption is checked explicitly first — if it fails, this ray
       // is left as no-hit (discard/see-through) rather than risking a
       // wrong detection.
-      haveHit = findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0, hitP);
-      if (!haveHit) {
-        bool farIsBackground = (u_sliceMode < 0.5) || (occupancyAndGradient(ro + tEnd * rd).w < classifyThresh);
-        if (farIsBackground) {
-          haveHit = findOuterBoundaryBackward(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
-        }
-      }
-    } else if (findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0, hitP)) {
+      doCutout = true; cutoutThenBackward = true;   // (stage 2, if stage 1 finds nothing: below the searches)
+    } else {
       // COVER off, but the material right at the cut is already on the
       // KEEP side - unchanged "look inside" behavior: find where THIS
       // material itself ends (its own exit boundary).
-      haveHit = true;
+      doCutout = true;
     }
   } else {
     // Ordinary case: ray starts in real background - either the
@@ -1276,10 +1278,24 @@ ${CLIP_SETUP_GLSL}
     // bar), completely independent of THRESHOLD/isoThresh - this is
     // what keeps this surface from ever eroding regardless of how high
     // THRESHOLD is pushed for the clip-plane reveal effect above.
-    if (findIsosurface(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP)) {
-      haveHit = true;
-    }
+    doIso = true;
   }
+  // The searches, each called at ONE place (Direct3D's shader compiler
+  // copies a function into every place it is called, and these are the
+  // big ones — see LOOP BOUNDS). The ?glsl= switches are for diagnosis.
+#ifndef NO_CUTOUT
+  if (doCutout) haveHit = findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0, hitP);
+#endif
+  // (stage 2 of the cutout case, see above; under SLICE only when the far
+  // end is background)
+  if (cutoutThenBackward && !haveHit)
+    doBackward = (u_sliceMode < 0.5) || (occupancyAndGradient(ro + tEnd * rd).w < classifyThresh);
+#ifndef NO_BACKWARD
+  if (doBackward) haveHit = findOuterBoundaryBackward(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
+#endif
+#ifndef NO_ISO
+  if (doIso) haveHit = findIsosurface(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
+#endif
 
   if (!haveHit) discard;
 
@@ -1404,18 +1420,23 @@ ${CLIP_SETUP_GLSL}
       // the shade-floor difference above.
       baseColor = startInside ? vec3(0.8,0.8,1.0) : u_paintBase;
     }
+#ifndef NO_PAINT
     if (u_paintOn > 0.5 && !startInside) baseColor = paintSurface(hitP, rd, baseColor, classifyThresh);
+#endif
+#ifndef NO_PHOTO
     if (u_photoOn > 0.5 && !startInside) {
       vec4 ph = photoAt(hitP, N);
       // the photo as taken: its colour, and unshaded (it has its own light) where it lies
       baseColor = mix(baseColor * shade, ph.rgb, ph.a);
       shade = 1.0;
     }
+#endif
   }
   vec3 solidColor = baseColor * shade;
   // Shadows of the streamlines: they dim only the direct light (what is
   // above the ambient level). Read 1.5 shadow voxels towards the light, so
   // the surface does not shade itself (with the brain as an occluder too).
+#ifndef NO_SHADOW
   if (u_brainShadowOn > 0.5 && (u_shellMode < 0.5 || isCap)) { // GLASS: only the (opaque) cut face
     vec3 Lt = u_pointLight > 0.5 ? normalize(hitP - u_lightPosLocal) : u_lightDir;
     float off = 1.5 * u_shadowVoxMm / max((u_voxMm.x + u_voxMm.y + u_voxMm.z) / 3.0, 1e-6);
@@ -1425,6 +1446,7 @@ ${CLIP_SETUP_GLSL}
     solidColor = baseColor * (ambL + max(shade - ambL, 0.0) * T);
     spec *= T;
   }
+#endif
   solidColor += vec3(spec);
   // TEMPORARY DEBUG (remove once the thin-structure issue is
   // understood): paints every hit a flat, unmistakable color by which
@@ -1451,6 +1473,7 @@ ${CLIP_SETUP_GLSL}
   // never occludes anything drawn behind it, which is what leaves
   // streamlines and other geometry visible through it.
   vec3 worldPos = (u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz;
+#ifndef NO_CURSOR
   if (u_cursorOn > 0.5) {
     // How fast the distance to a plane changes per screen pixel, from the
     // surface's own normal (not from the neighbouring pixels: at the
@@ -1481,6 +1504,7 @@ ${CLIP_SETUP_GLSL}
       return;
     }
   }
+#endif
   vec4 clipPos = u_projView * vec4(worldPos, 1.0);
   float fragDepth = clipPos.z / clipPos.w * 0.5 + 0.5;
 
@@ -1507,6 +1531,20 @@ export function gpuInfo(gl) {
   return { renderer, vendor };
 }
 
+// DIAGNOSIS (the Windows / Direct3D shader-compile hang): ?glsl=paint,photo
+// leaves those parts out of the brain shaders, to find the one the
+// compiler chokes on. Words: paint, photo, cursor, shadow, cutout,
+// backward, iso, normal. Not for normal use (what is left out is not drawn).
+const GLSL_OFF = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('glsl');
+    if (!q) return {};
+    const out = {};
+    for (const w of q.split(',').map(x => x.trim().toLowerCase()).filter(Boolean)) out['NO_' + w.toUpperCase()] = 1;
+    console.warn('brain shaders: left out (?glsl=):', Object.keys(out).join(', '));
+    return out;
+  } catch (e) { return {}; }
+})();
 export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInfo) {
   const isColor = (anat.channels || 1) === 3;
   const isLabelMode = !isColor && !!(dispInfo && dispInfo.apply && dispInfo.map);
@@ -1744,6 +1782,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   // shader) and in these three material-level settings (transparency and
   // depth handling).
   const glassMat = new THREE.ShaderMaterial({
+    defines: { ...GLSL_OFF },
     vertexShader:   GLASS_VS,
     fragmentShader: GLASS_ONLY_FS,
     uniforms: sharedUniforms,
@@ -1752,6 +1791,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
     depthTest:   true,
   });
   const solidMat = new THREE.ShaderMaterial({
+    defines: { ...GLSL_OFF },
     vertexShader:   GLASS_VS,
     fragmentShader: SOLID_ONLY_FS,
     uniforms: sharedUniforms,
@@ -1760,6 +1800,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
     depthTest:   true,
   });
   const shellMat = new THREE.ShaderMaterial({
+    defines: { ...GLSL_OFF },
     vertexShader:   GLASS_VS,
     fragmentShader: SOLID_ONLY_FS, // same shader as solidMat — see comment above
     uniforms: sharedUniforms,
