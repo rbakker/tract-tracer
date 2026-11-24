@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { buildLutRGBA } from './lut-io.js';
+console.info('scene3d.js · build 2026-11-24c · shaders read textures with textureLod (no forced loop unrolling on Direct3D)');
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)

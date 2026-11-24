@@ -1466,6 +1466,57 @@ input[type=file]{display:none;}
 </script>
 <script type="module">
 import * as THREE from 'three';
+// ── Build stamp and diagnostics ──
+// APP_BUILD: printed first in the console, so a report shows which version
+// ran. installGlTiming: logs WebGL calls that block the page for long
+// (texture uploads, shader compiles) — the step being entered is logged
+// BEFORE the call, so a hang shows where it is. Hunting a stall on Windows
+// (ANGLE / Direct3D) at "uploading 3D texture…".
+const APP_BUILD = '2026-11-24c · diag: load steps + slow WebGL calls';
+console.info('%cTractogram Observer · build ' + APP_BUILD, 'font-weight:bold');
+function installGlTiming(gl, label) {
+  if (!gl || gl.__timed) return;
+  gl.__timed = true;
+  const SLOW = 50;   // ms
+  const calls = ['texImage3D', 'texSubImage3D', 'texImage2D', 'texSubImage2D', 'texStorage3D', 'compileShader', 'linkProgram',
+                 'getProgramParameter', 'getShaderParameter', 'getProgramInfoLog', 'useProgram', 'drawArrays', 'drawElements',
+                 'drawArraysInstanced', 'drawElementsInstanced', 'readPixels', 'finish', 'generateMipmap', 'bufferData'];
+  for (const name of calls) {
+    const f = gl[name];
+    if (typeof f !== 'function') continue;
+    gl[name] = function (...a) {
+      if (name === 'texImage3D' || name === 'texStorage3D')
+        console.info(`[gl ${label}] → ${name} ${a[3]}×${a[4]}×${a[5]} internalformat 0x${(+a[2]).toString(16)}`);
+      else if (name === 'getProgramParameter' && a[1] === gl.LINK_STATUS)
+        console.info(`[gl ${label}] → waiting for a shader program (compile + link)`);
+      const t0 = performance.now();
+      const r = f.apply(this, a);
+      const dt = performance.now() - t0;
+      if (dt > SLOW) console.warn(`[gl ${label}] ${name} took ${dt.toFixed(0)} ms`);
+      return r;
+    };
+  }
+  try {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    console.info(`[gl ${label}]`, dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      '· MAX_3D_TEXTURE_SIZE', gl.getParameter(gl.MAX_3D_TEXTURE_SIZE),
+      '· MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      '· parallel shader compile', !!gl.getExtension('KHR_parallel_shader_compile'),
+      '· float linear', !!gl.getExtension('OES_texture_float_linear'),
+      '· canvas', gl.canvas.width + '×' + gl.canvas.height, '· devicePixelRatio', window.devicePixelRatio);
+  } catch (e) { console.warn('[gl ' + label + '] info:', e); }
+}
+// One step of a load, logged on entry and with its time on exit (a hang:
+// the last "→" line without its "✓").
+function loadStep(name, fn) {
+  console.info('[load] → ' + name);
+  const t0 = performance.now();
+  const r = fn();
+  console.info('[load] ✓ ' + name + ' ' + (performance.now() - t0).toFixed(0) + ' ms');
+  return r;
+}
+// (blocking stretches of over a second, whatever they were)
+try { new PerformanceObserver(l => { for (const e of l.getEntries()) if (e.duration > 1000) console.warn('[page] blocked for ' + e.duration.toFixed(0) + ' ms'); }).observe({ type: 'longtask', buffered: true }); } catch (e) {}
 import { parseNifti, parseMif, parseWebmCodecs as parseWebm, writeNifti } from './js/volume-io.js';
 import { parseLUT, buildLutRGBA } from './js/lut-io.js';
 import { parseTrx, countTrx } from './js/trx-io.js';
@@ -1906,6 +1957,7 @@ function estimateGpuTier(gl) {
   // Unrecognised renderer string — default conservative.
   return 'low';
 }
+installGlTiming(vr.gl, '2D');
 let qualityTier = estimateGpuTier(vr.gl);
 console.info('GPU quality tier guess:', qualityTier);
 // Streamline rendering no longer branches on qualityTier at all — the
@@ -2584,6 +2636,7 @@ function initSliceInteraction(planeKey, getCanvas, tag, redrawFn) {
 // ═══════════════════════════════════════════════════════════
 const threeCanvas=document.getElementById('three-canvas');
 const renderer3=new THREE.WebGLRenderer({canvas:threeCanvas,antialias:true});
+installGlTiming(renderer3.getContext(), '3D');
 slabRenderer = new SlabRenderer(renderer3);
 // Cap the render resolution rather than following the device's full pixel
 // ratio (2-3x on many tablets/phones): the raymarcher's cost scales with
@@ -2992,7 +3045,10 @@ function render3D() {
   updateShadowLight();
   syncBrainShadowUniforms();
   syncMeshShadowUniforms();
+  const _t0 = performance.now();
   renderer3.render(scene, camera);
+  const _dt = performance.now() - _t0;
+  if (_dt > 300) console.warn('[3D] a frame took ' + _dt.toFixed(0) + ' ms (shader programs: ' + renderer3.info.programs.length + ')');
   for (const fn of _afterRender) fn();   // (a tool's layer over the view follows it)
 }
 const _afterRender = new Set();
@@ -6254,23 +6310,25 @@ async function loadAnat(f){
 	state.set('tgt.view.'+k,probeCenter)
   }
   setProgress('uploading 3D texture…'); await tick();
+  console.info('[load] volume ' + f.name + ': ' + shape.join('×') + ' × ' + channels + ' ch, ' + (data && data.constructor && data.constructor.name) + ', ' + vox_mm.map(v => +v.toFixed(2)).join('×') + ' mm');
   activeMaskData = null;
-  vr.upload(anat);
+  loadStep('2D texture upload (vr.upload)', () => vr.upload(anat));
   _texUnmasked = vr.texData;       // (APPLY MASK: the volume's own values, to mask or unmask)
-  buildGlassBrainLocal(anat);
-  applyActiveMask();               // this volume's mask, if it has one
-  _ov2dKey = null; updateOverlay2D();   // (the overlay in the sections: on this grid)
+  loadStep('3D brain build (buildGlassBrainLocal)', () => buildGlassBrainLocal(anat));
+  loadStep('mask', () => applyActiveMask());               // this volume's mask, if it has one
+  loadStep('2D overlay', () => { _ov2dKey = null; updateOverlay2D(); });   // (the overlay in the sections: on this grid)
   // The view: only re-framed when the scene's reference changes (a new
   // volume may become it; switching to an already-listed one doesn't).
-  recomputeView();
+  loadStep('view', () => recomputeView());
   updateProbeRadiusRange(false); // rescale RADIUS slider to this anatomy's size; don't disturb current value/mode
   anatHeaderReady = true;
   checkShowHud();
-  resizeAll();
-  if (!_keepCursor) state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter });
-  updateSlicesA(); updateSlicesB();   // (now: an update made while a load runs draws nothing — the sections' index labels were stale)
-  registerVolumeItems();
+  loadStep('resize', () => resizeAll());
+  if (!_keepCursor) loadStep('cursor', () => state.update({ 'src.cursor':probeCenter, 'tgt.cursor':probeCenter }));
+  loadStep('2D sections', () => { updateSlicesA(); updateSlicesB(); });   // (now: an update made while a load runs draws nothing — the sections' index labels were stale)
+  loadStep('lists', () => registerVolumeItems());
   setProgress('');
+  console.info('[load] ' + f.name + ' shown');
   //updateSlicesA(); updateSlicesB(); updatePlaneMeshes();
   classifyPendingVolumes();
 }
