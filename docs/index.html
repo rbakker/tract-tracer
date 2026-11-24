@@ -1466,7 +1466,14 @@ input[type=file]{display:none;}
 </script>
 <script type="module">
 import * as THREE from 'three';
-console.info('Tractogram Observer · build 2026-11-24j');   // (which build ran: the first line of a console log)
+console.info('Tractogram Observer · build 2026-11-24k');   // (which build ran: the first line of a console log)
+// ?shadertest: compile every shader in its own context and report (see
+// js/shadertest.js) — instead of starting the app.
+if (new URLSearchParams(location.search).has('shadertest')) {
+  const { runShaderTest } = await import('./js/shadertest.js');
+  runShaderTest();
+  await new Promise(() => {});   // (the app itself does not start)
+}
 import { parseNifti, parseMif, parseWebmCodecs as parseWebm, writeNifti } from './js/volume-io.js';
 import { parseLUT, buildLutRGBA } from './js/lut-io.js';
 import { parseTrx, countTrx } from './js/trx-io.js';
@@ -1893,7 +1900,7 @@ function estimateGpuTier(gl) {
   if (/apple m[1-9]/.test(r)) return 'high';
 
   // Intel integrated: see the naming-generation note above.
-  if (/iris xe|\barc\b/.test(r)) return 'high';
+  if (/iris(\(r\))? xe|\barc\b/.test(r)) return 'high';   // (Chrome writes "Iris(R) Xe"; Firefox only reports a broad class, "HD Graphics": low)
   if (/intel/.test(r)) return 'low'; // plain "HD Graphics", "UHD Graphics", or unrecognised Intel — err conservative
 
   // Mobile GPUs: recognise specific model-number ranges rather than
@@ -8981,7 +8988,6 @@ function setLabelColor(v, hex, done, vol = labelVol() || activeVolume) {
   for (const el of document.querySelectorAll('[data-label-sw="' + v + '"]')) if (el.value !== hex) el.value = hex;
   if (done) labelsChanged();
 }
-let _labelVisTex = null;
 // The shown regions as a smooth occupancy field for the 3D surface (see
 // u_occ in scene3d.js): 1 inside a shown label, 0 elsewhere, Gaussian-
 // blurred with σ = 0.8 voxel. Light enough to keep thin regions (a blur
@@ -9043,24 +9049,12 @@ function updateLabelOccupancy(u) {
   u.u_occ.value = _occTex; u.u_useOcc.value = 1;
   console.log('label occupancy ' + nx + '×' + ny + '×' + nz + ', σ ' + OCC_SIGMA + ': ' + (performance.now() - t0).toFixed(0) + ' ms');
 }
+// (The ray-marched brain shows every label; region on/off is the region
+// meshes'. This keeps the label occupancy current and redraws.)
 function applyLabelVisibility(redraw = true) {
   if (!glassBrainMesh) return;
   const u = glassBrainMesh.material.uniforms;
-  if (!u.u_labelHide) return;
   if (u.u_occ) updateLabelOccupancy(u);
-  const hidden = labelsShown() ? hiddenLabelsOf(activeVolume) : null;
-  if (!hidden || !hidden.size) { u.u_labelHide.value = 0; }
-  else {
-    const maxV = Math.max(...hidden);
-    const rows = Math.max(1, Math.ceil((maxV + 1) / 4096));
-    const data = new Uint8Array(rows * 4096).fill(255);
-    for (const v of hidden) if (v >= 0 && v < data.length) data[v] = 0;
-    if (_labelVisTex) _labelVisTex.dispose();
-    _labelVisTex = new THREE.DataTexture(data, 4096, rows, THREE.RedFormat, THREE.UnsignedByteType);
-    _labelVisTex.minFilter = _labelVisTex.magFilter = THREE.NearestFilter;
-    _labelVisTex.needsUpdate = true;
-    u.u_labelVis.value = _labelVisTex; u.u_labelVisRows.value = rows; u.u_labelHide.value = 1;
-  }
   if (redraw) render3D();
 }
 // Region colors were edited.

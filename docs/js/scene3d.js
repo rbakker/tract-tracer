@@ -4,7 +4,8 @@
 
 import * as THREE from 'three';
 import { buildLutRGBA } from './lut-io.js';
-console.info('scene3d.js · build 2026-11-24j');
+export const SCENE3D_BUILD = '2026-11-24k';
+console.info('scene3d.js · build ' + SCENE3D_BUILD);
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)
@@ -228,6 +229,20 @@ uniform float u_glassAlphaMult; // OPACITY's multiplier on GLASS mode's Fresnel 
 uniform float u_rimPow;
 uniform float u_volDiagMm;
 uniform int   u_steps;
+// WINDOWS SHADER RULES. On Windows, Chrome, Edge and Firefox translate
+// WebGL shaders to Direct3D (ANGLE) and compile them with Microsoft's
+// compiler, which copies every function into every place it is called and
+// unrolls loops with constant bounds. The brain shaders are big; keep them
+// compiling there (check with ?shadertest, on Windows, before a release):
+//  - loops: bounds at a uniform (u_steps, or count + u_loopZero), never a
+//    plain constant — see LOOP BOUNDS;
+//  - a heavy function (a surface search, occupancyAndGradient) called at
+//    one place; repeated samples in a loop rather than written out;
+//  - no texture read after an early return in a function that is called
+//    inside branches (that crashed the compiler: stack overflow, 2026-11-24);
+//  - no function calls inside && || ?: (they get unfolded into nested ifs);
+//  - watch the "compiling took … ms" warning (scene3d.js, buildGlassBrain).
+//
 // LOOP BOUNDS: the ray-march loops end at u_steps, a uniform, and the
 // others at their count + u_loopZero (a uniform, always 0), not at a
 // constant: with a constant bound, Microsoft's shader compiler (Chrome and
@@ -267,13 +282,6 @@ uniform float u_contrast;
 uniform float u_applyLUT;
 uniform sampler2D u_lut;
 uniform float u_lutSize;
-// LABEL mode: which labels are shown (index.html's label visibility, the
-// region label's checkbox/lamp and the DATA panel's label list). One byte
-// per label value, laid out 4096 per row; 0 = hidden (drawn as background).
-// u_labelHide = 0 when every label is shown (the lookup is skipped).
-uniform sampler2D u_labelVis;
-uniform float u_labelVisRows;
-uniform float u_labelHide;
 uniform float u_dataMin;
 uniform float u_dataRange;
 uniform mat4  u_model;
@@ -371,23 +379,9 @@ vec3 colourPaint(vec3 p) {
 // Reconstructs the original integer label index from the normalized
 // scalar texture value (texture stores (raw-min)/range — see
 // VolRenderer.upload), rounded to the nearest integer.
-bool labelHidden(float idx) {
-  // One straight path, no early return: on Windows (ANGLE → Direct3D),
-  // this function with an early return and a texture read, called inside
-  // the branches of occupancyAt, crashed the shader compiler (stack
-  // overflow; found with the shader compile test, 2026-11-24). The table
-  // is tiny, so reading it every time costs next to nothing.
-  vec2 uv = vec2((mod(idx, 4096.0) + 0.5) / 4096.0, (floor(idx / 4096.0) + 0.5) / u_labelVisRows);
-  bool off = textureLod(u_labelVis, uv, 0.0).r < 0.5;
-  return off && u_labelHide > 0.5 && idx >= 0.0 && idx < 4096.0 * u_labelVisRows;
-}
-// (a hidden label reads as background, 0 — the surfaces, borders, colours
-// and occupancy below all go through this)
 float sampleLabelIndex(vec3 p) {
   float norm = textureLod(u_vol, p / u_size, 0.0).r;
-  float idx = floor(norm * u_dataRange + u_dataMin + 0.5);
-  if (labelHidden(idx)) return 0.0;   // (no call inside ?: — see occupancyAt)
-  return idx;
+  return floor(norm * u_dataRange + u_dataMin + 0.5);
 }
 // Label indices are arbitrary categorical numbers — going from region 47
 // to 48 isn't "half as different" as 47 to 49, so a continuous gradient
@@ -557,15 +551,10 @@ float occupancyAt(vec3 voxCoord) {
   bool nearestFiltered = (u_applyLUT > 0.5) && (u_isColor < 0.5);
   if (nearestFiltered && u_useOcc > 0.5) return textureLod(u_occ, (voxCoord + vec3(0.5)) / u_size, 0.0).r; // voxel centre: the blurred value
   float v = sampleVol(voxCoord + vec3(1e-3));
-  // a hidden label. (Not one && chain with the call at its end: Windows'
-  // WebGL translation (ANGLE, Direct3D) rewrites a call inside && into
-  // nested ifs, and on this one it overflowed its stack — the GPU process
-  // crashed and the solid brain never compiled. Found with the shader
-  // compile test, 2026-11-24.)
-  if (nearestFiltered && v > 0.0 && u_labelHide > 0.5) {
-    float li = sampleLabelIndex(voxCoord + vec3(1e-3));
-    if (li == 0.0) return 0.0;
-  }
+  // (Hidden labels used to be tested here, through a function with an
+  // early return and a texture read: on Windows that crashed the shader
+  // compiler — see WINDOWS SHADER RULES. The feature was off by then:
+  // removed, 2026-11-24.)
   return nearestFiltered ? (v > 0.0 ? 1.0 : 0.0) : v;
 }
 // Trilinear-ish reconstruction of the field, plus (for label data only) an
@@ -1633,11 +1622,6 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
     t.format = THREE.RedFormat; t.type = THREE.UnsignedByteType; t.needsUpdate = true;
     return t;
   }
-  function _allLabelsVisibleTex() {
-    const t = new THREE.DataTexture(new Uint8Array(4096).fill(255), 4096, 1, THREE.RedFormat, THREE.UnsignedByteType);
-    t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
-    return t;
-  }
   if (isLabelMode) {
     const { data, size } = buildLutRGBA(dispInfo.map, dispInfo.maxIndex);
     lutTex = new THREE.DataTexture(data, size, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -1720,11 +1704,8 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       u_applyLUT:  { value: isLabelMode ? 1 : 0 },
       u_lut:       { value: lutTex },
       u_lutSize:   { value: lutSize },
-      u_labelVis:  { value: _allLabelsVisibleTex() },
       u_occ:       { value: _emptyOccTex() },
       u_useOcc:    { value: 0 },
-      u_labelVisRows: { value: 1 },
-      u_labelHide: { value: 0 },
       u_dataMin:   { value: anat.mn || 0 },
       u_dataRange: { value: (anat.mx - anat.mn) || 1 },
       u_model:     { value: modelMatrix },
@@ -3123,3 +3104,6 @@ export function setRibbonHighlight(mesh, perTract) {
   for (let i = 0; i < n; i++) H[i] = perTract[tr[i]];
   a.needsUpdate = true;
 }
+
+// (for ?shadertest: the brain shaders as buildGlassBrain uses them)
+export { GLASS_VS, GLASS_ONLY_FS, SOLID_ONLY_FS };
