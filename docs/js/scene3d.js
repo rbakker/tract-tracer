@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { buildLutRGBA } from './lut-io.js';
-console.info('scene3d.js · build 2026-11-24g · one call site per search, corner and normal samples in loops, ?glsl= switches (no loop unrolling on Direct3D)');
+console.info('scene3d.js · build 2026-11-24i · fix: labelHidden without early return (ANGLE/Direct3D stack overflow) (no loop unrolling on Direct3D)');
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)
@@ -375,16 +375,22 @@ vec3 colourPaint(vec3 p) {
 // scalar texture value (texture stores (raw-min)/range — see
 // VolRenderer.upload), rounded to the nearest integer.
 bool labelHidden(float idx) {
-  if (u_labelHide < 0.5 || idx < 0.0 || idx >= 4096.0 * u_labelVisRows) return false;
+  // One straight path, no early return: on Windows (ANGLE → Direct3D),
+  // this function with an early return and a texture read, called inside
+  // the branches of occupancyAt, crashed the shader compiler (stack
+  // overflow; found with the shader compile test, 2026-11-24). The table
+  // is tiny, so reading it every time costs next to nothing.
   vec2 uv = vec2((mod(idx, 4096.0) + 0.5) / 4096.0, (floor(idx / 4096.0) + 0.5) / u_labelVisRows);
-  return textureLod(u_labelVis, uv, 0.0).r < 0.5;
+  bool off = textureLod(u_labelVis, uv, 0.0).r < 0.5;
+  return off && u_labelHide > 0.5 && idx >= 0.0 && idx < 4096.0 * u_labelVisRows;
 }
 // (a hidden label reads as background, 0 — the surfaces, borders, colours
 // and occupancy below all go through this)
 float sampleLabelIndex(vec3 p) {
   float norm = textureLod(u_vol, p / u_size, 0.0).r;
   float idx = floor(norm * u_dataRange + u_dataMin + 0.5);
-  return labelHidden(idx) ? 0.0 : idx;
+  if (labelHidden(idx)) return 0.0;   // (no call inside ?: — see occupancyAt)
+  return idx;
 }
 // Label indices are arbitrary categorical numbers — going from region 47
 // to 48 isn't "half as different" as 47 to 49, so a continuous gradient
@@ -554,7 +560,15 @@ float occupancyAt(vec3 voxCoord) {
   bool nearestFiltered = (u_applyLUT > 0.5) && (u_isColor < 0.5);
   if (nearestFiltered && u_useOcc > 0.5) return textureLod(u_occ, (voxCoord + vec3(0.5)) / u_size, 0.0).r; // voxel centre: the blurred value
   float v = sampleVol(voxCoord + vec3(1e-3));
-  if (nearestFiltered && v > 0.0 && u_labelHide > 0.5 && sampleLabelIndex(voxCoord + vec3(1e-3)) == 0.0) return 0.0; // a hidden label
+  // a hidden label. (Not one && chain with the call at its end: Windows'
+  // WebGL translation (ANGLE, Direct3D) rewrites a call inside && into
+  // nested ifs, and on this one it overflowed its stack — the GPU process
+  // crashed and the solid brain never compiled. Found with the shader
+  // compile test, 2026-11-24.)
+  if (nearestFiltered && v > 0.0 && u_labelHide > 0.5) {
+    float li = sampleLabelIndex(voxCoord + vec3(1e-3));
+    if (li == 0.0) return 0.0;
+  }
   return nearestFiltered ? (v > 0.0 ? 1.0 : 0.0) : v;
 }
 // Trilinear-ish reconstruction of the field, plus (for label data only) an
@@ -1288,8 +1302,10 @@ ${CLIP_SETUP_GLSL}
 #endif
   // (stage 2 of the cutout case, see above; under SLICE only when the far
   // end is background)
-  if (cutoutThenBackward && !haveHit)
-    doBackward = (u_sliceMode < 0.5) || (occupancyAndGradient(ro + tEnd * rd).w < classifyThresh);
+  if (cutoutThenBackward && !haveHit) {   // (no call inside || : see occupancyAt)
+    doBackward = u_sliceMode < 0.5;
+    if (!doBackward) doBackward = occupancyAndGradient(ro + tEnd * rd).w < classifyThresh;
+  }
 #ifndef NO_BACKWARD
   if (doBackward) haveHit = findOuterBoundaryBackward(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
 #endif
@@ -1318,11 +1334,11 @@ ${CLIP_SETUP_GLSL}
     // blend. The blend is what makes the isosurface itself look good -
     // but a cut face is a flat cross-section, exactly like the 2D slice
     // panels, which also read raw per-voxel labels with no blending.
-    baseColor = isBoxFace ? boxFaceChecker(hitP)   // the volume's edge, not a cut
-              : labelMode ? lutColor(sampleLabelIndex(hitP))
-              : (u_isColor > 0.5 && u_forceGray < 0.5
-                  ? colourPaint(hitP)
-                  : vec3(gammaContrast(sampleVol(hitP), 1.0 / u_contrast)));
+    // (if/else, no calls inside ?: — see occupancyAt)
+    if (isBoxFace) baseColor = boxFaceChecker(hitP);   // the volume's edge, not a cut
+    else if (labelMode) baseColor = lutColor(sampleLabelIndex(hitP));
+    else if (u_isColor > 0.5 && u_forceGray < 0.5) baseColor = colourPaint(hitP);
+    else baseColor = vec3(gammaContrast(sampleVol(hitP), 1.0 / u_contrast));
     shade = 1.0;
   } else {
     // Guard against a degenerate (near-zero) gradient before
