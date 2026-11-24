@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { buildLutRGBA } from './lut-io.js';
-console.info('scene3d.js · build 2026-11-24i · fix: labelHidden without early return (ANGLE/Direct3D stack overflow) (no loop unrolling on Direct3D)');
+console.info('scene3d.js · build 2026-11-24j');
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)
@@ -228,16 +228,13 @@ uniform float u_glassAlphaMult; // OPACITY's multiplier on GLASS mode's Fresnel 
 uniform float u_rimPow;
 uniform float u_volDiagMm;
 uniform int   u_steps;
-// LOOP BOUNDS: every loop of the brain shaders ends at a uniform — the
-// long ray-march loops at u_steps, all others at their count +
-// u_loopZero (always 0) —, not at a constant. With a constant bound,
-// Microsoft's shader compiler (Chrome and Firefox on Windows draw WebGL
-// through ANGLE / Direct3D) unrolls the loop; the small ones (8 corners,
-// 6 bisection steps, 3×3×3 neighbours) nest inside the others and inside
-// functions inlined at dozens of places, so the code multiplies: compiling
-// the solid shader then takes minutes, the page hangs at "uploading 3D
-// texture…" and the driver gives up (graphics context lost). A uniform
-// bound can't be unrolled.
+// LOOP BOUNDS: the ray-march loops end at u_steps, a uniform, and the
+// others at their count + u_loopZero (a uniform, always 0), not at a
+// constant: with a constant bound, Microsoft's shader compiler (Chrome and
+// Firefox on Windows draw WebGL through ANGLE / Direct3D) unrolls the
+// loop, and these nest inside each other and inside functions it copies
+// into every place they are called — compiling then takes far longer
+// (measured on Windows, Firefox: 2.1 s with u_loopZero, 10.4 s without).
 uniform int   u_loopZero;
 uniform mat4  u_invPV;
 // The ray of a pixel, from the camera's own axes (not by unprojecting the
@@ -677,7 +674,7 @@ bool findIsosurface(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize, 
   // increasingly wrong render the higher u_steps goes past this number,
   // which is exactly what a too-high ULTRA setting once hit against an
   // earlier, lower version of this same bound.
-  for (int i = 1; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
+  for (int i = 1; i < u_steps; i++) {   // (see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tStart + float(i) * stepSize;
     if (t > tEnd) break;
@@ -737,7 +734,7 @@ bool findCutoutBoundary(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSi
                          float t1, float t2, bool row1Above, bool row2AndBelow, out vec3 hitP) {
   vec3 prevP = ro + tStart * rd;
   bool startCut = isCutZone(occupancyAndGradient(prevP).w, t1, t2, row1Above, row2AndBelow);
-  for (int i = 1; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
+  for (int i = 1; i < u_steps; i++) {   // (see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tStart + float(i) * stepSize;
     if (t > tEnd) break;
@@ -783,7 +780,7 @@ bool findCutoutBoundary(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSi
 bool findOuterBoundaryBackward(vec3 ro, vec3 rd, float tStart, float tFar, float stepSize,
                                 float threshBackground, out vec3 hitP) {
   vec3 prevP = ro + tFar * rd;
-  for (int i = 1; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
+  for (int i = 1; i < u_steps; i++) {   // (see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tFar - float(i) * stepSize;
     if (t < tStart) break;
@@ -802,9 +799,6 @@ bool findOuterBoundaryBackward(vec3 ro, vec3 rd, float tStart, float tFar, float
   return false;
 }
 vec3 smoothedOccupancyNormal(vec3 p) {
-#ifdef NO_NORMAL
-  return vec3(0.0);   // (diagnosis only: the view direction stands in)
-#endif
   // Adjustable (default 1.0, matching prior fixed behavior) via
   // u_gradRadius — see its uniform declaration for why this is exposed
   // rather than hardcoded: a fixed sampling distance can alias against a
@@ -921,7 +915,7 @@ ${CLIP_SETUP_GLSL}
   // Same compile-time-bound caveat as findIsosurface's loop in the solid
   // shader - must stay comfortably above the highest u_steps any quality
   // tier uses.
-  for (int i = 0; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
+  for (int i = 0; i < u_steps; i++) {   // (see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tStart + (float(i) + 0.5) * stepSize;
     vec3 p = ro + t * rd;
@@ -1296,22 +1290,16 @@ ${CLIP_SETUP_GLSL}
   }
   // The searches, each called at ONE place (Direct3D's shader compiler
   // copies a function into every place it is called, and these are the
-  // big ones — see LOOP BOUNDS). The ?glsl= switches are for diagnosis.
-#ifndef NO_CUTOUT
+  // big ones — see LOOP BOUNDS).
   if (doCutout) haveHit = findCutoutBoundary(ro, rd, tStart, tEnd, stepSize, u_cutoutT1, u_cutoutBelowThresh, u_cutoutRow1Above > 0, u_cutoutRow2AndBelow > 0, hitP);
-#endif
   // (stage 2 of the cutout case, see above; under SLICE only when the far
   // end is background)
   if (cutoutThenBackward && !haveHit) {   // (no call inside || : see occupancyAt)
     doBackward = u_sliceMode < 0.5;
     if (!doBackward) doBackward = occupancyAndGradient(ro + tEnd * rd).w < classifyThresh;
   }
-#ifndef NO_BACKWARD
   if (doBackward) haveHit = findOuterBoundaryBackward(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
-#endif
-#ifndef NO_ISO
   if (doIso) haveHit = findIsosurface(ro, rd, tStart, tEnd, stepSize, classifyThresh, hitP);
-#endif
 
   if (!haveHit) discard;
 
@@ -1436,23 +1424,18 @@ ${CLIP_SETUP_GLSL}
       // the shade-floor difference above.
       baseColor = startInside ? vec3(0.8,0.8,1.0) : u_paintBase;
     }
-#ifndef NO_PAINT
     if (u_paintOn > 0.5 && !startInside) baseColor = paintSurface(hitP, rd, baseColor, classifyThresh);
-#endif
-#ifndef NO_PHOTO
     if (u_photoOn > 0.5 && !startInside) {
       vec4 ph = photoAt(hitP, N);
       // the photo as taken: its colour, and unshaded (it has its own light) where it lies
       baseColor = mix(baseColor * shade, ph.rgb, ph.a);
       shade = 1.0;
     }
-#endif
   }
   vec3 solidColor = baseColor * shade;
   // Shadows of the streamlines: they dim only the direct light (what is
   // above the ambient level). Read 1.5 shadow voxels towards the light, so
   // the surface does not shade itself (with the brain as an occluder too).
-#ifndef NO_SHADOW
   if (u_brainShadowOn > 0.5 && (u_shellMode < 0.5 || isCap)) { // GLASS: only the (opaque) cut face
     vec3 Lt = u_pointLight > 0.5 ? normalize(hitP - u_lightPosLocal) : u_lightDir;
     float off = 1.5 * u_shadowVoxMm / max((u_voxMm.x + u_voxMm.y + u_voxMm.z) / 3.0, 1e-6);
@@ -1462,7 +1445,6 @@ ${CLIP_SETUP_GLSL}
     solidColor = baseColor * (ambL + max(shade - ambL, 0.0) * T);
     spec *= T;
   }
-#endif
   solidColor += vec3(spec);
   // TEMPORARY DEBUG (remove once the thin-structure issue is
   // understood): paints every hit a flat, unmistakable color by which
@@ -1489,7 +1471,6 @@ ${CLIP_SETUP_GLSL}
   // never occludes anything drawn behind it, which is what leaves
   // streamlines and other geometry visible through it.
   vec3 worldPos = (u_model * vec4(hitP - u_size * 0.5, 1.0)).xyz;
-#ifndef NO_CURSOR
   if (u_cursorOn > 0.5) {
     // How fast the distance to a plane changes per screen pixel, from the
     // surface's own normal (not from the neighbouring pixels: at the
@@ -1520,7 +1501,6 @@ ${CLIP_SETUP_GLSL}
       return;
     }
   }
-#endif
   vec4 clipPos = u_projView * vec4(worldPos, 1.0);
   float fragDepth = clipPos.z / clipPos.w * 0.5 + 0.5;
 
@@ -1547,20 +1527,6 @@ export function gpuInfo(gl) {
   return { renderer, vendor };
 }
 
-// DIAGNOSIS (the Windows / Direct3D shader-compile hang): ?glsl=paint,photo
-// leaves those parts out of the brain shaders, to find the one the
-// compiler chokes on. Words: paint, photo, cursor, shadow, cutout,
-// backward, iso, normal. Not for normal use (what is left out is not drawn).
-const GLSL_OFF = (() => {
-  try {
-    const q = new URLSearchParams(location.search).get('glsl');
-    if (!q) return {};
-    const out = {};
-    for (const w of q.split(',').map(x => x.trim().toLowerCase()).filter(Boolean)) out['NO_' + w.toUpperCase()] = 1;
-    console.warn('brain shaders: left out (?glsl=):', Object.keys(out).join(', '));
-    return out;
-  } catch (e) { return {}; }
-})();
 export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInfo) {
   const isColor = (anat.channels || 1) === 3;
   const isLabelMode = !isColor && !!(dispInfo && dispInfo.apply && dispInfo.map);
@@ -1798,7 +1764,6 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   // shader) and in these three material-level settings (transparency and
   // depth handling).
   const glassMat = new THREE.ShaderMaterial({
-    defines: { ...GLSL_OFF },
     vertexShader:   GLASS_VS,
     fragmentShader: GLASS_ONLY_FS,
     uniforms: sharedUniforms,
@@ -1807,7 +1772,6 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
     depthTest:   true,
   });
   const solidMat = new THREE.ShaderMaterial({
-    defines: { ...GLSL_OFF },
     vertexShader:   GLASS_VS,
     fragmentShader: SOLID_ONLY_FS,
     uniforms: sharedUniforms,
@@ -1816,7 +1780,6 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
     depthTest:   true,
   });
   const shellMat = new THREE.ShaderMaterial({
-    defines: { ...GLSL_OFF },
     vertexShader:   GLASS_VS,
     fragmentShader: SOLID_ONLY_FS, // same shader as solidMat — see comment above
     uniforms: sharedUniforms,
@@ -1886,6 +1849,10 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   };
 
   scene.add(mesh);
+  // (the first render of each material compiles its shader: slow ones are
+  // reported — Windows' Direct3D compiler is far slower than the others,
+  // and a shader that grows can freeze the page there; see LOOP BOUNDS)
+  const _compileT0 = performance.now();
   // Initial compile — forces shader errors to surface now, for all three
   // materials (whichever one ends up actually selected happens moments
   // later, in index.html's updateGlassBrainUniforms). shellMat reuses
@@ -1901,6 +1868,8 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
   renderer3.render(scene, camera);
   if (renderer3.getContext().getError()) console.error('Glass brain: WebGL error after first render (glass/shell shader)');
   mesh.material = glassMat;
+  const _compileMs = performance.now() - _compileT0;
+  if (_compileMs > 1000) console.warn('3D brain shaders: compiling took ' + Math.round(_compileMs) + ' ms (once per page load; slowest on Windows)');
   return mesh;
 }
 
