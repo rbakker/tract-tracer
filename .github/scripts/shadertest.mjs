@@ -8,14 +8,32 @@
 //        catches this kind of failure; only on request, never by default)
 //   REQUIRE_D3D=0 …   allow a renderer other than Direct3D (local tries)
 //
-// Serves the repository root itself (no other server needed); three.js
-// comes from the CDN, as in the app.
+// Serves the app itself (no other server needed): the folder that holds
+// js/shadertest.js next to an index.html — found in the repository (or
+// SITE_DIR=…). three.js comes from the CDN, as in the app.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
-const ROOT = process.cwd();
+// the app's folder: SITE_DIR, else the first folder (up to 3 deep) with
+// index.html and js/shadertest.js
+function findSite(dir, depth = 0) {
+  if (fs.existsSync(path.join(dir, 'index.html')) && fs.existsSync(path.join(dir, 'js', 'shadertest.js'))) return dir;
+  if (depth >= 3) return null;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue;
+    const f = findSite(path.join(dir, e.name), depth + 1);
+    if (f) return f;
+  }
+  return null;
+}
+const ROOT = path.resolve(process.env.SITE_DIR || findSite(process.cwd()) || process.cwd());
+console.log('Serving ' + ROOT);
+if (!fs.existsSync(path.join(ROOT, 'js', 'shadertest.js'))) {
+  console.log('No js/shadertest.js under ' + process.cwd() + ' (3 levels deep): is it committed? Set SITE_DIR to the app folder.');
+  process.exit(1);
+}
 const PORT = 8123;
 const KNOWN_BAD = process.env.KNOWN_BAD === '1';
 const REQUIRE_D3D = process.env.REQUIRE_D3D !== '0';
@@ -26,7 +44,7 @@ const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (p.endsWith('/')) p += 'index.html';
   const f = path.join(ROOT, p);
-  if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
+  if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { console.log('  404 ' + p); res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
 }).listen(PORT);

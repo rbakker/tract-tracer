@@ -7,9 +7,9 @@ name: Shader test (Windows)
 
 on:
   push:
-    paths: ['index.html', 'js/**', '.github/workflows/shadertest.yml', '.github/scripts/shadertest.mjs']
+    paths: ['docs/index.html', 'docs/js/**', '.github/workflows/shadertest.yml', '.github/scripts/shadertest.mjs']
   pull_request:
-    paths: ['index.html', 'js/**', '.github/workflows/shadertest.yml', '.github/scripts/shadertest.mjs']
+    paths: ['docs/index.html', 'docs/js/**', '.github/workflows/shadertest.yml', '.github/scripts/shadertest.mjs']
   workflow_dispatch:
     inputs:
       known_bad:
@@ -30,6 +30,7 @@ jobs:
         run: npm install --no-save --no-package-lock playwright@1.63.0
       - name: Compile the shaders
         env:
+          SITE_DIR: docs   # the app (as served by GitHub Pages)
           KNOWN_BAD: ${{ inputs.known_bad && '1' || '0' }}
         run: node .github/scripts/shadertest.mjs
       - name: Keep the results
