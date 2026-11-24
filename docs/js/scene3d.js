@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { buildLutRGBA } from './lut-io.js';
-console.info('scene3d.js · build 2026-11-24d · textureLod + uniform loop bounds (no loop unrolling on Direct3D)');
+console.info('scene3d.js · build 2026-11-24e · textureLod + uniform bounds on all loops (no loop unrolling on Direct3D)');
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)
@@ -228,13 +228,16 @@ uniform float u_glassAlphaMult; // OPACITY's multiplier on GLASS mode's Fresnel 
 uniform float u_rimPow;
 uniform float u_volDiagMm;
 uniform int   u_steps;
-// LOOP BOUNDS: the long ray-march loops end at a uniform (u_steps; the
-// paint's at PAINT_MAX + u_loopZero, u_loopZero = 0), not at a constant.
-// With a constant bound, Microsoft's shader compiler (Chrome and Firefox
-// on Windows draw WebGL through ANGLE / Direct3D) tries to unroll the
-// loop, with the volume sampling inside it 512 times over: compiling then
-// takes minutes, the page hangs at "uploading 3D texture…" and the driver
-// gives up (graphics context lost). A uniform bound can't be unrolled.
+// LOOP BOUNDS: every loop of the brain shaders ends at a uniform — the
+// long ray-march loops at u_steps, all others at their count +
+// u_loopZero (always 0) —, not at a constant. With a constant bound,
+// Microsoft's shader compiler (Chrome and Firefox on Windows draw WebGL
+// through ANGLE / Direct3D) unrolls the loop; the small ones (8 corners,
+// 6 bisection steps, 3×3×3 neighbours) nest inside the others and inside
+// functions inlined at dozens of places, so the code multiplies: compiling
+// the solid shader then takes minutes, the page hangs at "uploading 3D
+// texture…" and the driver gives up (graphics context lost). A uniform
+// bound can't be unrolled.
 uniform int   u_loopZero;
 uniform mat4  u_invPV;
 // The ray of a pixel, from the camera's own axes (not by unprojecting the
@@ -413,9 +416,9 @@ float labelBorder(vec3 p) {
 vec3 labelNormal(vec3 p) {
   float c = sampleLabelIndex(p);
   vec3 g = vec3(0.0);
-  for (int dz = -1; dz <= 1; dz++) {
-    for (int dy = -1; dy <= 1; dy++) {
-      for (int dx = -1; dx <= 1; dx++) {
+  for (int dz = -1; dz <= 1 + u_loopZero; dz++) {
+    for (int dy = -1; dy <= 1 + u_loopZero; dy++) {
+      for (int dx = -1; dx <= 1 + u_loopZero; dx++) {
         if (dx == 0 && dy == 0 && dz == 0) continue;
         float fx = float(dx), fy = float(dy), fz = float(dz);
         float differs = (abs(sampleLabelIndex(p + vec3(fx,fy,fz)) - c) > 0.5) ? 1.0 : 0.0;
@@ -468,7 +471,7 @@ vec3 interpolatedLutColor(vec3 p) {
     // blend only the corners that hold a (shown) label, so background
     // doesn't darken the surface colour.
     vec3 acc = vec3(0.0); float wsum = 0.0;
-    for (int k = 0; k < 8; k++) {
+    for (int k = 0; k < 8 + u_loopZero; k++) {
       vec3 o = vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
       float idx = sampleLabelIndex(p0 + o + e);
       vec3 w3 = mix(vec3(1.0) - f, f, o);
@@ -670,7 +673,7 @@ bool findIsosurface(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize, 
     bool inside = occ >= thresh;
     if (inside != startInside) {
       vec3 a = prevP, b = p; // a stays on the startInside side, b on the other
-      for (int k = 0; k < 6; k++) {
+      for (int k = 0; k < 6 + u_loopZero; k++) {
         vec3 mid = (a + b) * 0.5;
         bool midInside = occupancyAndGradient(mid).w >= thresh;
         if (midInside == startInside) a = mid; else b = mid;
@@ -729,7 +732,7 @@ bool findCutoutBoundary(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSi
     bool nowCut = isCutZone(occupancyAndGradient(p).w, t1, t2, row1Above, row2AndBelow);
     if (nowCut != startCut) {
       vec3 a = prevP, b = p; // a stays on the startCut side, b on the other
-      for (int k = 0; k < 6; k++) {
+      for (int k = 0; k < 6 + u_loopZero; k++) {
         vec3 mid = (a + b) * 0.5;
         bool midCut = isCutZone(occupancyAndGradient(mid).w, t1, t2, row1Above, row2AndBelow);
         if (midCut == startCut) a = mid; else b = mid;
@@ -774,7 +777,7 @@ bool findOuterBoundaryBackward(vec3 ro, vec3 rd, float tStart, float tFar, float
     vec3 p = ro + t * rd;
     if (occupancyAndGradient(p).w >= threshBackground) {
       vec3 a = prevP, b = p; // a stays below threshBackground, b at/above it
-      for (int k = 0; k < 6; k++) {
+      for (int k = 0; k < 6 + u_loopZero; k++) {
         vec3 mid = (a + b) * 0.5;
         if (occupancyAndGradient(mid).w < threshBackground) a = mid; else b = mid;
       }
@@ -840,7 +843,7 @@ const CLIP_SETUP_GLSL = `
   // else in this shader). D(t) = d0 + t*dn is the signed distance from the
   // plane along the ray.
   bool anyPlaneActive = false;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 3 + u_loopZero; i++) {
     float dir = u_clipDir[i];
     if (dir == 0.0) continue;
     anyPlaneActive = true;
@@ -1005,7 +1008,7 @@ vec4 paintLabelAt(vec3 w) {
   vec3 g = tc * vec3(sz) - 0.5;
   vec3 f = fract(g); ivec3 b = ivec3(floor(g));
   vec4 acc = vec4(0.0);
-  for (int k = 0; k < 8; k++) {
+  for (int k = 0; k < 8 + u_loopZero; k++) {
     ivec3 o = ivec3(k & 1, (k >> 1) & 1, k >> 2), q = b + o;
     if (any(lessThan(q, ivec3(0))) || any(greaterThanEqual(q, sz))) continue;
     float wt = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y) * (o.z == 1 ? f.z : 1.0 - f.z);
@@ -1462,7 +1465,7 @@ ${CLIP_SETUP_GLSL}
     float nv = dot(Nw, v);
     if (abs(nv) < 0.05) nv = nv < 0.0 ? -0.05 : 0.05;   // (edge on: the line's width there stays bounded)
     float ca = 0.0; vec3 cc = vec3(0.0);
-    for (int k = 0; k < 3; k++) {
+    for (int k = 0; k < 3 + u_loopZero; k++) {
       vec3 n = u_cursorN[k];
       float d = dot(worldPos - u_cursorPos, n);
       vec3 w = n - Nw * (dot(n, v) / nv);
