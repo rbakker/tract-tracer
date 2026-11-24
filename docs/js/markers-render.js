@@ -502,3 +502,18 @@ export function markerBoundingSphere(pos) {
   for (let i = 0; i < pos.length; i += 3) if (Number.isFinite(pos[i]) && Number.isFinite(pos[i + 1]) && Number.isFinite(pos[i + 2])) box.expandByPoint(v.set(pos[i], pos[i + 1], pos[i + 2]));
   return box.isEmpty() ? new THREE.Sphere() : box.getBoundingSphere(new THREE.Sphere());
 }
+
+// SHADERS: every shader this module builds, in each variant the app uses
+// (#defines, sides) — compiled one by one by ?shadertest (js/shadertest.js;
+// on GitHub, on Windows, at every push). Editing a shader needs nothing
+// here; a NEW shader or variant needs its line here. Entries:
+//   { name, make: () => material }          a three.js material, as the app makes it
+//   { name, vs, fs, defines, side }         a three.js ShaderMaterial (side: 'front' | 'back' | 'double')
+//   { name, raw: true, vs, fs }             a raw WebGL2 program
+export const SHADERS = [
+  { name: 'markers · 3D', make: () => makeMarkerMaterial({ FULL_PASS: 1 }) },
+  { name: 'markers · 3D outline', make: () => makeMarkerMaterial({ FULL_PASS: 1, OUTLINE: 1 }) },
+  { name: 'markers · section, near half', make: () => makeMarkerMaterial({ NEAR_PASS: 1 }) },
+  { name: 'markers · section, far half', make: () => makeMarkerMaterial({ FAR_PASS: 1 }) },
+  { name: 'marker links', make: () => makeLinkMaterial() },
+];

@@ -1,0 +1,88 @@
+# Checks the app (docs/) at every push that touches it, and deploys it to
+# GitHub Pages only when every check passed: a failing check leaves the
+# site as it was. (Settings › Pages › Source must be "GitHub Actions".)
+# The checks run side by side; deploy waits for both.
+#   files    (Linux, seconds): every file the app loads by path is committed
+#            (.github/scripts/filecheck.mjs)
+#   shaders  (Windows): every shader compiles in Chrome on Direct3D, where
+#            the 3D brain crashed on 2026-11-24 (?shadertest&run,
+#            .github/scripts/shadertest.mjs). The known-bad shader only when
+#            asked: "Run workflow" (Actions tab) with "known_bad" ticked.
+name: Check and deploy
+
+on:
+  push:
+    paths: ['docs/**', '.github/workflows/checks.yml', '.github/scripts/**']
+  pull_request:
+    paths: ['docs/**', '.github/workflows/checks.yml', '.github/scripts/**']
+  workflow_dispatch:
+    inputs:
+      known_bad:
+        description: 'Also compile the known-bad shader (must fail: checks the shader test itself)'
+        type: boolean
+        default: false
+
+jobs:
+  files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Every file the app loads is committed
+        run: node .github/scripts/filecheck.mjs docs
+
+  shaders:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install Playwright (drives the runner's own Chrome)
+        run: npm install --no-save --no-package-lock playwright@1.63.0
+      - name: Compile the shaders (Chrome, Direct3D 11)
+        env:
+          SITE_DIR: docs   # the app (as served by GitHub Pages)
+          KNOWN_BAD: ${{ inputs.known_bad && '1' || '0' }}
+        run: node .github/scripts/shadertest.mjs
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: shadertest
+          path: |
+            shadertest.json
+            shadertest.png
+          if-no-files-found: ignore
+
+  # Only for a push to the default branch, and only when both checks passed
+  # (needs: a failed or skipped check skips this job — the site stays as it was).
+  deploy:
+    needs: [files, shaders]
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false   # (a deployment under way finishes)
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v6
+      - name: Package docs/
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

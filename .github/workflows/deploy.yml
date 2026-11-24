@@ -1,0 +1,30 @@
+   name: deploy
+   on:
+     push:
+       branches: [main]          # → dev.mydomain.org (Cloudflare)
+     release:
+       types: [published]        # → mydomain.org (GitHub Pages)
+   permissions:
+     contents: read
+     pages: write
+     id-token: write
+   jobs:
+     dev:
+       if: github.event_name == 'push'
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: cloudflare/wrangler-action@v3
+           with:
+             apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+             accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+             command: deploy
+     production:
+       if: github.event_name == 'release'
+       runs-on: ubuntu-latest
+       environment: github-pages
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/upload-pages-artifact@v3
+           with: { path: docs }
+         - uses: actions/deploy-pages@v4

@@ -581,3 +581,14 @@ export class VolRenderer {
     return vao;
   }
 }
+
+// SHADERS: every shader this module builds, in each variant the app uses
+// (#defines, sides) — compiled one by one by ?shadertest (js/shadertest.js;
+// on GitHub, on Windows, at every push). Editing a shader needs nothing
+// here; a NEW shader or variant needs its line here. Entries:
+//   { name, make: () => material }          a three.js material, as the app makes it
+//   { name, vs, fs, defines, side }         a three.js ShaderMaterial (side: 'front' | 'back' | 'double')
+//   { name, raw: true, vs, fs }             a raw WebGL2 program
+export const SHADERS = [
+  { name: 'sections · the volume (slices)', raw: true, vs: VS, fs: FS_SLICE },
+];

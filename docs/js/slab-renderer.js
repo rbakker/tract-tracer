@@ -215,6 +215,44 @@ void main() {
   gl_FragColor = vec4(c.rgb * (vD < 0.0 ? 0.8 : 1.0), 1.0);
 }`;
 
+// The slab passes' materials (the class makes them through these, and so
+// does SHADERS below).
+function slabLineMaterial(def, uniforms) {
+  return new THREE.ShaderMaterial({
+    vertexShader: SLAB_VS, fragmentShader: SLAB_FS,
+    uniforms, defines: { ...def, COLORMAP_SIZE },
+    depthWrite: !!def.NEAR_PASS && !def.FAINT_PASS, depthTest: true, transparent: !!def.FAR_PASS || !!def.FAINT_PASS,
+    // Same reasoning as scene3d.js's makeRibbonMaterial: screen-space
+    // ribbon construction makes triangle winding easy to get backwards
+    // for a given camera's handedness without it being obvious by
+    // inspection. This renderer's custom orthographic camera basis
+    // (uDir/vDir/nDir as matrixWorld columns) isn't guaranteed to match
+    // the 3D perspective camera's winding convention, so this needs its
+    // own DoubleSide rather than assuming it inherits the 3D fix.
+    side: THREE.DoubleSide,
+  });
+}
+function slabDotMaterial(def, uniforms) {
+  return new THREE.ShaderMaterial({
+    vertexShader: DOTS_VS, fragmentShader: DOTS_FS,
+    uniforms, defines: def,
+    depthWrite: false, depthTest: false, transparent: true,
+  });
+}
+function nearestMaterial() {
+  return new THREE.ShaderMaterial({
+    vertexShader: NEAREST_VS, fragmentShader: NEAREST_FS, depthWrite: false, depthTest: false, transparent: false,
+    uniforms: { u_sliceNormal: { value: new THREE.Vector3() }, u_slicePt: { value: new THREE.Vector3() },
+                u_slabHalf: { value: 1 }, u_dotPx: { value: 2 }, u_color: { value: new THREE.Vector3(0.2, 0.5, 1) } },
+  });
+}
+function sheetMaterial() {
+  return new THREE.ShaderMaterial({
+    vertexShader: SHEET_VS, fragmentShader: SHEET_FS, side: THREE.DoubleSide, depthTest: false, depthWrite: false, transparent: false,
+    uniforms: { u_sliceNormal: { value: new THREE.Vector3() }, u_slicePt: { value: new THREE.Vector3() }, u_slabHalf: { value: 1 }, u_tex: { value: null } },
+  });
+}
+
 export class SlabRenderer {
   constructor(threeRenderer) {
     this._r      = threeRenderer;
@@ -242,10 +280,7 @@ export class SlabRenderer {
   }
   // the sheet's mesh (one at a time), on its geometry, with its texture
   _sheetPass(sheet, nDir, cursor, halfThickMm) {
-    if (!this._sheetMat) this._sheetMat = new THREE.ShaderMaterial({
-      vertexShader: SHEET_VS, fragmentShader: SHEET_FS, side: THREE.DoubleSide, depthTest: false, depthWrite: false, transparent: false,
-      uniforms: { u_sliceNormal: { value: new THREE.Vector3() }, u_slicePt: { value: new THREE.Vector3() }, u_slabHalf: { value: 1 }, u_tex: { value: null } },
-    });
+    if (!this._sheetMat) this._sheetMat = sheetMaterial();
     if (!this._sheetMesh || this._sheetMesh.geometry !== sheet.geometry) {
       this._sheetMesh = new THREE.Mesh(sheet.geometry, this._sheetMat);
       this._sheetMesh.frustumCulled = false;
@@ -321,32 +356,12 @@ export class SlabRenderer {
 
   _ensureMats() {
     if (this._matNear) return;
-    const lineMat = (def) => new THREE.ShaderMaterial({
-      vertexShader: SLAB_VS, fragmentShader: SLAB_FS,
-      uniforms: this._lineUniforms(), defines: { ...def, COLORMAP_SIZE },
-      depthWrite: !!def.NEAR_PASS && !def.FAINT_PASS, depthTest: true, transparent: !!def.FAR_PASS || !!def.FAINT_PASS,
-      // Same reasoning as scene3d.js's makeRibbonMaterial: screen-space
-      // ribbon construction makes triangle winding easy to get backwards
-      // for a given camera's handedness without it being obvious by
-      // inspection. This renderer's custom orthographic camera basis
-      // (uDir/vDir/nDir as matrixWorld columns) isn't guaranteed to match
-      // the 3D perspective camera's winding convention, so this needs its
-      // own DoubleSide rather than assuming it inherits the 3D fix.
-      side: THREE.DoubleSide,
-    });
-    const dotMat = (def) => new THREE.ShaderMaterial({
-      vertexShader: DOTS_VS, fragmentShader: DOTS_FS,
-      uniforms: this._dotUniforms(), defines: def,
-      depthWrite: false, depthTest: false, transparent: true,
-    });
+    const lineMat = (def) => slabLineMaterial(def, this._lineUniforms());
+    const dotMat = (def) => slabDotMaterial(def, this._dotUniforms());
     this._matNear     = lineMat({ NEAR_PASS: 1 });
     this._matFar      = lineMat({ FAR_PASS:  1 });
     this._matNearFaint = lineMat({ NEAR_PASS: 1, FAINT_PASS: 1 });
-    this._matNearest = new THREE.ShaderMaterial({
-      vertexShader: NEAREST_VS, fragmentShader: NEAREST_FS, depthWrite: false, depthTest: false, transparent: false,
-      uniforms: { u_sliceNormal: { value: new THREE.Vector3() }, u_slicePt: { value: new THREE.Vector3() },
-                  u_slabHalf: { value: 1 }, u_dotPx: { value: 2 }, u_color: { value: new THREE.Vector3(0.2, 0.5, 1) } },
-    });
+    this._matNearest = nearestMaterial();
     this._dmatSrcNear = dotMat({ NEAR_PASS: 1 });
     this._dmatSrcFar  = dotMat({ FAR_PASS:  1 });
     this._dmatTgtNear = dotMat({ NEAR_PASS: 1 });
@@ -600,3 +615,20 @@ export class SlabRenderer {
     canvas2d.getContext('2d', {colorSpace: 'srgb'}).drawImage(this._offCanvas, 0, 0);
   }
 }
+
+// SHADERS: every shader this module builds, in each variant the app uses
+// (#defines, sides) — compiled one by one by ?shadertest (js/shadertest.js;
+// on GitHub, on Windows, at every push). Editing a shader needs nothing
+// here; a NEW shader or variant needs its line here. Entries:
+//   { name, make: () => material }          a three.js material, as the app makes it
+//   { name, vs, fs, defines, side }         a three.js ShaderMaterial (side: 'front' | 'back' | 'double')
+//   { name, raw: true, vs, fs }             a raw WebGL2 program
+export const SHADERS = [
+  { name: 'sections · streamlines, near half', make: () => slabLineMaterial({ NEAR_PASS: 1 }, {}) },
+  { name: 'sections · streamlines, far half', make: () => slabLineMaterial({ FAR_PASS: 1 }, {}) },
+  { name: 'sections · streamlines, near half, faint', make: () => slabLineMaterial({ NEAR_PASS: 1, FAINT_PASS: 1 }, {}) },
+  { name: 'sections · end dots, near half', make: () => slabDotMaterial({ NEAR_PASS: 1 }, {}) },
+  { name: 'sections · end dots, far half', make: () => slabDotMaterial({ FAR_PASS: 1 }, {}) },
+  { name: 'sections · nearest points', make: () => nearestMaterial() },
+  { name: 'sections · photo sheet', make: () => sheetMaterial() },
+];

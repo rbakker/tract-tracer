@@ -673,3 +673,19 @@ export class RegionMeshes {
     u.u_rimPow.value = L.rimPow; u.u_alphaMult.value = L.alphaMult;
   }
 }
+
+// SHADERS: every shader this module builds, in each variant the app uses
+// (#defines, sides) — compiled one by one by ?shadertest (js/shadertest.js;
+// on GitHub, on Windows, at every push). Editing a shader needs nothing
+// here; a NEW shader or variant needs its line here. Entries:
+//   { name, make: () => material }          a three.js material, as the app makes it
+//   { name, vs, fs, defines, side }         a three.js ShaderMaterial (side: 'front' | 'back' | 'double')
+//   { name, raw: true, vs, fs }             a raw WebGL2 program
+// (volume-surfaces.js draws with VS / FS too: covered by these)
+export const SHADERS = [
+  { name: 'region meshes · solid', vs: VS, fs: FS, side: 'double' },
+  { name: 'region meshes · glass', vs: VS, fs: FS, side: 'front' },
+  { name: 'region meshes · inner walls', vs: VS, fs: FS, side: 'back' },
+  { name: 'region caps', vs: CAP_VS, fs: CAP_FS, side: 'double' },
+  { name: 'region caps · ROI set (bits)', vs: CAP_VS, fs: CAP_FS_BITS, side: 'double' },
+];

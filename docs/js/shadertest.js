@@ -15,32 +15,24 @@
 // own button, never by "Run all" or &run: it crashes the browser's graphics
 // process on Windows — it is there to check that the test still notices.
 //
-// Covered: the shaders built with three.js from scene3d.js and
-// markers-render.js, in the variants the app switches between (#defines).
-// Not covered yet: the 2D renderers (vol-renderer.js, slab-renderer.js) and
-// volume-surfaces.js, which build theirs internally — the 2D ones compile
-// as the app starts.
+// What is compiled: each module's SHADERS list (scene3d.js, markers-render.js,
+// slab-renderer.js, region-meshes.js — which volume-surfaces.js shares —
+// and vol-renderer.js). A module's shaders are listed next to them, so an
+// edit needs nothing here and a new shader one line there.
 import * as THREE from 'three';
 import * as S from './scene3d.js';
-import * as M from './markers-render.js';
+import { SHADERS as MARKERS } from './markers-render.js';
+import { SHADERS as SLAB } from './slab-renderer.js';
+import { SHADERS as REGIONS } from './region-meshes.js';
+import { SHADERS as VOL } from './vol-renderer.js';
 
-const material = (vs, fs, defines = {}) => new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs, defines });
-const ribbon = (faint, clip) => { const m = S.makeRibbonMaterial(null, null, faint); if (clip) m.defines.CLIP3D = 1; return m; };
-
-// [name, () => material]
-const TESTS = [
-  ['3D brain · translucent', () => material(S.GLASS_VS, S.GLASS_ONLY_FS)],
-  ['3D brain · solid / glass (the big one)', () => material(S.GLASS_VS, S.SOLID_ONLY_FS)],
-  ['streamlines · opaque', () => ribbon(false, false)],
-  ['streamlines · faint pass', () => ribbon(true, false)],
-  ['streamlines · opaque, clipped', () => ribbon(false, true)],
-  ['streamlines · faint pass, clipped', () => ribbon(true, true)],
-  ['streamline end dots', () => S.makeDotsMaterial3d()],
-  ['markers · 3D', () => M.makeMarkerMaterial({ FULL_PASS: 1 })],
-  ['markers · 3D outline', () => M.makeMarkerMaterial({ FULL_PASS: 1, OUTLINE: 1 })],
-  ['markers · beyond the section (FAR_PASS)', () => M.makeMarkerMaterial({ FAR_PASS: 1 })],
-  ['marker links', () => material(M.LINK_VS, M.LINK_FS)],
-];
+const SIDES = { front: THREE.FrontSide, back: THREE.BackSide, double: THREE.DoubleSide };
+// [name, entry] for every module's SHADERS
+const TESTS = [...S.SHADERS, ...MARKERS, ...SLAB, ...REGIONS, ...VOL].map(e => [e.name, e]);
+// an entry → its three.js material (see the SHADERS comment in scene3d.js)
+const materialOf = e => e.make ? e.make()
+  : new THREE.ShaderMaterial({ vertexShader: e.vs, fragmentShader: e.fs, defines: { ...(e.defines || {}) }, side: SIDES[e.side || 'front'] });
+const runEntry = e => e.raw ? testRaw(e.vs, e.fs) : testMaterial(() => materialOf(e));
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -172,7 +164,7 @@ export function runShaderTest() {
     busy = true;
     for (let i = 0; i < TESTS.length; i++) {
       results[i] = { state: 'run' }; render();
-      results[i] = await testMaterial(TESTS[i][1]);
+      results[i] = await runEntry(TESTS[i][1]);
       render();
       if (results[i].state === 'lost') {   // (the graphics process went down: the rest would not be fair)
         for (let j = i + 1; j < TESTS.length; j++) results[j] = { state: 'fail', ms: null, log: 'not run: an earlier shader crashed the graphics process' };

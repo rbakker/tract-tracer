@@ -3105,5 +3105,21 @@ export function setRibbonHighlight(mesh, perTract) {
   a.needsUpdate = true;
 }
 
-// (for ?shadertest: the brain shaders as buildGlassBrain uses them)
-export { GLASS_VS, GLASS_ONLY_FS, SOLID_ONLY_FS };
+// SHADERS: every shader this module builds, in each variant the app uses
+// (#defines, sides) — compiled one by one by ?shadertest (js/shadertest.js;
+// on GitHub, on Windows, at every push). Editing a shader needs nothing
+// here; a NEW shader or variant needs its line here. Entries:
+//   { name, make: () => material }          a three.js material, as the app makes it
+//   { name, vs, fs, defines, side }         a three.js ShaderMaterial (side: 'front' | 'back' | 'double')
+//   { name, raw: true, vs, fs }             a raw WebGL2 program
+export const SHADERS = [
+  // (as buildGlassBrain makes them; shellMat is solidMat's shader)
+  { name: '3D brain · translucent', make: () => new THREE.ShaderMaterial({ vertexShader: GLASS_VS, fragmentShader: GLASS_ONLY_FS, transparent: true }) },
+  { name: '3D brain · solid / glass shell (the big one)', make: () => new THREE.ShaderMaterial({ vertexShader: GLASS_VS, fragmentShader: SOLID_ONLY_FS }) },
+  { name: 'streamlines · opaque', make: () => makeRibbonMaterial(null, null, false) },
+  { name: 'streamlines · faint pass', make: () => makeRibbonMaterial(null, null, true) },
+  // (CLIP3D: index.html's setLineClipDefine, while the streamlines are clipped)
+  { name: 'streamlines · opaque, clipped', make: () => { const m = makeRibbonMaterial(null, null, false); m.defines.CLIP3D = 1; return m; } },
+  { name: 'streamlines · faint pass, clipped', make: () => { const m = makeRibbonMaterial(null, null, true); m.defines.CLIP3D = 1; return m; } },
+  { name: 'streamline end dots · 3D', make: () => makeDotsMaterial3d() },
+];
