@@ -1472,12 +1472,34 @@ import * as THREE from 'three';
 // (texture uploads, shader compiles) — the step being entered is logged
 // BEFORE the call, so a hang shows where it is. Hunting a stall on Windows
 // (ANGLE / Direct3D) at "uploading 3D texture…".
-const APP_BUILD = '2026-11-24c · diag: load steps + slow WebGL calls';
+const APP_BUILD = '2026-11-24d · diag: load steps, slow WebGL calls, shader programs';
 console.info('%cTractogram Observer · build ' + APP_BUILD, 'font-weight:bold');
 function installGlTiming(gl, label) {
   if (!gl || gl.__timed) return;
   gl.__timed = true;
   const SLOW = 50;   // ms
+  // shader programs: which one is waited for (named by a word in its
+  // source), logged BEFORE the first call that has to wait for its compile
+  const srcOf = new WeakMap(), shadersOf = new WeakMap(), seen = new WeakSet();
+  let nProg = 0;
+  const progName = prog => {
+    const fs = (shadersOf.get(prog) || []).map(sh => srcOf.get(sh) || '').join('\n');
+    const words = ['findIsosurface', 'findOuterBoundary', 'GLASS', 'u_shellMode', 'RIBBON', 'u_fileStyle', 'u_fog', 'u_paint', 'u_vol'];
+    const hit = words.filter(w => fs.includes(w)).slice(0, 3).join(',');
+    return (prog.__n || (prog.__n = ++nProg)) + ' [' + (hit || 'other') + ', ' + Math.round(fs.length / 1000) + ' k chars]';
+  };
+  const firstUse = (prog, what) => {
+    if (!prog || seen.has(prog)) return;
+    seen.add(prog);
+    console.info(`[gl ${label}] → program ${progName(prog)}: ${what} (waits for its compile)`);
+  };
+  { const f = gl.shaderSource; gl.shaderSource = function (sh, src) { srcOf.set(sh, src); return f.call(this, sh, src); }; }
+  { const f = gl.attachShader; gl.attachShader = function (prog, sh) { if (!shadersOf.has(prog)) shadersOf.set(prog, []); shadersOf.get(prog).push(sh); return f.call(this, prog, sh); }; }
+  for (const name of ['getProgramParameter', 'getActiveUniform', 'getActiveAttrib', 'getUniformLocation', 'getAttribLocation', 'getProgramInfoLog']) {
+    const f = gl[name];
+    gl[name] = function (prog, ...a) { firstUse(prog, name); return f.call(this, prog, ...a); };
+  }
+  { const f = gl.linkProgram; gl.linkProgram = function (prog) { console.info(`[gl ${label}] → link program ${progName(prog)}`); return f.call(this, prog); }; }
   const calls = ['texImage3D', 'texSubImage3D', 'texImage2D', 'texSubImage2D', 'texStorage3D', 'compileShader', 'linkProgram',
                  'getProgramParameter', 'getShaderParameter', 'getProgramInfoLog', 'useProgram', 'drawArrays', 'drawElements',
                  'drawArraysInstanced', 'drawElementsInstanced', 'readPixels', 'finish', 'generateMipmap', 'bufferData'];

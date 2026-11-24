@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { buildLutRGBA } from './lut-io.js';
-console.info('scene3d.js · build 2026-11-24c · shaders read textures with textureLod (no forced loop unrolling on Direct3D)');
+console.info('scene3d.js · build 2026-11-24d · textureLod + uniform loop bounds (no loop unrolling on Direct3D)');
 
 // ═══════════════════════════════════════════════════════════
 // TrackballControls (inlined — no npm dependency)
@@ -228,6 +228,14 @@ uniform float u_glassAlphaMult; // OPACITY's multiplier on GLASS mode's Fresnel 
 uniform float u_rimPow;
 uniform float u_volDiagMm;
 uniform int   u_steps;
+// LOOP BOUNDS: the long ray-march loops end at a uniform (u_steps; the
+// paint's at PAINT_MAX + u_loopZero, u_loopZero = 0), not at a constant.
+// With a constant bound, Microsoft's shader compiler (Chrome and Firefox
+// on Windows draw WebGL through ANGLE / Direct3D) tries to unroll the
+// loop, with the volume sampling inside it 512 times over: compiling then
+// takes minutes, the page hangs at "uploading 3D texture…" and the driver
+// gives up (graphics context lost). A uniform bound can't be unrolled.
+uniform int   u_loopZero;
 uniform mat4  u_invPV;
 // The ray of a pixel, from the camera's own axes (not by unprojecting the
 // near and far planes: with the near plane a hair from a far camera that
@@ -653,7 +661,7 @@ bool findIsosurface(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSize, 
   // increasingly wrong render the higher u_steps goes past this number,
   // which is exactly what a too-high ULTRA setting once hit against an
   // earlier, lower version of this same bound.
-  for (int i = 1; i < 512; i++) {
+  for (int i = 1; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tStart + float(i) * stepSize;
     if (t > tEnd) break;
@@ -713,7 +721,7 @@ bool findCutoutBoundary(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSi
                          float t1, float t2, bool row1Above, bool row2AndBelow, out vec3 hitP) {
   vec3 prevP = ro + tStart * rd;
   bool startCut = isCutZone(occupancyAndGradient(prevP).w, t1, t2, row1Above, row2AndBelow);
-  for (int i = 1; i < 512; i++) {
+  for (int i = 1; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tStart + float(i) * stepSize;
     if (t > tEnd) break;
@@ -759,7 +767,7 @@ bool findCutoutBoundary(vec3 ro, vec3 rd, float tStart, float tEnd, float stepSi
 bool findOuterBoundaryBackward(vec3 ro, vec3 rd, float tStart, float tFar, float stepSize,
                                 float threshBackground, out vec3 hitP) {
   vec3 prevP = ro + tFar * rd;
-  for (int i = 1; i < 512; i++) {
+  for (int i = 1; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tFar - float(i) * stepSize;
     if (t < tStart) break;
@@ -889,7 +897,7 @@ ${CLIP_SETUP_GLSL}
   // Same compile-time-bound caveat as findIsosurface's loop in the solid
   // shader - must stay comfortably above the highest u_steps any quality
   // tier uses.
-  for (int i = 0; i < 512; i++) {
+  for (int i = 0; i < u_steps; i++) {   // (a uniform bound: see LOOP BOUNDS)
     if (i >= u_steps) break;
     float t = tStart + (float(i) + 0.5) * stepSize;
     vec3 p = ro + t * rd;
@@ -1054,7 +1062,7 @@ vec3 paintSurface(vec3 hitP, vec3 rd, vec3 base, float thresh) {
   vec3 Dw = normalize(mat3(u_model) * rd);   // the line of sight, inward
   if (u_paintLabels > 0.5) {
     float st = max(max(u_paintStep, 0.05), u_paintIn / float(PAINT_MAX - 2));
-    for (int i = 0; i < PAINT_MAX; i++) {
+    for (int i = 0; i < PAINT_MAX + u_loopZero; i++) {
       float d = float(i) * st;
       if (d > u_paintIn + 1e-4) break;
       vec3 w = Pw + Dw * d;
@@ -1068,7 +1076,7 @@ vec3 paintSurface(vec3 hitP, vec3 rd, vec3 base, float thresh) {
   float st = max(max(u_paintStep, 0.05), span / float(PAINT_MAX - 2));
   float m = paintAt(Pw), at = 0.0;   // (at: where the maximum lay, mm along the line of sight from the surface)
   bool out_ = false;
-  for (int i = 1; i < PAINT_MAX; i++) {           // toward the eye: until it enters tissue again
+  for (int i = 1; i < PAINT_MAX + u_loopZero; i++) {           // toward the eye: until it enters tissue again
     float d = float(i) * st;
     if (d > u_paintOut + 1e-4) break;
     vec3 w = Pw - Dw * d;
@@ -1077,7 +1085,7 @@ vec3 paintSurface(vec3 hitP, vec3 rd, vec3 base, float thresh) {
     float v = paintAt(w);
     if (v > m) { m = v; at = -d; }
   }
-  for (int i = 1; i < PAINT_MAX; i++) {           // behind it: until it leaves the tissue
+  for (int i = 1; i < PAINT_MAX + u_loopZero; i++) {           // behind it: until it leaves the tissue
     float d = float(i) * st;
     if (d > u_paintIn + 1e-4) break;
     vec3 w = Pw + Dw * d;
@@ -1675,6 +1683,7 @@ export function buildGlassBrain(anat, texData, scene, renderer3, camera, dispInf
       // has been enough to trip a driver watchdog and lose the WebGL
       // context outright, with no user interaction involved at all.
       u_steps:     { value: 40 },
+      u_loopZero:  { value: 0 },   // (see LOOP BOUNDS)
       u_invPV:     { value: new THREE.Matrix4() },
       u_camRot:    { value: new THREE.Matrix3() },
       u_projScale: { value: new THREE.Vector2(1, 1) },
