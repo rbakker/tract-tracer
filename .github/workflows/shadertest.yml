@@ -1,0 +1,43 @@
+# Compiles the app's shaders in Chrome on Windows (ANGLE → Direct3D 11),
+# where the 3D brain shader crashed on 2026-11-24 while it compiled
+# everywhere else. Runs ?shadertest&run (js/shadertest.js) and fails when a
+# shader fails. The known-bad shader is only compiled when asked for, from
+# "Run workflow" (Actions tab) with "known_bad" ticked.
+name: Shader test (Windows)
+
+on:
+  push:
+    paths: ['index.html', 'js/**', '.github/workflows/shadertest.yml', '.github/scripts/shadertest.mjs']
+  pull_request:
+    paths: ['index.html', 'js/**', '.github/workflows/shadertest.yml', '.github/scripts/shadertest.mjs']
+  workflow_dispatch:
+    inputs:
+      known_bad:
+        description: 'Also compile the known-bad shader (must fail: checks the test itself)'
+        type: boolean
+        default: false
+
+jobs:
+  shadertest:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright (drives the runner's own Chrome)
+        run: npm install --no-save --no-package-lock playwright@1.63.0
+      - name: Compile the shaders
+        env:
+          KNOWN_BAD: ${{ inputs.known_bad && '1' || '0' }}
+        run: node .github/scripts/shadertest.mjs
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadertest
+          path: |
+            shadertest.json
+            shadertest.png
+          if-no-files-found: ignore
