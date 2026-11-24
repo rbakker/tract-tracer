@@ -337,7 +337,7 @@ vec3 sampleRaw(vec3 p) {
   // directly and were never sqrt-encoded, so leave those untouched.
   // Scalar textures are RedFormat (single channel) — replicate .r into
   // all three components. Colour textures are RGBA8 — read all three.
-  vec4 texel = texture(u_vol, p / u_size);
+  vec4 texel = textureLod(u_vol, p / u_size, 0.0);
   vec3 enc = u_isColor > 0.5 ? texel.rgb : vec3(texel.r);
   return u_isColor > 0.5 ? enc * enc : enc;
 }
@@ -365,12 +365,12 @@ vec3 colourPaint(vec3 p) {
 bool labelHidden(float idx) {
   if (u_labelHide < 0.5 || idx < 0.0 || idx >= 4096.0 * u_labelVisRows) return false;
   vec2 uv = vec2((mod(idx, 4096.0) + 0.5) / 4096.0, (floor(idx / 4096.0) + 0.5) / u_labelVisRows);
-  return texture(u_labelVis, uv).r < 0.5;
+  return textureLod(u_labelVis, uv, 0.0).r < 0.5;
 }
 // (a hidden label reads as background, 0 — the surfaces, borders, colours
 // and occupancy below all go through this)
 float sampleLabelIndex(vec3 p) {
-  float norm = texture(u_vol, p / u_size).r;
+  float norm = textureLod(u_vol, p / u_size, 0.0).r;
   float idx = floor(norm * u_dataRange + u_dataMin + 0.5);
   return labelHidden(idx) ? 0.0 : idx;
 }
@@ -430,7 +430,7 @@ vec3 labelNormal(vec3 p) {
 // rather than a flat multiply that could clip saturated colours.
 vec3 lutColor(float idx) {
   vec3 c = (idx < 0.0 || idx >= u_lutSize) ? vec3(0.5)
-         : texture(u_lut, vec2((idx + 0.5) / u_lutSize, 0.5)).rgb;
+         : textureLod(u_lut, vec2((idx + 0.5) / u_lutSize, 0.5), 0.0).rgb;
   return pow(clamp(c, 0.0, 1.0), vec3(1.0 / u_contrast));
 }
 // Manual trilinear blend of LUT colour across the 8 voxels surrounding a
@@ -540,7 +540,7 @@ float occupancyAt(vec3 voxCoord) {
   // nowhere near the next boundary) while staying negligible for LINEAR
   // filtering's own blend, so both modes can share this one code path.
   bool nearestFiltered = (u_applyLUT > 0.5) && (u_isColor < 0.5);
-  if (nearestFiltered && u_useOcc > 0.5) return texture(u_occ, (voxCoord + vec3(0.5)) / u_size).r; // voxel centre: the blurred value
+  if (nearestFiltered && u_useOcc > 0.5) return textureLod(u_occ, (voxCoord + vec3(0.5)) / u_size, 0.0).r; // voxel centre: the blurred value
   float v = sampleVol(voxCoord + vec3(1e-3));
   if (nearestFiltered && v > 0.0 && u_labelHide > 0.5 && sampleLabelIndex(voxCoord + vec3(1e-3)) == 0.0) return 0.0; // a hidden label
   return nearestFiltered ? (v > 0.0 ? 1.0 : 0.0) : v;
@@ -987,7 +987,7 @@ uniform vec3      u_paintBase;  // the surface's own colour (a plain scan)
 float paintAt(vec3 w) {
   vec3 tc = (u_paintW2T * vec4(w, 1.0)).xyz;
   if (any(lessThan(tc, vec3(0.0))) || any(greaterThan(tc, vec3(1.0)))) return 0.0;
-  return texture(u_paintTex, tc).r;
+  return textureLod(u_paintTex, tc, 0.0).r;
 }
 // a label volume at world point w: its colour (premultiplied by how much of the 8 voxels around are visible labels) and that share
 vec4 paintLabelAt(vec3 w) {
@@ -1002,7 +1002,7 @@ vec4 paintLabelAt(vec3 w) {
     float wt = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y) * (o.z == 1 ? f.z : 1.0 - f.z);
     float id = floor(texelFetch(u_paintTex, q, 0).r + 0.5);
     if (id <= 0.0 || id >= u_paintLutSize) continue;
-    vec4 c = texture(u_paintLut, vec2((id + 0.5) / u_paintLutSize, 0.5));
+    vec4 c = textureLod(u_paintLut, vec2((id + 0.5) / u_paintLutSize, 0.5), 0.0);
     acc += wt * c.a * vec4(c.rgb, 1.0);
   }
   return acc;
@@ -1087,10 +1087,10 @@ vec3 paintSurface(vec3 hitP, vec3 rd, vec3 base, float thresh) {
   float sp = u_paintHi - u_paintLo;
   float t = abs(sp) < 1e-6 ? step(u_paintLo, m) : (m - u_paintLo) / sp;
   if (t <= 0.0) return base;
-  vec3 c = texture(u_paintMap, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb;
+  vec3 c = textureLod(u_paintMap, vec2(clamp(t, 0.0, 1.0), 0.5), 0.0).rgb;
   if (u_paintDepth > 0.5) {
     float dz = span > 1e-4 ? (at + u_paintOut) / span : 0.5;
-    c = texture(u_paintMap, vec2(clamp(dz, 0.0, 1.0), 0.5)).rgb * mix(0.4, 1.0, clamp(t, 0.0, 1.0));
+    c = textureLod(u_paintMap, vec2(clamp(dz, 0.0, 1.0), 0.5), 0.0).rgb * mix(0.4, 1.0, clamp(t, 0.0, 1.0));
   }
   float a = u_paintRise > 0.03 ? clamp(t / u_paintRise, 0.0, 1.0) : smoothstep(0.0, 0.03, t);   // (opaque: a soft edge at 'from')
   return mix(base, c, a);
@@ -1408,7 +1408,7 @@ ${CLIP_SETUP_GLSL}
     vec3 Lt = u_pointLight > 0.5 ? normalize(hitP - u_lightPosLocal) : u_lightDir;
     float off = 1.5 * u_shadowVoxMm / max((u_voxMm.x + u_voxMm.y + u_voxMm.z) / 3.0, 1e-6);
     vec3 wp = (u_model * vec4(hitP - Lt * off - u_size * 0.5, 1.0)).xyz;
-    float T = texture(u_shadowTex, (wp - u_shadowMin) / u_shadowSize).r;
+    float T = textureLod(u_shadowTex, (wp - u_shadowMin) / u_shadowSize, 0.0).r;
     float ambL = (startInside && !isCap) ? 0.3 : u_ambient;
     solidColor = baseColor * (ambL + max(shade - ambL, 0.0) * T);
     spec *= T;
@@ -2036,7 +2036,7 @@ uniform vec3  u_shadowSize;
 // ambient part (u_ambient) reaches every line, so nothing goes fully dark.
 float lineShadow() {
   if (u_shadowOn < 0.5) return 1.0;
-  return texture(u_shadowTex, (vWorldPos - u_shadowMin) / u_shadowSize).r;
+  return textureLod(u_shadowTex, (vWorldPos - u_shadowMin) / u_shadowSize, 0.0).r;
 }
 void main() {
 #ifdef CLIP3D
@@ -2365,8 +2365,8 @@ export function makeRibbonMaterial(colormapTex = null, styleTex = null, faint = 
 
 // ── Colormaps (data-field coloring) ─────────────────────────────────────
 // A colormap texture is COLORMAP_SIZE wide and one ROW per colormap:
-// index.html gives every loaded streamline file its own row (so each
-// file's active field can have its own map or legend), capped at
+// index.html gives every drawn streamline group its own row (so each
+// group's active field can have its own map or legend), capped at
 // MAX_COLORMAP_ROWS. It's kept as a texture (not baked into per-vertex
 // colors) so it can be swapped on the fly: setColormap()/setColormapRGB()
 // rewrite one row in place and every mesh holding the texture picks the
@@ -2374,7 +2374,7 @@ export function makeRibbonMaterial(colormapTex = null, styleTex = null, faint = 
 // as hexToRgbRaw below (no sRGB<->linear conversion: the texture's
 // colorSpace stays NoColorSpace, and LINE_FS never re-encodes on output).
 export const COLORMAP_SIZE = 256;
-export const MAX_COLORMAP_ROWS = 256;
+export const MAX_COLORMAP_ROWS = 1024;
 
 // ── Colormap definitions ──
 // Every colormap, whatever its origin (built-in, derived from a data

@@ -279,6 +279,7 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
   font-size:13px;line-height:1;user-select:none;
   font-family:-apple-system,'Segoe UI',sans-serif;}
 .dt-caret-empty{display:none;} /* leaf rows: no caret column, no indent */
+.dt-caret-blank{cursor:default;} /* (a streamline leaf among parents: the column kept, empty) */
 .dt-check{flex:none;accent-color:var(--accent2);cursor:pointer;}
 .dt-radio{flex:none;accent-color:var(--accent);cursor:pointer;}
 .dt-check:disabled,.dt-radio:disabled{opacity:0.3;cursor:default;}
@@ -429,6 +430,10 @@ body.left-folded #rail{display:none;}   /* folded: the rail goes too; ☰ brings
 .hover-tip.mt-in-panel > *{zoom:1;}
 .dt-swatch-static{display:inline-block;cursor:default;}
 .dt-swatch-static:hover{transform:none;}
+.dt-strip{width:9px;height:9px;}   /* a parent row's bundle colors (left to right) */
+.dt-groupby{flex-wrap:wrap;row-gap:3px;}
+.dt-groupby select{flex:0 1 auto;}
+.dt-groupby-sep{color:var(--dim);}
 .dt-scroll{max-height:calc(50vh / var(--ui));overflow-y:auto;overflow-x:hidden;}
 .dt-note{color:var(--dim);font-size:9px;white-space:normal;padding:2px 0 2px 4px;}
 .dt-labels{flex-basis:100%;min-width:0;}
@@ -1474,7 +1479,7 @@ import { MultiFileOpener, isJunkPath } from './js/file-opener.js';
 import { ScreenCapture, captureSupported, canRecordMp4 } from './js/screen-capture.js';
 import { pathOf, dirOf, joinPath, withPath, findFile, sameFile, shortNames } from './js/file-paths.js';
 import { parseManifest, resolveManifestVolumes, MANIFEST_FILENAME, isManifestName, stripPathExt, autoBundlePalette } from './js/bundle-io.js';
-import { LabelItem, LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
+import { LabelItem, LoadedDataStore, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, BundleGroupItem, LutItem, DataFieldItem, DataGroupItem, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton } from './js/loaded-data.js';
 import { FloatingPanel, PanelDockGroup } from './js/floating-panel.js';
 import { GridIndex }    from './js/grid-index.js';
 import { VolRenderer }  from './js/vol-renderer.js';
@@ -1837,9 +1842,9 @@ let srcStyle  = readColorState('src-color-picker',  'flat');
 let tgtStyle  = readColorState('tgt-color-picker',  'flat');
 // One colormap texture shared by every (re)built streamline mesh (3D and
 // 2D) — see makeColormapTexture in scene3d.js. One ROW per loaded
-// streamline file: trckParents[i] uses row i, written by
-// writeFieldColormapRow when a field is activated. Hence the cap on how
-// many files one bundle load may contain (MAX_TRACT_FILES). Changing a
+// drawn group (bundle, see regroupStreamlines): groups[i] uses row i,
+// written by writeFieldColormapRow when a field is activated. Hence the
+// cap on how many bundles can be shown together (MAX_TRACT_FILES). Changing a
 // file's colormap later = rewrite its row + a redraw, no geometry rebuild.
 const MAX_TRACT_FILES = MAX_COLORMAP_ROWS;
 const lineColormapTex = makeColormapTexture('jet', MAX_TRACT_FILES);
@@ -3755,6 +3760,10 @@ function renderCtxMenu() {
 // Any press on the menu pins it; a press on a free spot (not a control)
 // that moves drags it (and the click that ends the drag folds nothing).
 let _ctxDragged = false;
+// (capture: a control that stops its pointerdown — a slider being
+// scrubbed — must still mark the menu busy, or the menu rebuilds under
+// the drag at its first change and the slider freezes)
+bundleTipEl.addEventListener('pointerdown', () => { if (ctxMenu) { _cardBusy = true; pinCtxMenu(); } }, true);
 bundleTipEl.addEventListener('pointerdown', ev => {
   ev.stopPropagation();
   if (!ctxMenu) return;
@@ -3803,7 +3812,7 @@ function bundleRowControls(gi) {
   sw.addEventListener('input', () => setBundleColor(g, sw.value));
   const nm = document.createElement('span');
   nm.className = 'mt-id ctx-name' + (g.visible ? '' : ' ctx-off');
-  nm.textContent = g.name; nm.title = g.name;
+  nm.textContent = g.fullName || g.name; nm.title = nm.textContent;
   out.push(lb, cb, fb, sw, nm);
   return out;
 }
@@ -4662,7 +4671,7 @@ function focusNames() {
   if (focusIgnored()) return [];
   const vis = groups.filter(g => g.visible);
   if (vis.every(g => g.focus !== false)) return [];
-  return vis.filter(g => g.focus !== false).map(g => g.name);
+  return vis.filter(g => g.focus !== false).map(g => g.fullName || g.name);
 }
 // Point budget shares in highlight mode, as fractions of the tier's
 // budget: when the visible streamlines don't fit, the context keeps
@@ -6272,12 +6281,12 @@ let gridIdx=null,streamlineLookup=null,allPts=null,allStreamlines=null,trckHeade
 // into ONE flat allStreamlines array — GridIndex, the probe and slicing
 // work on it unmodified. A bundle is simply a GROUP of those streamlines
 // (streamlineBundleId: per-streamline index into `groups`). Groups come
-// from the sources: each file is one group, unless it's split by one of
-// its per-streamline categorical .dqz fields (a bundle-assignment file,
-// e.g. from a clustering tool) — then each code of that field is a group,
-// named and colored by the field's legend. So 16 bundle .tck files, and
-// one whole-brain file + a 16-bundle assignment field, end up as the same
-// 16 groups. See regroupStreamlines.
+// from GROUP·BY: by file, by a file's bundle-assignment field (e.g. from a
+// clustering tool, a .trx's groups) and by any per-streamline categorical
+// .dqz field, as a tree; the groups are its leaves, named and colored by
+// the fields' legends. So 16 bundle .tck files, and one whole-brain file +
+// a 16-bundle assignment field, end up as the same 16 groups. See
+// regroupStreamlines.
 // isBundle: more than one group, or a split — i.e. groups are meaningful
 // and colored per bundle (LINE·COLOR etc. default to 'bundle').
 let isBundle=false, streamlineBundleId=null, bundlePaletteRGB=null, bundleNames=null, _lastBundleInfo=null;
@@ -6514,7 +6523,7 @@ async function readTractEntries(entries, alreadyLoaded) {
   return out;
 }
 // A .trx's data per point / per streamline and its groups: as .dqz data
-// files of that tractogram (its fields, "color by", "split by"; groups as a
+// files of that tractogram (its fields: COLOR·BY, FILTER·BY, GROUP·BY; groups as a
 // bundle field, which splits it), already read and cut to its kept
 // streamlines (js/trx-io.js).
 function registerTrxFields(p, parsed) {
@@ -6531,7 +6540,7 @@ const sourceOf = (entry, parsed, every) => ({
   color: entry.color || null, header: parsed ? parsed.header : { loaded: 'not yet — read when switched on' },
   uuid: parsed ? parsed.header._dqz?.uuid ?? null : null, streamlines: parsed ? parsed.streamlines : [],
   file: entry.file, pending: !parsed, every: every || 1, total: parsed ? parsed.total ?? parsed.streamlines.length : null,
-  firstStreamline: 0, split: undefined });
+  firstStreamline: 0 });
 
 // allStreamlines, streamlineLookup, trckHeader from trckParents.
 function rebuildTractArrays(manifest) {
@@ -6589,6 +6598,7 @@ async function loadTrckBundle(descriptor, mode = 'replace'){
   }
   if (!add) {
     groups = []; // nothing to carry over
+    groupChainUser = null; groupColorPerUser = null; groupNodeStates.clear();
     // Data files of the replaced streamlines go with them.
     const old = new Set(trckParents);
     dqzChildRecords = dqzChildRecords.filter(r => !(r.parent && old.has(r.parent)));
@@ -6629,55 +6639,240 @@ function readPendingSource(p) {
   }, 50);
 }
 
-// Rebuilds `groups` and the per-streamline group index from trckParents
-// and each source's split field. Groups that still exist (same source,
-// same code) keep their object — and with it their on/off, color, width/
-// opacity and active data field. Returns false (and changes nothing) if
-// there would be more groups than the style/colormap textures have rows.
+// ── GROUP·BY ────────────────────────────────────────────────
+// Streamlines carry categorical variables: "file" (which loaded file),
+// "bundle" (a file's bundle-assignment field: "role": "bundles", e.g. a
+// .trx's groups) and every other per-streamline categorical data field
+// (.dqz), by name. One chain for the whole set — groupChain, e.g.
+// file › bundle › hemisphere — splits them into a tree: each level splits
+// only the streamlines that have that variable (a mixed load: a file
+// without bundles stays one row), and a variable of the same name splits
+// every file alike. The leaves are `groups`: what is drawn (own color,
+// on/off, focus, style texel and colormap row). Leaves never span files:
+// with several files, "file" is always somewhere in the chain.
+// groupTree: the parent rows ({ key, name, children, leaves, state }).
+let groupChainUser = null;     // the user's chain (variable keys), or null: the default
+let groupColorPerUser = null;  // 'group': "override bundle colors" (palette per row); null: by the last level
+let groupChain = [], groupColorPer = 'group', groupTree = [];
+const groupNodeStates = new Map();   // node key -> { collapsed, filters, uiSettingsOpen } (kept across regroups)
+const GROUP_MAX_VALUES = 64;         // a field with more values is not offered for grouping (the bundle field excepted)
+
+// The variables streamlines can be grouped by now: key -> { key, label,
+// bySource: Map(source -> rec) } (file: no rec). In first-seen order.
+function groupVariables() {
+  const vars = new Map();
+  if (trckParents.length > 1) vars.set('file', { key: 'file', label: 'file', bySource: new Map() });
+  for (const p of trckParents) {
+    const cands = dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p && r.parsed
+      && r.parsed.scope === 'per_streamline' && r.header.kind === 'categorical');
+    const bundleRec = cands.find(r => r.header.role === 'bundles');
+    for (const r of cands) {
+      const key = r === bundleRec ? 'bundle' : 'f:' + fieldName(r);
+      if (key !== 'bundle' && distinctCodes(r) > GROUP_MAX_VALUES) continue;
+      if (!vars.has(key)) vars.set(key, { key, label: fieldName(r), bySource: new Map() });
+      const v = vars.get(key);
+      if (!v.bySource.has(p)) v.bySource.set(p, r);
+    }
+  }
+  // the bundle field by its name ("FOD filter"); "bundle" when the files name it differently
+  const b = vars.get('bundle');
+  if (b) { const names = new Set([...b.bySource.values()].map(fieldName)); b.label = names.size === 1 ? [...names][0] : 'bundle'; }
+  return vars;
+}
+function distinctCodes(rec) {
+  if (rec._nCodes === undefined) rec._nCodes = new Set(rec.parsed.codes).size;
+  return rec._nCodes;
+}
+// The chain in use: the user's (less what is gone; "file" kept in when
+// there are several files), else file (several files) › bundle (if any).
+function effectiveGroupChain(vars) {
+  let chain;
+  if (groupChainUser) {
+    chain = groupChainUser.filter(k => vars.has(k));
+    if (vars.has('file') && !chain.includes('file')) chain.push('file');
+  } else chain = ['file', 'bundle'].filter(k => vars.has(k));
+  return chain;
+}
+// Its values' names, in order: a legend's order (by code), then the rest
+// by code; the same name in several files is one value.
+function groupValueOrder(v) {
+  const rank = new Map();
+  for (const rec of v.bySource.values()) {
+    const L = fieldLegend(rec) || [], present = new Set(rec.parsed.codes);
+    const names = [...L.filter(e => present.has(e.value)).map(e => e.name),
+                   ...[...present].filter(c => !L.some(e => e.value === c)).sort((a, b) => a - b).map(c => v.label + ' ' + c)];
+    for (const n of names) if (!rank.has(n)) rank.set(n, rank.size);
+  }
+  return rank;
+}
+
+// Rebuilds `groups`, groupTree and the per-streamline group index from
+// trckParents and the chain. Groups that still exist (same file, same
+// path) keep their object — and with it their on/off, focus, picked
+// color, active data field and conditions. Returns false (and changes
+// nothing) if there would be more groups than the style/colormap
+// textures have rows.
 function regroupStreamlines() {
   filtersChanged();   // (other bundles per streamline)
-  const old = new Map(groups.map(g => [g.source.name + '\u0000' + (g.code ?? ''), g]));
-  const next = [];
-  const gid = new Int32Array(allStreamlines ? allStreamlines.length : 0);
-  for (const p of trckParents) {
-    const rec = p.split || null;
+  const vars = groupVariables();
+  const chain = effectiveGroupChain(vars);
+  const ranks = new Map(chain.filter(k => k !== 'file').map(k => [k, groupValueOrder(vars.get(k))]));
+  const old = new Map(groups.map(g => [g.key, g]));
+  const leaves = [];   // { g, path, local } before sorting
+  const perSource = [];
+  trckParents.forEach((p, pi) => {
     const n = p.streamlines.length;
-    if (!rec) {
-      const g = old.get(p.name + '\u0000') || { visible: !p.pending };
-      Object.assign(g, { source: p, code: null, name: p.label, sourceColor: p.color });
-      const k = next.push(g) - 1;
-      gid.fill(k, p.firstStreamline, p.firstStreamline + n);
-      continue;
+    // its levels: the chain's variables it has
+    const levels = [];
+    for (const k of chain) {
+      const v = vars.get(k);
+      if (k === 'file') { levels.push({ k, values: [{ name: p.label, rank: pi, code: null, color: p.color || null, fileKey: p.name }], idx: null }); continue; }
+      const rec = v.bySource.get(p);
+      if (!rec || !n) continue;
+      const L = fieldLegend(rec) || [], codes = rec.parsed.codes, rank = ranks.get(k);
+      const byCode = new Map(), values = [], idx = new Int32Array(n);
+      for (let i = 0; i < n; i++) {
+        const c = codes[i];
+        let j = byCode.get(c);
+        if (j === undefined) {
+          const e = L.find(l => l.value === c), name = e ? e.name : v.label + ' ' + c;
+          j = values.push({ name, rank: rank.get(name) ?? 1e9, code: c, color: e ? rgbRawToHex(e.color.map(x => x / 255)) : null }) - 1;
+          byCode.set(c, j);
+        }
+        idx[i] = j;
+      }
+      levels.push({ k, values, idx });
     }
-    // Split by a per-streamline categorical field: one group per code
-    // present, in legend order (codes missing from the legend last).
-    const codes = rec.parsed.codes, legend = fieldLegend(rec) || [];
-    const present = new Set(codes);
-    const ordered = [...legend.map(e => e.value).filter(v => present.has(v)),
-                     ...[...present].filter(v => !legend.some(e => e.value === v)).sort((a, b) => a - b)];
-    const index = new Map();
-    for (const code of ordered) {
-      const e = legend.find(l => l.value === code);
-      const g = old.get(p.name + '\u0000' + code) || { visible: true };
-      Object.assign(g, { source: p, code, name: e ? e.name : fieldName(rec) + ' ' + code,
-                         sourceColor: e ? rgbRawToHex(e.color.map(c => c / 255)) : null });
-      index.set(code, next.push(g) - 1);
+    // one leaf per combination present (mixed radix over its levels)
+    const strides = []; let s = 1;
+    for (const l of levels) { strides.push(s); s *= l.values.length; }
+    const local = new Int32Array(n), combos = new Map();
+    const leafFor = combo => {
+      let li = combos.get(combo);
+      if (li !== undefined) return li;
+      const path = levels.map((l, d) => { const val = l.values[Math.floor(combo / strides[d]) % l.values.length]; return { k: l.k, ...val }; });
+      li = leaves.push({ p, pi, path }) - 1;
+      combos.set(combo, li);
+      return li;
+    };
+    if (!n) leafFor(0);   // (not read yet, or empty: one row, to switch it on)
+    for (let i = 0; i < n; i++) {
+      let combo = 0;
+      for (let d = 0; d < levels.length; d++) if (levels[d].idx) combo += levels[d].idx[i] * strides[d];
+      local[i] = leafFor(combo);
     }
-    for (let i = 0; i < n; i++) gid[p.firstStreamline + i] = index.get(codes[i]);
-  }
-  if (next.length > MAX_TRACT_FILES) {
-    alert(`That makes ${next.length} bundles; at most ${MAX_TRACT_FILES} can be shown together.`);
+    perSource.push({ p, local });
+  });
+  if (leaves.length > MAX_TRACT_FILES) {
+    alert(`That makes ${leaves.length} bundles; at most ${MAX_TRACT_FILES} can be shown together. Group by fewer levels.`);
     return false;
   }
+  // tree order: level by level, values in their order; a shorter path (a
+  // file without that level) first
+  const ci = k => chain.indexOf(k);
+  const cmp = (a, b) => {
+    for (let d = 0; d < Math.min(a.path.length, b.path.length); d++) {
+      const x = a.path[d], y = b.path[d];
+      if (x.k !== y.k) return ci(x.k) - ci(y.k);
+      if (x.rank !== y.rank) return x.rank - y.rank;
+      if (x.name !== y.name) return x.name < y.name ? -1 : 1;
+    }
+    return a.path.length - b.path.length || a.pi - b.pi;
+  };
+  const order = leaves.map((_, i) => i).sort((i, j) => cmp(leaves[i], leaves[j]));
+  const giOf = new Int32Array(leaves.length);
+  order.forEach((li, gi) => { giOf[li] = gi; });
+  const part = x => x.k + '=' + (x.k === 'file' ? x.fileKey : x.name);
+  const next = order.map(li => {
+    const { p, path } = leaves[li];
+    const key = p.name + '\u0000' + path.filter(x => x.k !== 'file').map(part).join('\u0001');
+    const g = old.get(key) || { visible: !p.pending };
+    const fields = path.filter(x => x.k !== 'file');
+    Object.assign(g, { key, source: p, path, code: fields.length ? fields[fields.length - 1].code : null,
+                       name: path.length ? path[path.length - 1].name : p.label,
+                       fullName: path.length ? path.map(x => x.name).join(' › ') : p.label });
+    return g;
+  });
+  const gid = new Int32Array(allStreamlines ? allStreamlines.length : 0);
+  for (const { p, local } of perSource) for (let i = 0; i < local.length; i++) gid[p.firstStreamline + i] = giOf[local[i]];
+  // the parent rows: one node per path prefix; a lone top node is left out
+  // (its children are the top rows)
+  const root = { children: [], byPart: new Map() };
+  for (const g of next) {
+    let at = root, prefix = [];
+    for (let d = 0; d < g.path.length - 1; d++) {
+      const x = g.path[d];
+      prefix.push(part(x));
+      let node = at.byPart.get(prefix[prefix.length - 1]);
+      if (!node) {
+        const key = prefix.join('\u0001');
+        node = { key, name: x.name, k: x.k, depth: d, children: [], byPart: new Map(), leaves: [], parent: at === root ? null : at };
+        at.byPart.set(prefix[prefix.length - 1], node);
+        at.children.push(node);
+      }
+      node.leaves.push(g);
+      at = node;
+    }
+    at.children.push(g);
+    g._parentNode = at === root ? null : at;
+  }
+  // a parent row with one bundle only: that bundle in its place ("CST · a")
+  const lift = list => list.forEach((c, i) => {
+    if (!c.children) return;
+    lift(c.children);
+    if (c.children.length === 1 && !c.children[0].children) {
+      const g = c.children[0];
+      g.name = c.name + ' · ' + g.name;
+      g._parentNode = c.parent;
+      list[i] = g;
+    }
+  });
+  lift(root.children);
+  let top = root.children;
+  while (top.length === 1 && top[0].children) top = top[0].children;
+  const dropped = new Set();
+  { let r = root.children; while (r.length === 1 && r[0].children) { dropped.add(r[0]); r = r[0].children; } }
+  for (const g of next) {
+    g.ancestors = [];
+    for (let node = g._parentNode; node; node = node.parent) if (!dropped.has(node)) g.ancestors.unshift(node);
+    delete g._parentNode;
+  }
+  const nodes = [];
+  const walk = list => { for (const c of list) if (c.children) { nodes.push(c); walk(c.children); } };
+  walk(top);
+  const many = next.length > 24;   // (a long list starts folded)
+  for (const node of nodes) {
+    if (!groupNodeStates.has(node.key)) groupNodeStates.set(node.key, { collapsed: many, filters: [] });
+    node.state = groupNodeStates.get(node.key);
+    delete node.byPart;
+  }
   groups = next;
+  groupChain = chain;
+  _groupSig = groupSignature(vars, chain);
+  groupTree = top;
   streamlineBundleId = gid;
   isBundle = groups.length > 1 || groups.some(g => g.code !== null);
-  // Colors: a group's own (user-picked) color, else its file's/legend's,
-  // else one from the automatic palette.
-  const auto = autoBundlePalette(groups.length);
-  groups.forEach((g, i) => { if (!g.color) g.color = hexToRgbRaw(g.sourceColor || auto[i]); });
+  // Colors: a group's own (user-picked) color, else the one of its value
+  // at the COLOR·PER level (legend or file color; else from the automatic
+  // palette, one per value), else its own.
+  // (the last level, so changing it changes the colors too; "override
+  // bundle colors": the palette, per bundle row)
+  groupColorPer = groupColorPerUser === 'group' || !chain.length ? 'group' : chain[chain.length - 1];
+  const colorKey = g => {
+    const x = groupColorPer !== 'group' && g.path.find(x => x.k === groupColorPer);
+    return x ? part(x) : 'g:' + g.key;
+  };
+  // (row: each its own from the palette, legend colors aside; a group
+  // without the level: its file's color, if it has one)
+  const ownColor = g => {
+    if (groupColorPer === 'group') return null;
+    const x = g.path.find(x => x.k === groupColorPer);
+    return x ? x.color : g.source.color || null;
+  };
+  const keys = [...new Set(groups.map(colorKey))], auto = autoBundlePalette(keys.length);
+  for (const g of groups) g.color = hexToRgbRaw(g.userColor || ownColor(g) || auto[keys.indexOf(colorKey(g))]);
   bundlePaletteRGB = groups.map(g => g.color);
-  bundleNames = groups.map(g => g.name);
+  bundleNames = groups.map(g => g.fullName);
   hiddenBundleIndices.clear();
   groups.forEach((g, i) => { if (!g.visible) hiddenBundleIndices.add(i); });
   // An active field only colors streamlines of its own file.
@@ -6685,39 +6880,29 @@ function regroupStreamlines() {
   groups.forEach(g => { if (g.activeField) writeFieldColormapRow(g); });
   return true;
 }
-
-// Splits source p by field rec (a matched per-streamline categorical
-// field of p), or undoes the split (rec null). userChoice: the user picked
-// this, so a default (see applyDefaultSplits) never overrides it again.
-function setSourceSplit(p, rec, userChoice = true) {
-  const prev = p.split;
-  p.split = rec || null;
-  if (userChoice) p.splitChosen = true;
+// A new chain (variable keys) or COLOR·PER level, from the GROUP·BY row.
+function setGroupChain(chain, colorPer = groupColorPerUser) {
+  const prevChain = groupChainUser, prevColor = groupColorPerUser;
+  groupChainUser = chain; groupColorPerUser = colorPer;
   const wasBundle = isBundle;
-  if (!regroupStreamlines()) { p.split = prev; regroupStreamlines(); return; }
+  if (!regroupStreamlines()) { groupChainUser = prevChain; groupColorPerUser = prevColor; regroupStreamlines(); return; }
   if (isBundle !== wasBundle) applyColorDefaultsForLoad();
+  resetProbeSelection();
   registerTrckItem();
   updateProbe();
 }
-
-// Fields that can split source p into bundles: its matched per-streamline
-// categorical fields.
-function splitCandidates(p) {
-  return dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p && r.parsed
-    && r.parsed.scope === 'per_streamline' && r.header.kind === 'categorical');
+// What the grouping depends on: the chain and, per level, which file's
+// field it reads.
+let _groupSig = '';
+function groupSignature(vars, chain) {
+  return chain.map(k => k + ':' + [...vars.get(k).bySource.entries()].map(([p, r]) => p.name + '/' + r.file.name).join(',')).join('|')
+       + '#' + trckParents.map(p => p.name + (p.pending ? '?' : '') + p.streamlines.length).join(',');
 }
-
-// A source not split by the user gets split by a field whose header says
-// "role": "bundles" (a bundle-assignment file). Returns true if anything
-// changed.
+// Called once data files attach or go: true when the grouping would change
+// (a "role": "bundles" field groups at once, by the default chain).
 function applyDefaultSplits() {
-  let changed = false;
-  for (const p of trckParents) {
-    if (p.splitChosen) continue;
-    const want = splitCandidates(p).find(r => r.header.role === 'bundles') || null;
-    if (want !== (p.split || null)) { p.split = want; changed = true; }
-  }
-  return changed;
+  const vars = groupVariables();
+  return groupSignature(vars, effectiveGroupChain(vars)) !== _groupSig;
 }
 
 // Removes all streamlines (and their data-file attachments) from the viewer.
@@ -6730,6 +6915,7 @@ function clearStreamlines() {
   _tractBox = null; recomputeView({ reframe: false }); // (removing data never moves the view)
   setStreamlines = []; renderStreamlines = []; // their 'nothing loaded' values (see their declarations)
   isBundle = false; streamlineBundleId = null; bundlePaletteRGB = null; bundleNames = null; _lastBundleInfo = null;
+  groupChainUser = null; groupColorPerUser = null; groupChain = []; groupTree = []; groupNodeStates.clear(); _groupSig = '';
   hiddenBundleIndices.clear();
   trckHeader = null; trckHeaderReady = false;
   state.set('trck.file', undefined);
@@ -8211,6 +8397,7 @@ function clearVolumes() {
 // Same caveat as clearVolumes: only used when a new volume is on its way.
 function clearAll() {
   setDataTitle(null);
+  loadedZipNames.clear();
   photos = [];
   pick3D = null; updatePickStrip(); if (ctxMenu) hideBundleTooltip(true);
   setSurfacePhoto(null);
@@ -8233,7 +8420,26 @@ function clearAll() {
 // Returns { replaceAll, replaceVolumes, trckMode } or null when cancelled.
 // The window's title: "Tractogram Observer – <what is loaded>" (null: the name alone).
 const BASE_TITLE = document.title;
-function setDataTitle(name) { document.title = name ? BASE_TITLE + ' – ' + name : BASE_TITLE; }
+let _dataTitle = null;
+function setDataTitle(name) { _dataTitle = name || null; document.title = name ? BASE_TITLE + ' – ' + name : BASE_TITLE; }
+
+// ── Packages that belong together ──
+// A zip dropped while another is loaded: the same zip name — a new version
+// of it — replaces everything; a zip sharing any volume with what is
+// loaded (same file name, same size: from the zip, nothing read) — e.g. a
+// second package of the same pipeline with its own copy of the anatomy —
+// asks Add / Replace; Add loads only what is new (files already loaded,
+// by name and size, are left out). Anything else replaces everything.
+const loadedZipNames = new Set();   // (lower case; reset by clearAll)
+const fileKey = f => String(f.name || '').split('/').pop().toLowerCase() + '|' + f.size;
+function loadedFileKeys() {
+  const keys = new Set();
+  const put = f => { if (f && f.size != null) keys.add(fileKey(f)); };
+  volumes.forEach(v => put(v.file)); luts.forEach(l => put(l.file));
+  trckParents.forEach(p => put(p.file)); dqzChildRecords.forEach(r => put(r.file));
+  markerSets.forEach(m => put(m.file)); photos.forEach(p => put(p.file));
+  return keys;
+}
 // A drop's name: the file (a zip), the folder (a folder dropped), else the first file + how many more.
 function dropName(files) {
   const list = Array.from(files || []);
@@ -8250,7 +8456,22 @@ async function decideDropMode(r, rawFiles) {
   const out = { replaceAll: false, replaceVolumes: false, trckMode: 'replace' };
   if (!volumes.length && !trckParents.length) return out;
   const isZip = rawFiles.length === 1 && /\.zip$/i.test(rawFiles[0].name);
-  if (volEntries.length && (isZip || entries.length > 1)) return { ...out, replaceAll: true };
+  if (volEntries.length && (isZip || entries.length > 1)) {
+    // (see loadedZipNames)
+    if (isZip && loadedZipNames.has(rawFiles[0].name.toLowerCase())) return { ...out, replaceAll: true };
+    const keys = loadedFileKeys(), shared = volEntries.filter(e => keys.has(fileKey(e.file)));
+    if (!shared.length) return { ...out, replaceAll: true };
+    const choice = await askChoice({
+      title: 'LOAD PACKAGE',
+      lines: [dropName(rawFiles),
+              'It has ' + (shared.length === 1 ? shared[0].file.name.split('/').pop() : shared.length + ' volumes') + ' in common with what is loaded.',
+              'Add what is new to it, or replace everything?'],
+      choices: [{ id: 'add', label: 'Add' }, { id: 'replace', label: 'Replace' }], defaultId: 'add',
+    });
+    if (!choice) return null;
+    if (choice === 'replace') return { ...out, replaceAll: true };
+    return { ...out, join: true, trckMode: 'add' };
+  }
 
   const ask = (title, what, kind) => askChoice({
     title, lines: [what, `Add to the loaded ${kind}, or replace them?`],
@@ -8295,7 +8516,23 @@ async function dispatchOpenedFiles(rawFiles){
   else if (mode.replaceVolumes) clearVolumes();
   // the window's title: what was loaded — on a replace (or into an empty
   // app), not on an add
-  if (fresh || mode.replaceAll || mode.replaceVolumes || (mode.trckMode === 'replace' && trckParents.length && (r.bundle || r.tract))) setDataTitle(dropName(rawFiles));
+  if (mode.join) setDataTitle((_dataTitle ? _dataTitle + ' + ' : '') + dropName(rawFiles));
+  else if (fresh || mode.replaceAll || mode.replaceVolumes || (mode.trckMode === 'replace' && trckParents.length && (r.bundle || r.tract))) setDataTitle(dropName(rawFiles));
+  if (rawFiles.length === 1 && /\.zip$/i.test(rawFiles[0].name)) loadedZipNames.add(rawFiles[0].name.toLowerCase());
+  // Added to a package it belongs with: the files loaded already (same
+  // name and size) are left out; its volumes stand for themselves.
+  const loadedKeys = mode.join ? loadedFileKeys() : null;
+  const isDup = f => !!loadedKeys && !!f && loadedKeys.has(fileKey(f));
+  const loadedVolOf = f => volumes.find(v => v.file && fileKey(v.file) === fileKey(f)) || null;
+  if (mode.join) {
+    if (r.children) r.children = r.children.filter(c => !isDup(c.file));
+    if (r.markers) r.markers = r.markers.filter(m => !isDup(m.file));
+    if (r.bundle) {
+      const keep = r.bundle.entries.filter(e => !isDup(e.file));
+      r.bundle = keep.length ? { ...r.bundle, entries: keep } : null;
+    }
+    if (r.tract && isDup(r.tract)) r.tract = null;
+  }
   let did = false;
   // .dqz child data files: queued BEFORE any tractogram load below
   // starts, since that load (async, not awaited by state.update) ends in
@@ -8344,10 +8581,12 @@ async function dispatchOpenedFiles(rawFiles){
       if (bf && !findFile(entries.map(e => e.file), bf, manifestEntry.file))
         throw `index.json view.bounds names "${bf}", which is not in the drop`;
       // its opening view (see recomputeView); a new manifest replaces the old one's
-      manifestView = manifest.view ? { ...manifest.view,
-        from: manifest.view.from != null ? parseDir(manifest.view.from) : null,
-        up: manifest.view.up != null ? parseDir(manifest.view.up) : null } : null;
-      recomputeView({ force: true });
+      if (!mode.join) {   // (added to a loaded package: the view stays as it is)
+        manifestView = manifest.view ? { ...manifest.view,
+          from: manifest.view.from != null ? parseDir(manifest.view.from) : null,
+          up: manifest.view.up != null ? parseDir(manifest.view.up) : null } : null;
+        recomputeView({ force: true });
+      }
     } catch (e) {
       if (!confirmManifestError(e, true)) return false; // cancelled — load nothing
       // proceed without manifest guidance — manifestVolumes stays null,
@@ -8363,7 +8602,9 @@ async function dispatchOpenedFiles(rawFiles){
   const newVols = [];
   const manifestLut = new Map(); // LUT File -> volume record (Rule 1)
   if (manifestVolumes && manifestVolumes.length) {
+    const known = new Map();   // (a volume loaded already: its record, for the masks below)
     for (const v of manifestVolumes) {
+      if (isDup(v.file) && loadedVolOf(v.file)) { known.set(v.file, loadedVolOf(v.file)); newVols.push(null); continue; }
       const vol = makeVolume(v.file, { label: v.name, category: v.type === 'label' ? 'parcellation' : 'anatomy', source: 'manifest' });
       vol.manifestType = v.type;
       if (v.lutFile) manifestLut.set(v.lutFile, vol);
@@ -8372,10 +8613,11 @@ async function dispatchOpenedFiles(rawFiles){
     // "mask": a volume of the package applied to this one from the start
     // (as ANATOMY › apply mask; loadAnat applies the shown volume's mask)
     manifestVolumes.forEach((v, i) => {
-      if (v.maskFile) newVols[i].maskSrc = newVols.find(x => x.file === v.maskFile) || null;
+      if (v.maskFile && newVols[i]) newVols[i].maskSrc = newVols.find(x => x && x.file === v.maskFile) || known.get(v.maskFile) || null;
     });
+    for (let i = newVols.length - 1; i >= 0; i--) if (!newVols[i]) newVols.splice(i, 1);
   } else {
-    for (const e of anatEntries) newVols.push(makeVolume(e.file));
+    for (const e of anatEntries) if (!isDup(e.file)) newVols.push(makeVolume(e.file));
   }
   // a volume's JSON sidecar (BIDS: phase encoding, readout time, …), paired by name in file-opener
   for (const v of newVols) { const e = anatEntries.find(x => x.file === v.file); if (e && e.sidecar) v.sidecar = e.sidecar; }
@@ -8404,7 +8646,8 @@ async function dispatchOpenedFiles(rawFiles){
   //  4. otherwise it stays unattached, listed under Parcellations, where
   //     "attach to" picks its volume.
   // A volume with a lookup table counts as a parcellation.
-  const lutEntries = entries.filter(e => e.kind === 'lut');
+  // (added to a loaded package: a table loaded already only when a new volume names it)
+  const lutEntries = entries.filter(e => e.kind === 'lut' && (!isDup(e.file) || manifestLut.has(e.file)));
   const loneLut = entries.length === 1 && lutEntries.length === 1;
   let activeChanged = false;
   for (const e of lutEntries) {
@@ -8456,7 +8699,7 @@ async function dispatchOpenedFiles(rawFiles){
   // (sub-01_dwi.bval ↔ sub-01_dwi.nii.gz) — this drop's, then earlier
   // ones; else, dropped without a match, with the drop's only volume or
   // (dropped on their own) the shown one.
-  const gradEntries = entries.filter(e => e.kind === 'grad');
+  const gradEntries = entries.filter(e => e.kind === 'grad' && !isDup(e.file));
   if (gradEntries.length) {
     const groups = new Map();
     for (const e of gradEntries) {   // (by path: sub-01/dwi.bval and sub-02/dwi.bval are two tables)
@@ -8486,7 +8729,8 @@ async function dispatchOpenedFiles(rawFiles){
     // the first scan among them is shown; a drop of label volumes / masks
     // only adds them (to PARCELLATION, SEGMENTATION, ROI sets).
     let show = firstToShow(newVols);
-    if (activeVolume && activeVolume.category === 'anatomy' && !activeVolume.mask) {
+    if (mode.join && activeVolume) { show = null; for (const v of newVols) if (v.category == null || !v.box) await classifyVolume(v); }   // (added to a loaded package: what is shown stays)
+    else if (activeVolume && activeVolume.category === 'anatomy' && !activeVolume.mask) {
       show = null;
       const order = [firstToShow(newVols), ...newVols.filter(v => v !== firstToShow(newVols))];
       for (const v of order) {
@@ -8504,7 +8748,7 @@ async function dispatchOpenedFiles(rawFiles){
   }
   // photos (.jpg, .png): to TOOLS › Photo to surface, which opens with the last
   // a photo's registration (.photo.json, tools/photo.js): with its photo, of this drop or loaded before
-  const photoEntries = entries.filter(e => e.kind === 'photo'), photoJsons = entries.filter(e => e.kind === 'photoJson');
+  const photoEntries = entries.filter(e => e.kind === 'photo' && !isDup(e.file)), photoJsons = entries.filter(e => e.kind === 'photoJson' && !isDup(e.file));
   if (photoEntries.length || photoJsons.length) { if (await addPhotos(photoEntries.map(e => e.file), photoJsons.map(e => e.file))) did = true; }
   return did;
 }
@@ -10460,8 +10704,9 @@ function buildPaintPanel(d) {
 // icon as the bundle rows, applying to all bundles — each shows on, off or
 // mixed (some on); a click switches all on (or, when all are on, all off).
 // Plus the tractogram header(s).
+const _groupByUi = { open: false };
 function makeStreamlineToolbar() {
-  return new ToolbarItem((_, bar) => {
+  const tb = new ToolbarItem((_, bar) => {
     const nVis = groups.filter(g => g.visible).length;
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.className = 'dt-check';
@@ -10484,25 +10729,30 @@ function makeStreamlineToolbar() {
     if (!allFoc && nFoc > 0) fb.classList.add('mixed');
     const lbl = document.createElement('span');
     lbl.className = 'dt-toolbar-lbl';
-    lbl.textContent = 'all ' + groups.length.toLocaleString() + ' bundles';
+    lbl.textContent = 'all ' + groups.length.toLocaleString() + (groups.length === 1 ? ' bundle' : ' bundles');
+    if (groupChain.length) lbl.title = 'grouped by ' + groupChain.map(k => k === 'file' || k === 'bundle' ? k : k.slice(2)).join(' › ');
     const spacer = document.createElement('span');
     spacer.style.flex = '1';
     bar.append(cb, fb, lbl, spacer,
       makeInfoButton(() => showTrckHeaderPanel(), trckParents.length > 1 ? 'headers of all streamline files' : 'tractogram header'));
   });
+  // » : GROUP·BY (and COLOR·PER)
+  // below it, always: HIERARCHY » (GROUP·BY, COLOR·PER), folding as ANATOMY's MASKING »
+  tb.buildBelow = (_, el) => buildHierarchyPanel(el);
+  return tb;
 }
 
-// One tree row per group (bundle) — directly under the "Streamline
-// bundles" heading. A row's settings: WIDTH/OPACITY, "split by" (for its
-// file), its file's .dqz data fields (see buildFieldSettings) and its
-// file header. Called after every (re)grouping.
+// The tree rows under "Streamline bundles": groupTree's parent rows
+// (fold, on/off and focus of all below — mixed when they differ —, a strip
+// of their colors, COLOR·BY and FILTER·BY for all below) and one row per
+// group (bundle): on/off, focus, color, its own COLOR·BY / FILTER·BY.
+// Called after every (re)grouping.
 function registerTrckItem() {
-  const rows = groups.map((g, i) => {
+  const leafRow = (g, i) => {
     const bi = new BundleItem(g.name, i, isBundle ? rgbRawToHex(g.color) : null);
     g.item = bi;
     bi._visible = g.visible;
-    bi.tooltip = g.name + (g.name !== g.source.name ? '\n' + g.source.name : '')
-               + (g.code !== null ? '\n' + fieldName(g.source.split) + ' = ' + g.code : '')
+    bi.tooltip = g.fullName + (g.fullName !== g.source.name ? '\n' + g.source.name : '')
                + (g.source.pending ? '\nnot read yet: switch it on to read it' : g.source.every > 1 ? '\nevery ' + ordinal(g.source.every) + ' streamline read (to fit in memory)' : '');
     // On/off filters allStreamlines by group before the probe selection/
     // thinning step (see updateProbe) and rebuilds the mesh.
@@ -10522,34 +10772,142 @@ function registerTrckItem() {
     bi.focused = !!g.focus;
     bi.onFocusToggle = () => toggleFocus(g);
     bi.onInfo = () => showBundleHeader(g);
-    bi.infoTitle = 'header of ' + g.source.name;
+    bi.infoTitle = groups.length > 1 ? 'what this bundle is, and its file\'s header' : 'header of ' + g.source.name;
     // Only a bundle with data files has a menu (checked at each render).
     const build = (_, el) => buildBundleSettings(g, el);
     Object.defineProperty(bi, 'buildSettings', { get: () => hasBundleSettings(g) ? build : null, set() {}, configurable: true });
     proxySettingsOpen(bi, g);
     return bi;
-  });
-  // (one group — a single tractogram, not split: its own row says it all)
-  dataStore.streamlineToolbar = groups.length > 1 ? makeStreamlineToolbar() : null;
+  };
+  const nodeRow = node => {
+    const it = new BundleGroupItem(node.name);
+    node.item = it;
+    const st = node.state;
+    Object.defineProperty(it, 'collapsed', { get: () => !!st.collapsed, set: v => { st.collapsed = v; }, configurable: true });
+    proxySettingsOpen(it, st);
+    for (const c of node.children) it.addChild(c.children ? nodeRow(c) : leafRow(c, groups.indexOf(c)));
+    if (isBundle) it.stripColors = node.leaves.map(g => rgbRawToHex(g.color));
+    it.tooltip = node.name + ' · ' + node.leaves.length + ' bundles' + (st.filters.length ? '\nconditions (FILTER·BY) for all of them' : '');
+    it.tag = st.filters.length ? '⏷ ' + st.filters.length : null;
+    it.onInfo = () => showGroupNodeInfo(node);
+    it.infoTitle = 'what this group is';
+    it.onFocusToggle = () => {
+      const on = !node.leaves.every(g => g.focus);
+      for (const g of node.leaves) g.focus = on;
+      focusChanged();
+    };
+    const build = (_, el) => buildNodeSettings(node, el);
+    Object.defineProperty(it, 'buildSettings', { get: () => node.leaves.some(g => fieldRecsOf(g).length) ? build : null, set() {}, configurable: true });
+    return it;
+  };
+  const rows = groupTree.map(c => c.children ? nodeRow(c) : leafRow(c, groups.indexOf(c)));
+  // (one group, nothing to group by: its own row says it all)
+  dataStore.streamlineToolbar = groups.length > 1 || groupVariables().size ? makeStreamlineToolbar() : null;
   dataStore.setStreamlines(rows);
   rebuildDqzChildItems();
   bundleChanged();
 }
 
+// HIERARCHY » under "all N bundles" — left out entirely (its color
+// option too) when there is no level to choose, i.e. no categorical field
+// to group by (several plain files: always by file):
+// open, one row per level of the chain — "level 1: [file]", "level 2:
+// [FOD filter]" … — plus one more to add a level (---), and "override
+// bundle colors". What each level is: in its row's tip.
+function buildHierarchyPanel(el) {
+  const vars = groupVariables();
+  if (![...vars.keys()].some(k => k !== 'file')) return;
+  const levels = true, override = groups.length > 1;
+  const toggle = () => { _groupByUi.open = !_groupByUi.open; dataStore.refresh(); };
+  const head = document.createElement('div');
+  head.className = _groupByUi.open ? 'adv-head' : 'adv-open';
+  head.innerHTML = '<span>hierarchy</span><span class="adv-chev">' + (_groupByUi.open ? '«' : '»') + '</span>';
+  head.dataset.tip = 'how the bundles are grouped into a tree, level by level, and colored';
+  head.addEventListener('click', toggle);
+  if (!_groupByUi.open) { el.appendChild(head); return; }
+  const pnl = document.createElement('div');
+  pnl.className = 'adv-panel';
+  const body = document.createElement('div');
+  body.className = 'adv-body';
+  if (levels) buildGroupLevelRows(body, vars);
+  if (override) {
+    const row = document.createElement('label');
+    row.className = 'dt-choice an-check';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'dt-check'; cb.checked = groupColorPer === 'group';
+    cb.addEventListener('change', () => setGroupChain(groupChainUser, cb.checked ? 'group' : null));
+    const sp = document.createElement('span'); sp.textContent = 'override bundle colors';
+    row.append(cb, sp);
+    row.dataset.tip = 'off: bundles are colored by the last level of the hierarchy — the same value, the same color (its own, from a legend or the package, else one from the palette). on: every bundle row its own color from the palette. A color you picked yourself stays either way.';
+    body.appendChild(row);
+  }
+  pnl.append(head, body);
+  el.appendChild(pnl);
+}
+// What a level is, for its row's tip: "the 2 loaded tract files", "the
+// bundle field of each file: 2 values (FOD ≥ 0.075, FOD < 0.075)".
+function groupLevelText(v) {
+  if (v.key === 'file') return 'file: the ' + trckParents.length + ' loaded tract files — always a level with several files (move it up or down).';
+  const recs = [...v.bySource.values()], names = [];
+  for (const r of recs) {
+    const L = fieldLegend(r) || [];
+    for (const c of new Set(r.parsed.codes)) { const e = L.find(l => l.value === c), n = e ? e.name : String(c); if (!names.includes(n)) names.push(n); }
+  }
+  const desc = recs.map(r => r.header.description).find(d => typeof d === 'string' && d);
+  return v.label + ': ' + (v.key === 'bundle' ? 'the bundle field' : 'a category per streamline') + ' of '
+    + (recs.length === trckParents.length ? (recs.length > 1 ? 'each file' : 'the file') : recs.length + ' of the ' + trckParents.length + ' files')
+    + ' — ' + names.length + (names.length === 1 ? ' value' : ' values') + ': ' + names.slice(0, 12).join(', ') + (names.length > 12 ? ', …' : '')
+    + (desc ? '. ' + desc : '') + (recs.length < trckParents.length ? '. Files without it are not split at this level.' : '');
+}
+// The level rows: one pulldown each (--- takes a level out; picking a
+// level that is already there swaps the two), then one to add a level.
+function buildGroupLevelRows(el, vars) {
+  const chain = groupChain.slice();
+  const label = k => (vars.get(k) || { label: k.replace(/^f:/, '') }).label;
+  const tipFor = k => vars.has(k) ? groupLevelText(vars.get(k)) : '';
+  chain.forEach((k, d) => {
+    const opts = [...vars.keys()].map(v => [v, label(v)]);
+    if (k !== 'file') opts.unshift(['', '---']);
+    const r = makeChoiceRow('level ' + (d + 1), opts, k, v => {
+      const c = chain.slice(), j = c.indexOf(v);
+      if (!v) c.splice(d, 1);
+      else if (j >= 0) { c[j] = k; c[d] = v; }   // (already a level: the two swap)
+      else c[d] = v;
+      setGroupChain(c);
+    });
+    attachTip(r, tipFor(k) + ' — --- takes the level out; picking a level that is already there swaps the two.');
+    el.appendChild(r);
+  });
+  const rest = [...vars.keys()].filter(k => !chain.includes(k));
+  if (rest.length) {
+    const r = makeChoiceRow('level ' + (chain.length + 1), [['', '---'], ...rest.map(k => [k, label(k)])], '',
+      v => { if (v) setGroupChain([...chain, v]); });
+    attachTip(r, 'Add a level. ' + rest.map(tipFor).join(' · '));
+    el.appendChild(r);
+  }
+}
+
+// A parent row's settings: COLOR·BY for all bundles below (by field
+// name: each bundle takes its own file's field of that name) and FILTER·BY
+// conditions for all of them (each bundle can add its own).
+function buildNodeSettings(node, el) {
+  buildFieldSettingsFor(node.leaves, el);
+  buildStreamFilterSettings({ leaves: node.leaves, filters: node.state, inherited: [] }, el);
+}
+
 // A bundle's settings — the same in its DATA panel row and in the 3D menu
-// (hover a bundle's ends, then »): split by, color·by (only with data files;
+// (hover a bundle's ends, then »): COLOR·BY, FILTER·BY (only with data files;
 // see hasBundleSettings). The state lives on the group, so both stay in step (see
 // bundleChanged).
 function buildBundleSettings(g, el) {
-  buildSplitSettings(g.source, el);
   buildFieldSettings(g, el);
-  buildStreamFilterSettings(g, el);
+  buildStreamFilterSettings({ leaves: [g], filters: g, inherited: g.ancestors || [] }, el);
 }
 // The data fields (matched .dqz children) of streamline file p.
 const fieldRecsOf = p => dqzChildRecords.filter(r => r.status === 'matched' && r.parent === p.source);
-// Does bundle g have a settings menu at all (split by / color·by)? A bundle
+// Does bundle g have a settings menu at all (COLOR·BY / FILTER·BY)? A bundle
 // without data files has none: no », no card, no DATA row menu.
-const hasBundleSettings = g => splitCandidates(g.source).length > 0 || fieldRecsOf(g).length > 0;
+const hasBundleSettings = g => fieldRecsOf(g).length > 0;
 // A bundle's file header (the info icon before its color swatch).
 function showBundleHeader(g) {
   const p = g.source;
@@ -10559,7 +10917,38 @@ function showBundleHeader(g) {
   // (.trk, .tt) or else of its own extent; again undoes it.
   const mirrorLinks = p.pending ? [] : [['L–R', 0], ['A–P', 1], ['S–I', 2]].map(([n, a]) =>
     ['mirror ' + n + ((p.mirrored || []).includes(n) ? ' ✓' : ''), () => { mirrorSource(p, a, n); showBundleHeader(g); }]);
-  showHeaderPanel('TRACTS HEADER · ' + p.name, JSON.stringify(p.header, null, 2) + att.text, [...mirrorLinks, ...att.links]);
+  // a bundle of a GROUP·BY tree: what it is first (its levels, their
+  // fields), then its file's header
+  const head = groups.length > 1 || (g.path && g.path.length) ? JSON.stringify(groupInfo(g.path || [], [g], g.source), null, 2) + '\n\n── tract file header (' + p.name + ') ──\n' : '';
+  showHeaderPanel((head ? 'BUNDLE · ' + g.fullName : 'TRACTS HEADER · ' + p.name), head + JSON.stringify(p.header, null, 2) + att.text, [...mirrorLinks, ...att.links]);
+}
+// What a bundle or parent row of the tree is: its levels (the value, and
+// for a field its name, value code and file), its streamlines, and the
+// bundles below it.
+function groupInfo(path, leaves, source = null) {
+  const vars = groupVariables(), out = {};
+  out.levels = path.map(x => {
+    const v = vars.get(x.k);
+    if (x.k === 'file') return { level: 'file', value: x.name, file: x.fileKey };
+    const recs = v ? [...v.bySource.entries()].filter(([p]) => !source || p === source).map(([, r]) => r) : [];
+    const r = recs[0];
+    return { level: v ? v.label : x.k, value: x.name, code: x.code,
+             field: r ? r.file.name + (recs.length > 1 ? ' (+' + (recs.length - 1) + ' more files)' : '') : undefined,
+             description: r && r.header.description || undefined };
+  });
+  const ids = bundlesIds(leaves);
+  out.streamlines = ids.length;
+  const F = streamFilterMask();
+  if (F) out.shown = ids.filter(id => F[id]).length + ' (FILTER·BY)';
+  if (leaves.length > 1) out.bundles = leaves.map(g => g.fullName);
+  return out;
+}
+function showGroupNodeInfo(node) {
+  const path = node.leaves[0].path.slice(0, node.depth + 1);
+  const conds = node.state.filters.map(f => ({ field: f.name, how: f.how || undefined, values: f.values ? [...f.values] : undefined, range: f.range }));
+  const info = groupInfo(path, node.leaves);
+  if (conds.length) info['FILTER·BY'] = conds;
+  showHeaderPanel('GROUP · ' + path.map(x => x.name).join(' › '), JSON.stringify(info, null, 2), []);
 }
 // The centre of a tract file's grid in RAS mm (null without one).
 function gridCentreOf(h) {
@@ -10615,6 +11004,7 @@ function soloFocus(g) {
 }
 // A bundle's color, from its DATA swatch or its 3D menu swatch.
 function setBundleColor(g, hex, refreshTree = true) {
+  g.userColor = hex;
   g.color = hexToRgbRaw(hex);
   bundlePaletteRGB[groups.indexOf(g)] = g.color;
   if (g.item) g.item.colorHex = hex;
@@ -10627,18 +11017,6 @@ function focusChanged() {
   updateProbe();
   dataStore.refresh();
   bundleChanged();
-}
-
-// "split by [none | field]" for streamline file p: turn one file into a
-// bundle per code of a per-streamline categorical field (e.g. a
-// bundle-assignment file), or back into one bundle.
-function buildSplitSettings(p, el) {
-  const cands = splitCandidates(p);
-  if (!cands.length) return;
-  const opts = [['', 'none (one bundle)'], ...cands.map((r, i) => [String(i), fieldName(r)])];
-  el.appendChild(makeChoiceRow('split by', opts, p.split ? String(cands.indexOf(p.split)) : '', value => {
-    setSourceSplit(p, value === '' ? null : cands[+value]);
-  }, 'split this file\'s streamlines into bundles by a per-streamline category'));
 }
 
 // ── .dqz child data files ──────────────────────────────────
@@ -10795,31 +11173,37 @@ function rebuildDqzChildItems() {
 
 const fieldName = rec => (rec.header && rec.header.name) || rec.file.name;
 
-// The DATA part of a bundle row's settings: the matched .dqz fields of
-// its file as a plain list — a radio per field picks the one that colors
-// this bundle's streamlines (click the active one again for none) —
-// followed by the active field's colormap and APPLY FROM/TO window.
-// "color·by [--- | data field]" for bundle p — its file's matched .dqz
-// data fields — with, once one is chosen, its helpers indented below it
-// (as in the markers' COLOR·BY): map (the colormap), from and to (the
-// window; the parts outside it are dimmed). Left out when the file has
-// no data fields.
 // ── FILTER·BY: streamlines shown only when they meet conditions ──
-// Per bundle (g.filters), on its file's data fields, combined with AND —
-// and with the probe (it selects among what passes): a categorical field
-// per streamline, a list of values to keep (any of them: OR, counts
-// faceted as the markers'); a number per streamline — or per point,
-// summed up per streamline as its min, mean or max — a from–to range.
-// Streamlines that fail are not drawn at all (3D, sections), unlike the
-// colour window's dimming. visibleOnly() applies it everywhere.
+// Per bundle (g.filters) and per parent row of the tree (its
+// state.filters: for every bundle below), on data fields BY NAME (each
+// bundle reads its own file's field of that name; a bundle without it is
+// not held back by that condition), all combined with AND — and with the
+// probe (it selects among what passes): a categorical field per
+// streamline, a list of values to keep (any of them: OR, counts faceted
+// as the markers'); a number per streamline — or per point, summed up per
+// streamline as its min, mean or max — a from–to range. Streamlines that
+// fail are not drawn at all (3D, sections), unlike the colour window's
+// dimming. visibleOnly() applies it everywhere.
+// A condition: { name, how ('min'|'mean'|'max'|null), values: Set | range: [a, b] }.
 let _filterMask = undefined;   // (undefined: to compute; null: no conditions)
+// The field named `name` of bundle g's file (or null).
+const recNamed = (g, name) => fieldRecsOf(g).find(r => fieldName(r) === name) || null;
+// All conditions on bundle g — its parents' first —, each with g's field.
+function bundleConditions(g, own = true) {
+  const out = [];
+  for (const node of g.ancestors || []) for (const f of node.state.filters) { const rec = recNamed(g, f.name); if (rec) out.push({ f, rec }); }
+  if (own) for (const f of g.filters || []) { const rec = recNamed(g, f.name); if (rec) out.push({ f, rec }); }
+  return out;
+}
 function streamFilterMask() {
   if (_filterMask !== undefined) return _filterMask;
-  if (!allStreamlines || !groups.some(g => g.filters && g.filters.length)) return (_filterMask = null);
+  if (!allStreamlines) return (_filterMask = null);
+  const conds = groups.map(g => bundleConditions(g));
+  if (!conds.some(c => c.length)) return (_filterMask = null);
   const M = new Uint8Array(allStreamlines.length).fill(1);
   for (let id = 0; id < M.length; id++) {
-    const g = groups[streamlineBundleId ? streamlineBundleId[id] : 0];
-    if (g && g.filters && g.filters.length && !passesFilters(g, id, g.filters)) M[id] = 0;
+    const c = conds[streamlineBundleId ? streamlineBundleId[id] : 0];
+    if (c && c.length && !passesConditions(c, id)) M[id] = 0;
   }
   return (_filterMask = M);
 }
@@ -10840,59 +11224,112 @@ function streamValue(rec, id, how) {
   }
   return c[how][local];
 }
-function passesFilters(g, id, filters) {
-  for (const f of filters) {
-    if (!f.rec || f.rec.parent !== g.source) continue;
-    const x = streamValue(f.rec, id, f.how);
+// conds: [{ f, rec }] (see bundleConditions)
+function passesConditions(conds, id) {
+  for (const { f, rec } of conds) {
+    const x = streamValue(rec, id, f.how);
     if (f.values) { if (!f.values.has(x)) return false; }
     else if (!(x >= Math.min(f.range[0], f.range[1]) && x <= Math.max(f.range[0], f.range[1]))) return false;
   }
   return true;
 }
-// the streamlines (global ids) of bundle g
-function groupIds(g) {
-  const gi = groups.indexOf(g), out = [];
-  for (let id = 0; id < allStreamlines.length; id++) if ((streamlineBundleId ? streamlineBundleId[id] : 0) === gi) out.push(id);
+// the streamlines (global ids) of these bundles, in order
+function bundlesIds(leaves) {
+  const want = new Uint8Array(groups.length);
+  for (const g of leaves) { const gi = groups.indexOf(g); if (gi >= 0) want[gi] = 1; }
+  const out = [];
+  for (let id = 0; id < (allStreamlines ? allStreamlines.length : 0); id++) if (want[streamlineBundleId ? streamlineBundleId[id] : 0]) out.push(id);
   return out;
 }
-function filterRange(f, ids) {
-  if (f.rec.parsed.scope !== 'per_vertex') return [...fieldRange(f.rec)];
+const groupIds = g => bundlesIds([g]);
+// A streamline's value of field `name` (its own file's) — id -> value, NaN
+// where its bundle's file has no such field.
+function valueOfName(name, how) {
+  const byGi = new Map();
+  return id => {
+    const gi = streamlineBundleId ? streamlineBundleId[id] : 0;
+    let rec = byGi.get(gi);
+    if (rec === undefined) { rec = groups[gi] ? recNamed(groups[gi], name) : null; byGi.set(gi, rec); }
+    return rec ? streamValue(rec, id, how) : NaN;
+  };
+}
+function filterRange(f, ids, recs) {
+  if (recs[0].parsed.scope !== 'per_vertex') {
+    let lo = Infinity, hi = -Infinity;
+    for (const r of recs) { const [a, b] = fieldRange(r); lo = Math.min(lo, a); hi = Math.max(hi, b); }
+    return [lo, hi];
+  }
   let lo = Infinity, hi = -Infinity;
-  for (const id of ids) { const x = streamValue(f.rec, id, f.how); if (Number.isFinite(x)) { if (x < lo) lo = x; if (x > hi) hi = x; } }
+  const val = valueOfName(f.name, f.how);
+  for (const id of ids) { const x = val(id); if (Number.isFinite(x)) { if (x < lo) lo = x; if (x > hi) hi = x; } }
   return Number.isFinite(lo) ? [lo, hi] : [0, 1];
 }
-function buildStreamFilterSettings(g, el) {
-  const recs = fieldRecsOf(g);
-  if (!recs.length) return;
-  if (!g.filters) g.filters = [];
-  g.filters = g.filters.filter(f => recs.includes(f.rec));   // (fields gone: their conditions too)
-  const refilter = () => { filtersChanged(); updateProbe(); rebuildDqzChildItems(); bundleChanged(); };
+// The fields of these bundles by name: name -> [recs] (one per file), in
+// first-seen order.
+function fieldsByName(leaves) {
+  const out = new Map();
+  for (const g of leaves) for (const r of fieldRecsOf(g)) {
+    const n = fieldName(r);
+    if (!out.has(n)) out.set(n, []);
+    if (!out.get(n).includes(r)) out.get(n).push(r);
+  }
+  return out;
+}
+// FILTER·BY for a scope: { leaves (the bundles it applies to), filters
+// (the object holding its .filters: a bundle, or a parent row's state),
+// inherited (the parent rows whose conditions apply too: listed, not
+// edited here) }.
+function buildStreamFilterSettings(scope, el) {
+  const byName = fieldsByName(scope.leaves);
+  if (!byName.size) return;
+  const holder = scope.filters;
+  if (!holder.filters) holder.filters = [];
+  holder.filters = holder.filters.filter(f => byName.has(f.name));   // (fields gone: their conditions too)
+  const filters = holder.filters;
+  const refilter = () => { filtersChanged(); updateProbe(); rebuildDqzChildItems(); registerTrckItemSoon(); bundleChanged(); };
   const refilterQuiet = () => { filtersChanged(); updateProbe(); };
-  const ids = g.filters.length ? groupIds(g) : null;
+  const ids = filters.length ? bundlesIds(scope.leaves) : null;
   const box = document.createElement('div');
   box.className = 'dt-filters';
   const title = document.createElement('div');
   title.className = 'dt-fields-title';
   title.textContent = 'FILTER·BY';
   box.appendChild(title);
-  for (const f of g.filters) {
+  // conditions set on parent rows (for all their bundles)
+  for (const node of scope.inherited) for (const f of node.state.filters) {
+    if (!byName.has(f.name)) continue;
+    const note = document.createElement('div');
+    note.className = 'dt-note';
+    note.textContent = fieldName(byName.get(f.name)[0]) + (f.how ? ' · ' + f.how : '') + ': '
+      + (f.values ? f.values.size + (f.values.size === 1 ? ' value' : ' values') : (+f.range[0].toPrecision(4)) + ' – ' + (+f.range[1].toPrecision(4)))
+      + ' (from ' + node.name + ')';
+    box.appendChild(note);
+  }
+  for (const f of filters) {
+    const recs = byName.get(f.name), rec = recs[0];
     const head = document.createElement('div');
     head.className = 'dt-filter-head';
     const name = document.createElement('span');
     name.className = 'dt-filter-name';
-    name.textContent = fieldName(f.rec) + (f.how ? ' · ' + f.how : '');
+    name.textContent = f.name + (f.how ? ' · ' + f.how : '');
     head.appendChild(name);
-    const remove = makeSettingsButton('✕', () => { g.filters = g.filters.filter(x => x !== f); refilter(); }, 'remove this condition');
+    const remove = makeSettingsButton('✕', () => { holder.filters = holder.filters.filter(x => x !== f); refilter(); }, 'remove this condition');
     if (f.values) {
-      const L = fieldLegend(f.rec), others = g.filters.filter(x => x !== f);
-      const counts = new Map(), totals = new Map();
+      const others = filters.filter(x => x !== f);
+      const counts = new Map(), totals = new Map(), entryOf = new Map();
+      const val = valueOfName(f.name, null);
+      // the other conditions, per bundle (each with its own file's fields)
+      const otherConds = new Map();
+      for (const g of scope.leaves) otherConds.set(groups.indexOf(g), others.map(o => ({ f: o, rec: recNamed(g, o.name) })).filter(c => c.rec));
       for (const id of ids) {
-        const x = streamValue(f.rec, id, null);
+        const x = val(id);
         if (!Number.isFinite(x)) continue;
         totals.set(x, (totals.get(x) || 0) + 1);
-        if (!others.length || passesFilters(g, id, others)) counts.set(x, (counts.get(x) || 0) + 1);
+        const oc = otherConds.get(streamlineBundleId ? streamlineBundleId[id] : 0) || [];
+        if (!oc.length || passesConditions(oc, id)) counts.set(x, (counts.get(x) || 0) + 1);
       }
-      const entries = [...totals.keys()].sort((a, b) => a - b).map(v => { const e = L && L.find(e => e.value === v); return { value: v, name: e ? e.name : String(v), color: e ? e.color : null }; });
+      for (const r of recs) for (const e of fieldLegend(r) || []) if (!entryOf.has(e.value)) entryOf.set(e.value, e);
+      const entries = [...totals.keys()].sort((a, b) => a - b).map(v => { const e = entryOf.get(v); return { value: v, name: e ? e.name : String(v), color: e ? e.color : null }; });
       head.append(
         makeSettingsButton('all', () => { f.values = new Set(entries.map(e => e.value)); refilter(); }),
         makeSettingsButton('none', () => { f.values = new Set(); refilter(); }), remove);
@@ -10921,59 +11358,93 @@ function buildStreamFilterSettings(g, el) {
     } else {
       head.appendChild(remove);
       box.appendChild(head);
-      if (f.rec.parsed.scope === 'per_vertex') {   // per point: summed up per streamline
-        const hw = makeChoiceRow('per streamline', [['min', 'min'], ['mean', 'mean'], ['max', 'max']], f.how, v => { f.how = v; f.range = filterRange(f, groupIds(g)); refilter(); });
+      if (rec.parsed.scope === 'per_vertex') {   // per point: summed up per streamline
+        const hw = makeChoiceRow('use', [['min', 'min'], ['mean', 'mean'], ['max', 'max']], f.how, v => { f.how = v; f.range = filterRange(f, bundlesIds(scope.leaves), recs); refilter(); });
         hw.classList.add('dt-helper');
         attachTip(hw, 'A value per point: each streamline\'s smallest, mean or largest value is compared with the range.');
         box.appendChild(hw);
       }
-      const [lo, hi] = filterRange(f, ids);
+      const [lo, hi] = filterRange(f, ids, recs);
       const step = (hi - lo) / 500 || 1, fmt = v => String(+v.toPrecision(4));
       const fr = makeSliderRow('from', { min: lo, max: hi, step, value: f.range[0], format: fmt, free: true,
         onInput: v => { f.range[0] = v; refilterQuiet(); }, onChange: () => refilter() });
       const to = makeSliderRow('to', { min: lo, max: hi, step, value: f.range[1], format: fmt, free: true,
         onInput: v => { f.range[1] = v; refilterQuiet(); }, onChange: () => refilter() });
       for (const r of [fr, to]) { r.classList.add('dt-helper'); box.appendChild(r); }
-      attachTip(fr, 'Show only streamlines with ' + fieldName(f.rec) + (f.how ? ' (' + f.how + ' over their points)' : '') + ' from this value …');
+      attachTip(fr, 'Show only streamlines with ' + f.name + (f.how ? ' (' + f.how + ' over their points)' : '') + ' from this value …');
       attachTip(to, '… up to this value (both included).');
     }
   }
   // add a condition: a field not yet used (a categorical one only per streamline)
-  const avail = recs.filter(r => !g.filters.some(f => f.rec === r) && !(r.header.kind === 'categorical' && r.parsed.scope === 'per_vertex'));
+  const avail = [...byName.entries()].filter(([n, recs]) => !filters.some(f => f.name === n)
+    && !(recs[0].header.kind === 'categorical' && recs[0].parsed.scope === 'per_vertex'));
   if (avail.length) {
-    const add = makeChoiceRow('+ condition', [['', '---'], ...avail.map((r, i) => [String(i), fieldName(r)])], '', v => {
-      const r = avail[+v];
-      if (!r) return;
-      const f = { rec: r, how: r.parsed.scope === 'per_vertex' ? 'mean' : null };
+    const add = makeChoiceRow('+ condition', [['', '---'], ...avail.map(([n, rs], i) => [String(i), n + ' (' + fieldKindText(rs[0]) + ')'])], '', v => {
+      const pickd = avail[+v];
+      if (!pickd) return;
+      const [n, recs] = pickd, r = recs[0];
+      const f = { name: n, how: r.parsed.scope === 'per_vertex' ? 'mean' : null };
+      const all = bundlesIds(scope.leaves);
       if (r.header.kind === 'categorical') {
-        const vals = new Set(), gid = groupIds(g);
-        for (const id of gid) { const x = streamValue(r, id, null); if (Number.isFinite(x)) vals.add(x); }
+        const vals = new Set(), val = valueOfName(n, null);
+        for (const id of all) { const x = val(id); if (Number.isFinite(x)) vals.add(x); }
         f.values = vals;
-      } else f.range = filterRange(f, groupIds(g));
-      g.filters.push(f);
+      } else f.range = filterRange(f, all, recs);
+      holder.filters.push(f);
       refilter();
     });
-    attachTip(add, 'Add a condition. Streamlines are shown only when they meet ALL conditions (and the probe selects among those); within a category, ANY ticked value. A value per point is summed up per streamline: its min, mean or max.');
+    attachTip(add, 'Add a condition. Streamlines are shown only when they meet ALL conditions (and the probe selects among those); within a category, ANY ticked value. A value per point is summed up per streamline: its min, mean or max.' + (scope.leaves.length > 1 ? ' Here: for all ' + scope.leaves.length + ' bundles below (each its own file\'s field of that name).' : ''));
     box.appendChild(add);
   }
   el.appendChild(box);
 }
+// (the parent rows' tags and strips follow their conditions: once the
+// controls are let go)
+let _regTimer = 0;
+function registerTrckItemSoon() { clearTimeout(_regTimer); _regTimer = setTimeout(() => { for (const n of allGroupNodes()) if (n.item) n.item.tag = n.state.filters.length ? '⏷ ' + n.state.filters.length : null; dataStore.refresh(); }, 0); }
+function allGroupNodes() {
+  const out = [];
+  const walk = list => { for (const c of list) if (c.children) { out.push(c); walk(c.children); } };
+  walk(groupTree);
+  return out;
+}
 
-function buildFieldSettings(p, el) {
-  const recs = fieldRecsOf(p);
-  if (!recs.length) return;
-  const label = r => fieldName(r) + ' (' + r.header.kind + ')';
-  const row = makeChoiceRow('color·by', [['', '---'], ...recs.map((r, i) => [String(i), label(r)])],
-    p.activeField ? String(recs.indexOf(p.activeField)) : '',
-    v => setActiveField(p, v === '' ? null : recs[+v]));
-  attachTip(row, 'Color the streamlines by one of their data fields (.dqz), with a colormap over its from–to window; the parts outside the window are dimmed. --- : the normal line color.');
-  const rec = p.activeField;
+// COLOR·BY for one bundle (g) or for all bundles below a parent row
+// (leaves): a field BY NAME — each bundle takes its own file's field of
+// that name (a bundle without it: the normal line color) — with, once
+// one is chosen, its helpers indented below it (as in the markers'
+// COLOR·BY): map (the colormap), from and to (the window; the parts
+// outside it are dimmed). For several bundles, map and window are set on
+// all their fields of that name together. Left out without data fields.
+const buildFieldSettings = (g, el) => buildFieldSettingsFor([g], el);
+// a field in a list: "per point" / "per streamline", ", categorical" (how
+// its numbers are stored — raw, scaled — is no concern there)
+const fieldKindText = rec => (rec.parsed.scope === 'per_vertex' ? 'per point' : 'per streamline') + (rec.header.kind === 'categorical' ? ', categorical' : '');
+function buildFieldSettingsFor(leaves, el) {
+  const byName = fieldsByName(leaves);
+  if (!byName.size) return;
+  const names = [...byName.keys()];
+  const label = n => n + ' (' + fieldKindText(byName.get(n)[0]) + ')';
+  const cur = new Set(leaves.filter(g => fieldRecsOf(g).length).map(g => g.activeField ? fieldName(g.activeField) : ''));
+  const value = cur.size === 1 ? [...cur][0] : '\u0000';
+  const opts = [['', '---'], ...names.map(n => [n, label(n)])];
+  if (value === '\u0000') opts.unshift(['\u0000', 'mixed']);
+  const row = makeChoiceRow('COLOR·BY', opts, value, v => {
+    if (v === '\u0000') return;
+    if (leaves.length === 1) { setActiveField(leaves[0], v ? recNamed(leaves[0], v) : null); return; }
+    for (const g of leaves) { g.activeField = v ? recNamed(g, v) : null; if (g.activeField) { fieldNormValues(g.activeField); writeFieldColormapRow(g); } }
+    setActiveField(null, null);
+  });
+  attachTip(row, 'Color the streamlines by one of their data fields (.dqz), with a colormap over its from–to window; the parts outside the window are dimmed. --- : the normal line color.'
+    + (leaves.length > 1 ? ' Here: for all ' + leaves.length + ' bundles below (each its own file\'s field of that name; set one bundle apart in its own row).' : ''));
+  const recs = [...new Set(leaves.map(g => g.activeField).filter(Boolean))];
+  const rec = value && value !== '\u0000' ? recs[0] : null;
   if (rec) row.appendChild(makeInfoButton(() => showDqzChildHeaderPanel(rec), 'header of ' + rec.file.name));
   el.appendChild(row);
   if (!rec) return;
   const helper = (r, tip) => { r.classList.add('dt-helper'); if (tip) attachTip(r, tip); el.appendChild(r); };
-  helper(makeColormapPicker(rec), 'The colormap, spread over the from–to window.');
-  const [fr, to] = makeFieldWindowRows(rec);
+  helper(makeColormapPicker(rec, recs), 'The colormap, spread over the from–to window.');
+  const [fr, to] = makeFieldWindowRows(rec, recs);
   helper(fr, 'Value at the start of the colormap. Parts of the streamlines outside from–to are dimmed (3D › dimming). to < from reverses the colormap. Drag, or click to type.');
   helper(to, 'Value at the end of the colormap. Drag, or click to type.');
 }
@@ -11236,9 +11707,9 @@ function scrubifyRange(range) {
   range.after(field);
 }
 
-function setActiveField(p, rec) {
-  p.activeField = rec;
-  if (rec) { fieldNormValues(rec); writeFieldColormapRow(p); } // not mid-rebuild
+function setActiveField(p, rec) {   // (p null: several bundles' fields were set already)
+  if (p) p.activeField = rec;
+  if (p && rec) { fieldNormValues(rec); writeFieldColormapRow(p); } // not mid-rebuild
   rebuildDqzChildItems();          // radio states
   updateProbe();
   // The open card gets its helper rows now — not only once its controls
@@ -11379,6 +11850,7 @@ function resolveFieldColormap(rec) {
 // Categorical fields are drawn without blending between neighbouring
 // codes either way (see buildFieldInfo). Non-finite values stay NaN
 // (drawn in the global LINE·COLOR mode).
+const FIELD_NO_VALUE = -1e30;   // (see fieldNormValues)
 function fieldNormValues(rec) {
   const def = resolveFieldColormap(rec);
   const key = def.kind === 'categorical' ? 'legend' : 'range';
@@ -11395,7 +11867,10 @@ function fieldNormValues(rec) {
   } else {
     const v = rec.parsed.values, [lo, hi] = fieldRange(rec), span = hi - lo;
     norm = new Float32Array(v.length);
-    for (let i = 0; i < v.length; i++) norm[i] = span > 0 ? (v[i] - lo) / span : 0.5;
+    // no value (NaN, ±Inf): far below any window, so drawn as outside it
+    // (dimmed); huge, so a segment from a valid point to such a point is
+    // outside almost all the way (no stray colormap color at the joint)
+    for (let i = 0; i < v.length; i++) norm[i] = !Number.isFinite(v[i]) ? FIELD_NO_VALUE : span > 0 ? (v[i] - lo) / span : 0.5;
   }
   rec.norm = norm; rec.normKey = key;
   return norm;
@@ -11428,7 +11903,7 @@ function setFieldColormap(rec, ref) {
 }
 
 // "colormap [select] [swatch]" for a field's inline settings area.
-function makeColormapPicker(rec) {
+function makeColormapPicker(rec, linked = [rec]) {
   const wrap = document.createElement('div');
   wrap.className = 'dt-choice dt-cmap';
   const lbl = document.createElement('label');
@@ -11445,7 +11920,7 @@ function makeColormapPicker(rec) {
   sel.addEventListener('click', e => e.stopPropagation());
   sel.addEventListener('change', () => {
     const c = choices[+sel.value];
-    setFieldColormap(rec, c.source === 'file' ? { source: 'file' } : { source: c.source, id: c.id });
+    for (const r of linked) setFieldColormap(r, c.source === 'file' ? { source: 'file' } : { source: c.source, id: c.id });
   });
   const sw = document.createElement('span');
   sw.className = 'dt-cmap-swatch';
@@ -11467,8 +11942,10 @@ function updateFieldSwatch(rec) {
 }
 
 // "Apply from / to" sliders (data units) for a field's settings area.
-function makeFieldWindowRows(rec) {
-  const [lo, hi] = fieldRange(rec), win = fieldWindow(rec);
+function makeFieldWindowRows(rec, linked = [rec]) {
+  let lo = Infinity, hi = -Infinity;   // (several fields: over all their ranges)
+  for (const r of linked) { const [a, b] = fieldRange(r); lo = Math.min(lo, a); hi = Math.max(hi, b); }
+  const win = fieldWindow(rec);
   const categorical = rec.header.kind === 'categorical';
   const step = categorical ? 1 : (hi - lo) / 500 || 1;
   // Categorical: the code and, when the field's legend is the colormap, its
@@ -11481,8 +11958,9 @@ function makeFieldWindowRows(rec) {
     return e && e.name !== String(code) ? code + ' · ' + e.name : String(code);
   };
   const onChange = () => {
-    updateFieldSwatch(rec);
-    if (groups.some(g => g.activeField === rec)) restyleFiles();
+    for (const r of linked) if (r !== rec) { const w = fieldWindow(r); w[0] = win[0]; w[1] = win[1]; }
+    for (const r of linked) updateFieldSwatch(r);
+    if (groups.some(g => linked.includes(g.activeField))) restyleFiles();
   };
   return [
     makeSliderRow('from', { min: lo, max: hi, step, value: win[0], format: fmt, free: !categorical, onInput: v => { win[0] = v; onChange(); } }),
@@ -11533,7 +12011,7 @@ function showDqzChildHeaderPanel(rec) {
     for (let i = 0; i < v.length; i++) { const x = v[i]; if (x < mn) mn = x; if (x > mx) mx = x; }
     info.n_values = v.length;
     if (v.length) info.decoded_range = [+mn.toPrecision(6), +mx.toPrecision(6)];
-    const using = groups.filter(g => g.activeField === rec).map(g => g.name);
+    const using = groups.filter(g => g.activeField === rec).map(g => g.fullName || g.name);
     info.coloring = using.length ? using : 'off';
     info.colormap = fieldColormap(rec);
     info.window = fieldWindow(rec).map(x => +x.toPrecision(6));
@@ -13038,7 +13516,9 @@ resizeAll();
   markersHead.className = 'dt-row dt-cat an-head markers-head';
   markersHead.innerHTML = '<span class="dt-label">Marker sets</span>';
   markersHead.dataset.tip = 'The loaded marker sets (graph files): tick to show; each set\'s colours, shapes, sizes and filters in its settings.';
-  dataStore.listen(() => { markersHead.style.display = markerSets.length ? '' : 'none'; });
+  const showMarkersHead = () => { markersHead.style.display = markerSets.length ? '' : 'none'; };
+  showMarkersHead();   // (none loaded: the hint only, as on the other tabs)
+  dataStore.listen(showMarkersHead);
   listPane('markers', { categories: ['markers'], flat: true, top: markersHead, empty: emptyFill(
     '<p><b>Load a graph file</b> to place points (and links between them) in the view, with their properties shown on mouse-over: ' +
     'a .json file in the <a href="doc.html?graph-format" target="_blank" rel="noopener">graph format</a> (a Data Package).</p>') });

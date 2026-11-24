@@ -3,8 +3,8 @@
 //
 // Shape is deliberately similar to graphxtree.js (parent/child nodes,
 // a `visible` getter/setter that fires a callback, a `root` getter) but
-// adapted to what this app actually loads. The tree has exactly two
-// levels: three category headings — Anatomy (volumes), Parcellations
+// adapted to what this app actually loads. The tree has two levels
+// (streamlines: as many as GROUP·BY makes, see BundleGroupItem): the category headings — Anatomy (volumes), Parcellations
 // (label volumes, plus lookup tables not attached to any volume yet) and
 // Streamline bundles (one row per streamline file: each bundle of a
 // bundle set, or the single tractogram; plus .dqz data files that can't
@@ -129,6 +129,39 @@ class BundleItem extends LoadedItem {
     this.bundleIndex = bundleIndex; // index into bundlePaletteRGB/streamlineBundleId
     this.colorHex = colorHex || null;
   }
+}
+
+// A parent row of the streamline tree (GROUP·BY: a file, a bundle, a
+// category …): its children are BundleItems and further BundleGroupItems.
+// On/off and focus are those of all bundles below it — checked / lit when
+// all are, mixed (indeterminate checkbox, half-lit sun) when only some
+// are; switching it switches them all (each through its own setter).
+// stripColors: the colors of the bundles below, shown as a strip in place
+// of a swatch.
+class BundleGroupItem extends LoadedItem {
+  get category() { return 'streamlines'; }
+  constructor(label) {
+    super('bundlegroup', label);
+    this.stripColors = [];
+  }
+  // every BundleItem below, at any depth
+  get leaves() {
+    const out = [];
+    for (const c of this.children) {
+      if (c instanceof BundleGroupItem) out.push(...c.leaves);
+      else if (c instanceof BundleItem) out.push(c);
+    }
+    return out;
+  }
+  get visible() { const L = this.leaves; return L.length > 0 && L.every(l => l.visible); }
+  get visibleMixed() { const L = this.leaves, n = L.filter(l => l.visible).length; return n > 0 && n < L.length; }
+  set visible(v) {
+    for (const l of this.leaves) if (l._visible !== v) l.visible = v;
+    if (this.onVisibilityChange) this.onVisibilityChange(this, v);
+  }
+  get focused() { const L = this.leaves.filter(l => l.visible); return L.length > 0 && L.every(l => l.focused); }
+  set focused(v) { /* (follows the bundles below) */ }
+  get focusMixed() { const L = this.leaves.filter(l => l.visible), n = L.filter(l => l.focused).length; return n > 0 && n < L.length; }
 }
 
 // One label (region) of the shown parcellation: a checkbox (shown or not,
@@ -356,6 +389,15 @@ class DataTreeView {
       bar.style.paddingLeft = this._indent(depth, topDepth) + 'px';
       item.build(item, bar);
       wrap.appendChild(bar);
+      // a toolbar can have an area below it, always shown (e.g. the
+      // streamlines' HIERARCHY »: built by the app, folding itself)
+      if (item.buildBelow) {
+        const below = document.createElement('div');
+        below.className = 'dt-toolbar-below';
+        below.style.paddingLeft = this._indent(depth, topDepth) + 'px';
+        item.buildBelow(item, below);
+        if (below.childNodes.length) wrap.appendChild(below);
+      }
       return wrap;
     }
 
@@ -366,7 +408,12 @@ class DataTreeView {
 
     const hasChildren = item.children.length > 0;
     const caret = document.createElement('span');
-    caret.className = 'dt-caret' + (hasChildren ? '' : ' dt-caret-empty');
+    // (a streamline tree's leaf keeps an empty caret column when it sits
+    // among or under rows that have one: its checkbox then lines up
+    // one step right of its parent's, not left of it)
+    const keepCaret = !hasChildren && item.category === 'streamlines' && item.parent
+      && (depth > topDepth || item.parent.children.some(c => c.children.length));
+    caret.className = 'dt-caret' + (hasChildren ? '' : keepCaret ? ' dt-caret-blank' : ' dt-caret-empty');
     caret.textContent = hasChildren ? (item.collapsed ? '▸' : '▾') : '';
     if (hasChildren) {
       caret.addEventListener('click', e => {
@@ -427,6 +474,7 @@ class DataTreeView {
       selector.type = 'checkbox';
       selector.className = 'dt-check';
       selector.checked = item.visible;
+      selector.indeterminate = !!item.visibleMixed;   // (a parent row: only some below are on)
       selector.disabled = !!item.checkboxDisabled;
       selector.addEventListener('click', e => e.stopPropagation());
       selector.addEventListener('change', () => {
@@ -442,7 +490,8 @@ class DataTreeView {
     if (item.onFocusToggle) {
       focusBtn = makeFocusButton(item.focused, e => item.onFocusToggle(item, e),
         item.focused ? 'focused — click: unfocus' : 'focus: draw this bundle solid, dim the others (adds to the focused bundles)');
-      if (!item.visible) focusBtn.classList.add('grey'); // switched off: the sun is only remembered
+      if (!item.visible && !item.visibleMixed) focusBtn.classList.add('grey'); // switched off: the sun is only remembered
+      if (item.focusMixed) focusBtn.classList.add('mixed');                    // (a parent row: only some below are focused)
     }
 
     let swatch = null;
@@ -461,6 +510,15 @@ class DataTreeView {
         item.colorHex = swatch.value;
         if (item.onColorChange) item.onColorChange(item, swatch.value);
       });
+    }
+
+    // a parent row: the colors of the bundles below, as a strip
+    if (!swatch && item.stripColors && item.stripColors.length) {
+      swatch = document.createElement('span');
+      swatch.className = 'dt-swatch dt-swatch-static dt-strip';
+      const cs = item.stripColors.filter((c, i, a) => i === 0 || c !== a[i - 1]).slice(0, 24);
+      swatch.style.background = cs.length === 1 ? cs[0]
+        : 'linear-gradient(to right, ' + cs.map((c, i) => c + ' ' + (100 * i / cs.length).toFixed(1) + '% ' + (100 * (i + 1) / cs.length).toFixed(1) + '%').join(', ') + ')';
     }
 
     if (!swatch && item.swatchHex) {
@@ -534,4 +592,4 @@ class DataTreeView {
   }
 }
 
-export { LabelItem, LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton };
+export { LabelItem, LoadedItem, AnatomyItem, TractogramItem, ToolbarItem, MarkersItem, BundleItem, BundleGroupItem, LutItem, DataFieldItem, DataGroupItem, LoadedDataStore, DataTreeView, makeSettingsButton, makeFocusButton, makeInfoButton };

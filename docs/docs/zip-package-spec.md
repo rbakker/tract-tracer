@@ -273,6 +273,31 @@ So:
   more, every n-th streamline is read. The n is the same for all files of
   the load, and the streamline count says "thinned".
 
+### Packages that belong together
+
+A pipeline can write several packages for one dataset, for example a main
+package and a second one with extra tractograms or data files. Each keeps
+its own copy of the anatomy, so each also opens on its own. When a zip with
+volumes is dropped while something is loaded:
+
+- **Same zip file name as one loaded:** a new version of it. It replaces
+  everything.
+- **Any of its volumes already loaded:** same file name and same size,
+  taken from the zip without reading the file. The app asks **Add** or
+  **Replace**. Add loads only what is new and leaves out every file that
+  is already loaded (same name and size): volumes, lookup tables,
+  tractograms, `.dqz` files, markers. The view and the shown volume stay
+  as they are. A new `.dqz` file attaches to a loaded tractogram by its
+  uuid, as usual.
+- **Otherwise:** a different dataset. It replaces everything.
+
+So, for packages meant to be added together:
+
+- **Give the zips different file names.**
+- **Copy shared files unchanged.** Same name and same bytes. A volume
+  written again, even with identical voxels, can differ in size once
+  compressed. It then loads twice.
+
 ## Lookup tables
 
 A label volume's lookup table is found by the first rule that applies:
